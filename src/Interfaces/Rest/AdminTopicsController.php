@@ -230,7 +230,11 @@ class AdminTopicsController {
 	protected function extractNextTopicIds( WP_REST_Request $request ): array {
 		$next_topic_ids = $request->get_param( 'next_topic_ids' );
 
-		return $this->topic_transition_service->normalizeNextTopicIds( is_array( $next_topic_ids ) ? array_map( 'intval', $next_topic_ids ) : array() );
+		if ( ! is_array( $next_topic_ids ) ) {
+			return array();
+		}
+
+		return array_values( array_unique( array_filter( array_map( 'intval', $next_topic_ids ) ) ) );
 	}
 
 	/**

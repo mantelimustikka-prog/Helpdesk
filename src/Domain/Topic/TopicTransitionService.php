@@ -44,14 +44,33 @@ class TopicTransitionService {
 			return array();
 		}
 
+		$transitions = $this->repository->listFrom( $from_topic_id, $this->network_id, $active_only );
+		$target_ids  = array_values(
+			array_filter(
+				array_map(
+					static fn( array $transition ): int => (int) ( $transition['to_topic_id'] ?? 0 ),
+					$transitions
+				),
+				static fn( int $topic_id ): bool => $topic_id > 0 && $topic_id !== $from_topic_id
+			)
+		);
+		$targets     = array();
+
+		foreach ( $this->topic_repository->findMany( $target_ids, $this->network_id ) as $target ) {
+			$target_id = (int) ( $target['id'] ?? 0 );
+			if ( $target_id > 0 ) {
+				$targets[ $target_id ] = $target;
+			}
+		}
+
 		$valid = array();
-		foreach ( $this->repository->listFrom( $from_topic_id, $this->network_id, $active_only ) as $transition ) {
+		foreach ( $transitions as $transition ) {
 			$to_topic_id = (int) ( $transition['to_topic_id'] ?? 0 );
 			if ( $to_topic_id <= 0 || $to_topic_id === $from_topic_id ) {
 				continue;
 			}
 
-			$target = $this->topic_repository->find( $to_topic_id, $this->network_id );
+			$target = $targets[ $to_topic_id ] ?? null;
 			if ( ! $target || ( isset( $target['is_active'] ) && empty( $target['is_active'] ) ) ) {
 				continue;
 			}
@@ -318,13 +337,18 @@ class TopicTransitionService {
 
 		$next_topic_ids = $this->normalizeNextTopicIds( $next_topic_ids, $from_topic_id );
 		$target_topics  = array();
+		foreach ( $this->topic_repository->findMany( $next_topic_ids, $this->network_id ) as $topic ) {
+			$topic_id = (int) ( $topic['id'] ?? 0 );
+			if ( $topic_id > 0 ) {
+				$target_topics[ $topic_id ] = $topic;
+			}
+		}
+
 		foreach ( $next_topic_ids as $next_topic_id ) {
-			$topic = $this->topic_repository->find( $next_topic_id, $this->network_id );
+			$topic = $target_topics[ $next_topic_id ] ?? null;
 			if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
 				return false;
 			}
-
-			$target_topics[ $next_topic_id ] = $topic;
 		}
 
 		$existing_transitions = $this->repository->listFrom( $from_topic_id, $this->network_id, false );

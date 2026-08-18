@@ -258,15 +258,21 @@
 
 		items.forEach( function ( item ) {
 			var listItem = document.createElement( 'li' );
-			var link = document.createElement( 'a' );
 			var excerpt = document.createElement( 'p' );
+			var link;
 
-			link.href = item.url || '#';
-			link.textContent = item.title || '';
-			link.target = '_blank';
-			link.rel = 'noopener noreferrer';
-
-			listItem.appendChild( link );
+			if ( item.url ) {
+				link = document.createElement( 'a' );
+				link.href = item.url;
+				link.textContent = item.title || '';
+				link.target = '_blank';
+				link.rel = 'noopener noreferrer';
+				listItem.appendChild( link );
+			} else {
+				link = document.createElement( 'span' );
+				link.textContent = item.title || '';
+				listItem.appendChild( link );
+			}
 
 			if ( item.excerpt ) {
 				excerpt.className = 'hd-field-hint';

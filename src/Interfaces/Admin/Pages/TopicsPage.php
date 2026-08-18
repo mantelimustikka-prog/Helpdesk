@@ -472,12 +472,14 @@ class TopicsPage {
 	 * @return array<string, mixed>
 	 */
 	protected function getTopicPayloadFromPost(): array {
+		$node_type = isset( $_POST['node_type'] ) ? sanitize_key( wp_unslash( $_POST['node_type'] ) ) : 'branch';
+
 		return array(
 			'name'        => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
 			'slug'        => isset( $_POST['slug'] ) ? sanitize_text_field( wp_unslash( $_POST['slug'] ) ) : '',
 			'description' => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
-			'is_final'    => 'final' === ( isset( $_POST['node_type'] ) ? sanitize_key( wp_unslash( $_POST['node_type'] ) ) : 'branch' ) ? 1 : 0,
-			'node_type'   => isset( $_POST['node_type'] ) ? sanitize_key( wp_unslash( $_POST['node_type'] ) ) : 'branch',
+			'is_final'    => 'final' === $node_type ? 1 : 0,
+			'node_type'   => $node_type,
 			'is_active'   => isset( $_POST['is_active'] ) ? 1 : 0,
 			'sort_order'  => isset( $_POST['sort_order'] ) ? (int) wp_unslash( $_POST['sort_order'] ) : 0,
 		);
@@ -491,7 +493,9 @@ class TopicsPage {
 	protected function getNextTopicIdsFromPost(): array {
 		$next_topic_ids = isset( $_POST['next_topic_ids'] ) && is_array( $_POST['next_topic_ids'] ) ? wp_unslash( $_POST['next_topic_ids'] ) : array();
 
-		return $this->topic_transition_service->normalizeNextTopicIds( array_map( 'intval', $next_topic_ids ) );
+		$next_topic_ids = array_values( array_unique( array_filter( array_map( 'intval', $next_topic_ids ) ) ) );
+
+		return $next_topic_ids;
 	}
 
 	/**

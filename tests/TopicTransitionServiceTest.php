@@ -134,6 +134,14 @@ final class TopicTransitionServiceTest extends TestCase {
 					default => null,
 				};
 			}
+
+			public function findMany( array $ids, int $network_id ): array {
+				return array_values(
+					array_filter(
+						array_map( fn( int $id ): ?array => $this->find( $id, $network_id ), $ids )
+					)
+				);
+			}
 		};
 
 		$transition_repo = new class extends TopicTransitionRepository {
@@ -175,6 +183,14 @@ final class TopicTransitionServiceTest extends TestCase {
 					3 => [ 'id' => 3, 'title' => 'Shipping', 'is_final' => 1, 'is_active' => 1 ],
 					default => null,
 				};
+			}
+
+			public function findMany( array $ids, int $network_id ): array {
+				return array_values(
+					array_filter(
+						array_map( fn( int $id ): ?array => $this->find( $id, $network_id ), $ids )
+					)
+				);
 			}
 		};
 
@@ -279,6 +295,17 @@ final class TopicTransitionServiceTest extends TestCase {
 
 			public function find( int $id, int $network_id ): ?array {
 				return $this->exists ? [ 'id' => $id, 'is_final' => 0 ] : null;
+			}
+
+			public function findMany( array $ids, int $network_id ): array {
+				if ( ! $this->exists ) {
+					return array();
+				}
+
+				return array_map(
+					static fn( int $id ): array => [ 'id' => $id, 'is_final' => 0 ],
+					$ids
+				);
 			}
 		};
 	}
