@@ -131,6 +131,38 @@ class SubmissionSessionService {
 	}
 
 	/**
+	 * Restart a session: reset to step 0 and clear all branch-dependent state.
+	 *
+	 * Preserves the session token, user_id, form_type, network_id, site_id, and
+	 * expiry so the browser session remains valid, but wipes topic selection,
+	 * step progress, and accumulated payload so the user can choose a fresh topic.
+	 *
+	 * @param string $token       Session token.
+	 * @param int    $ttl_minutes Extend TTL on restart.
+	 * @return bool False when the session does not exist or is already expired.
+	 */
+	public function restart( string $token, int $ttl_minutes = self::DEFAULT_TTL_MINUTES ): bool {
+		$session = $this->resume( $token );
+		if ( ! $session ) {
+			return false;
+		}
+
+		$now     = current_time( 'mysql' );
+		$expires = date( 'Y-m-d H:i:s', strtotime( "+{$ttl_minutes} minutes", strtotime( $now ) ) );
+
+		return $this->repository->updateByToken(
+			$token,
+			[
+				'step_index'       => 0,
+				'current_topic_id' => null,
+				'payload_json'     => wp_json_encode( [] ),
+				'expires_at'       => $expires,
+				'updated_at'       => $now,
+			]
+		);
+	}
+
+	/**
 	 * Destroy a session.
 	 *
 	 * @param string $token Session token.

@@ -94,6 +94,16 @@ class PublicTicketController {
 
 		register_rest_route(
 			$namespace,
+			'/form-sessions/restart',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'restartFormSession' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$namespace,
 			'/kb/search',
 			array(
 				'methods'             => 'GET',
@@ -536,6 +546,39 @@ class PublicTicketController {
 				),
 				array( '%d', '%d', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s' )
 			);
+		}
+
+		return new WP_REST_Response( array( 'ok' => true ), 200 );
+	}
+
+	/**
+	 * POST /form-sessions/restart – reset a session to step 0 and clear branch state.
+	 *
+	 * Requires the same nonce protection as upsertFormSession.
+	 * Returns 200 {"ok": true} on success, or a WP_Error on failure.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function restartFormSession( WP_REST_Request $request ) {
+		$nonce = $request->get_header( 'X-WP-Nonce' );
+		if ( empty( $nonce ) ) {
+			$nonce = $request->get_param( '_wpnonce' );
+		}
+		if ( empty( $nonce ) || ! wp_verify_nonce( (string) $nonce, 'wp_rest' ) ) {
+			return new WP_Error( 'hd_invalid_nonce', __( 'Invalid or missing nonce.', 'wp-helpdesk' ), array( 'status' => 403 ) );
+		}
+
+		$token = sanitize_text_field( (string) $request->get_param( 'session_token' ) );
+		if ( '' === $token ) {
+			return new WP_Error( 'hd_missing_session_token', __( 'Missing form session token.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		}
+
+		$session_service = new \WPHelpdesk\Domain\Session\SubmissionSessionService();
+		$ok              = $session_service->restart( $token );
+
+		if ( ! $ok ) {
+			return new WP_Error( 'hd_session_not_found', __( 'Session not found or expired.', 'wp-helpdesk' ), array( 'status' => 404 ) );
 		}
 
 		return new WP_REST_Response( array( 'ok' => true ), 200 );

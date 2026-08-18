@@ -186,6 +186,124 @@ final class SubmissionSessionServiceTest extends TestCase {
 		self::assertSame( 7, $service->cleanupExpired() );
 	}
 
+	public function testRestartReturnsFalseForExpiredSession(): void {
+		$repository = new class extends SubmissionSessionRepository {
+			public function findByToken( string $token ): ?array {
+				return [
+					'id'           => 9,
+					'session_token' => $token,
+					'expires_at'   => '2000-01-01 00:00:00',
+					'payload_json' => '{"topic_id":5}',
+					'step_index'   => 2,
+				];
+			}
+
+			public function deleteByToken( string $token ): bool {
+				return true;
+			}
+		};
+
+		$service = $this->makeService( $repository );
+
+		self::assertFalse( $service->restart( 'old-token' ) );
+	}
+
+	public function testRestartReturnsFalseForMissingSession(): void {
+		$repository = new class extends SubmissionSessionRepository {
+			public function findByToken( string $token ): ?array {
+				return null;
+			}
+		};
+
+		$service = $this->makeService( $repository );
+
+		self::assertFalse( $service->restart( 'no-such-token' ) );
+	}
+
+	public function testRestartResetsStepAndClearsTopicAndPayload(): void {
+		$repository = new class extends SubmissionSessionRepository {
+			public array $updated = [];
+
+			public function findByToken( string $token ): ?array {
+				return [
+					'id'               => 4,
+					'session_token'    => $token,
+					'expires_at'       => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
+					'payload_json'     => '{"topic_id":3,"name":"Alice","message":"Help!"}',
+					'step_index'       => 2,
+					'current_topic_id' => 3,
+				];
+			}
+
+			public function updateByToken( string $token, array $data ): bool {
+				$this->updated = $data;
+				return true;
+			}
+		};
+
+		$service = $this->makeService( $repository );
+
+		$result = $service->restart( 'active-token' );
+
+		self::assertTrue( $result );
+		self::assertSame( 0, $repository->updated['step_index'] );
+		self::assertNull( $repository->updated['current_topic_id'] );
+		$payload = json_decode( $repository->updated['payload_json'], true );
+		self::assertSame( [], $payload );
+	}
+
+	public function testRestartAllowsNewTopicSelectionAfterReset(): void {
+		$repository = new class extends SubmissionSessionRepository {
+			public array $calls = [];
+
+			public function findByToken( string $token ): ?array {
+				// First call: active session with previous topic.
+				// Subsequent calls (advance): return the updated session with step_index=0.
+				if ( empty( $this->calls ) ) {
+					$this->calls[] = 'first';
+					return [
+						'id'               => 6,
+						'session_token'    => $token,
+						'expires_at'       => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
+						'payload_json'     => '{"topic_id":1}',
+						'step_index'       => 1,
+						'current_topic_id' => 1,
+					];
+				}
+				// After restart the session has step_index=0 and no topic.
+				return [
+					'id'               => 6,
+					'session_token'    => $token,
+					'expires_at'       => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
+					'payload_json'     => '{}',
+					'step_index'       => 0,
+					'current_topic_id' => null,
+				];
+			}
+
+			public function updateByToken( string $token, array $data ): bool {
+				$this->calls[] = $data;
+				return true;
+			}
+		};
+
+		$service = $this->makeService( $repository );
+
+		// Simulate restart.
+		$ok = $service->restart( 'session-abc' );
+		self::assertTrue( $ok );
+
+		// After restart, advance with a completely different topic should work.
+		$advanced = $service->advance( 'session-abc', 1, 99, [ 'topic_id' => 99, 'name' => 'Bob' ] );
+		self::assertTrue( $advanced );
+
+		// Verify the advance payload contains the NEW topic only (no contamination from topic_id=1).
+		$advance_update = end( $repository->calls );
+		$merged         = json_decode( $advance_update['payload_json'], true );
+		self::assertSame( 99, $merged['topic_id'] );
+		self::assertSame( 99, $advance_update['current_topic_id'] );
+	}
+
 	private function makeService( SubmissionSessionRepository $repository ): SubmissionSessionService {
 		$service = new SubmissionSessionService();
 

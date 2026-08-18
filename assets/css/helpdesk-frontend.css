@@ -246,3 +246,34 @@
 	color: #646970;
 	margin: 0 0 24px;
 }
+
+/* Start over / change topic action */
+.hd-start-over {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: #646970;
+	font-size: 0.85rem;
+	padding: 0;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.hd-start-over:hover,
+.hd-start-over:focus {
+	color: #d63638;
+	outline: 2px solid #d63638;
+	outline-offset: 2px;
+}
+
+.hd-form-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 16px;
+}
