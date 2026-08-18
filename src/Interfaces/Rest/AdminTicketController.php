@@ -1,0 +1,258 @@
+<?php
+/**
+ * @package WP Helpdesk
+ */
+
+namespace WPHelpdesk\Interfaces\Rest;
+
+use WP_REST_Request;
+use WP_REST_Response;
+use WPHelpdesk\Infrastructure\Database\Schema;
+use WPHelpdesk\Support\Constants;
+use WPHelpdesk\Support\Helpers;
+
+class AdminTicketController {
+	/**
+	 * List tickets for the current network.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response
+	 */
+	public function listTickets( WP_REST_Request $request ): WP_REST_Response {
+		global $wpdb;
+
+		$table      = Schema::table( Constants::TABLE_TICKETS );
+		$network_id = Helpers::getNetworkId();
+		$page       = max( 1, (int) $request->get_param( 'page' ) );
+		$per_page   = max( 1, min( 100, (int) $request->get_param( 'per_page' ) ?: 20 ) );
+		$offset     = ( $page - 1 ) * $per_page;
+		$status     = sanitize_key( (string) $request->get_param( 'status' ) );
+
+		if ( '' !== $status ) {
+			$sql = $wpdb->prepare(
+				"SELECT * FROM {$table} WHERE network_id = %d AND status = %s ORDER BY created_at DESC LIMIT %d OFFSET %d",
+				$network_id,
+				$status,
+				$per_page,
+				$offset
+			);
+		} else {
+			$sql = $wpdb->prepare(
+				"SELECT * FROM {$table} WHERE network_id = %d ORDER BY created_at DESC LIMIT %d OFFSET %d",
+				$network_id,
+				$per_page,
+				$offset
+			);
+		}
+
+		$tickets = $wpdb->get_results( $sql, ARRAY_A );
+
+		return new WP_REST_Response(
+			array(
+				'items'    => $tickets,
+				'page'     => $page,
+				'per_page' => $per_page,
+			)
+		);
+	}
+
+	/**
+	 * Get a single ticket.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response
+	 */
+	public function getTicket( WP_REST_Request $request ): WP_REST_Response {
+		$ticket = $this->findTicket( (int) $request['id'] );
+
+		if ( empty( $ticket ) ) {
+			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
+		}
+
+		return new WP_REST_Response( $ticket );
+	}
+
+	/**
+	 * Get ticket messages.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response
+	 */
+	public function getMessages( WP_REST_Request $request ): WP_REST_Response {
+		global $wpdb;
+
+		$ticket = $this->findTicket( (int) $request['id'] );
+		if ( empty( $ticket ) ) {
+			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
+		}
+
+		$table    = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+		$messages = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE ticket_id = %d ORDER BY created_at ASC",
+				(int) $ticket['id']
+			),
+			ARRAY_A
+		);
+
+		return new WP_REST_Response( array( 'items' => $messages ) );
+	}
+
+	/**
+	 * Add a reply to a ticket.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response
+	 */
+	public function reply( WP_REST_Request $request ): WP_REST_Response {
+		global $wpdb;
+
+		$ticket = $this->findTicket( (int) $request['id'] );
+		if ( empty( $ticket ) ) {
+			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
+		}
+
+		$body = wp_kses_post( (string) $request->get_param( 'body' ) );
+		if ( '' === trim( wp_strip_all_tags( $body ) ) ) {
+			return new WP_REST_Response( array( 'message' => 'Reply body is required.' ), 400 );
+		}
+
+		$table = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+		$wpdb->insert(
+			$table,
+			array(
+				'ticket_id'      => (int) $ticket['id'],
+				'author_user_id' => get_current_user_id(),
+				'author_type'    => 'agent',
+				'body'           => $body,
+				'is_internal'    => (int) $request->get_param( 'is_internal' ),
+				'created_at'     => current_time( 'mysql', true ),
+			),
+			array( '%d', '%d', '%s', '%s', '%d', '%s' )
+		);
+
+		$message = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE id = %d LIMIT 1",
+				(int) $wpdb->insert_id
+			),
+			ARRAY_A
+		);
+
+		/**
+		 * Fires when a helpdesk reply is created.
+		 */
+		do_action( 'hd_ticket_replied', $ticket, $message );
+
+		return new WP_REST_Response( $message, 201 );
+	}
+
+	/**
+	 * Update a ticket status.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response
+	 */
+	public function updateStatus( WP_REST_Request $request ): WP_REST_Response {
+		global $wpdb;
+
+		$ticket = $this->findTicket( (int) $request['id'] );
+		if ( empty( $ticket ) ) {
+			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
+		}
+
+		$new_status = sanitize_key( (string) $request->get_param( 'status' ) );
+		$allowed    = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
+
+		if ( ! in_array( $new_status, $allowed, true ) ) {
+			return new WP_REST_Response( array( 'message' => 'Invalid status value.' ), 400 );
+		}
+
+		$table       = Schema::table( Constants::TABLE_TICKETS );
+		$old_status  = (string) $ticket['status'];
+		$closed_at   = 'closed' === $new_status ? current_time( 'mysql', true ) : null;
+		$update_data = array(
+			'status'     => $new_status,
+			'updated_at' => current_time( 'mysql', true ),
+			'closed_at'  => $closed_at,
+		);
+
+		$wpdb->update(
+			$table,
+			$update_data,
+			array( 'id' => (int) $ticket['id'] ),
+			array( '%s', '%s', '%s' ),
+			array( '%d' )
+		);
+
+		$updated = $this->findTicket( (int) $ticket['id'] );
+
+		/**
+		 * Fires when a helpdesk ticket status changes.
+		 */
+		do_action( 'hd_ticket_status_changed', $updated, $old_status, $new_status );
+
+		return new WP_REST_Response( $updated );
+	}
+
+	/**
+	 * Assign a ticket to a user.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response
+	 */
+	public function assignTicket( WP_REST_Request $request ): WP_REST_Response {
+		global $wpdb;
+
+		$ticket = $this->findTicket( (int) $request['id'] );
+		if ( empty( $ticket ) ) {
+			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
+		}
+
+		$assigned_to = (int) $request->get_param( 'assigned_to' );
+
+		$table = Schema::table( Constants::TABLE_TICKETS );
+		$wpdb->update(
+			$table,
+			array(
+				'assigned_to' => $assigned_to,
+				'updated_at'  => current_time( 'mysql', true ),
+			),
+			array( 'id' => (int) $ticket['id'] ),
+			array( '%d', '%s' ),
+			array( '%d' )
+		);
+
+		$updated = $this->findTicket( (int) $ticket['id'] );
+
+		/**
+		 * Fires when a helpdesk ticket is assigned.
+		 */
+		do_action( 'hd_ticket_assigned', $updated, $assigned_to );
+
+		return new WP_REST_Response( $updated );
+	}
+
+	/**
+	 * Fetch a single ticket constrained to the current network.
+	 *
+	 * @param int $ticket_id Ticket ID.
+	 * @return array<string, mixed>|null
+	 */
+	protected function findTicket( int $ticket_id ): ?array {
+		global $wpdb;
+
+		$table      = Schema::table( Constants::TABLE_TICKETS );
+		$network_id = Helpers::getNetworkId();
+		$ticket     = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE id = %d AND network_id = %d LIMIT 1",
+				$ticket_id,
+				$network_id
+			),
+			ARRAY_A
+		);
+
+		return $ticket ?: null;
+	}
+}
