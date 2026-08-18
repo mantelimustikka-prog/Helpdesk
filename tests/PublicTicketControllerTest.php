@@ -154,4 +154,74 @@ final class PublicTicketControllerTest extends TestCase {
 		self::assertSame( 'hd_session_not_found', $response->get_error_code() );
 		self::assertSame( 404, $response->data['status'] );
 	}
+
+	public function testRestartFormSessionReturnsResetCounterOnSuccess(): void {
+		wp_helpdesk_test_reset_state();
+
+		// Override restartFormSession to inject a stub that returns new counter=2.
+		$controller = new class extends PublicTicketController {
+			public function restartFormSession( WP_REST_Request $request ) {
+				$nonce = $request->get_header( 'X-WP-Nonce' );
+				if ( empty( $nonce ) || ! wp_verify_nonce( (string) $nonce, 'wp_rest' ) ) {
+					return new WP_Error( 'hd_invalid_nonce', 'Invalid nonce.', array( 'status' => 403 ) );
+				}
+				$token = sanitize_text_field( (string) $request->get_param( 'session_token' ) );
+				if ( '' === $token ) {
+					return new WP_Error( 'hd_missing_session_token', 'Missing token.', array( 'status' => 422 ) );
+				}
+				// Stub: reset succeeded, new counter = 2.
+				return new WP_REST_Response( array( 'ok' => true, 'reset_counter' => 2 ), 200 );
+			}
+		};
+
+		$request = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid-rest-nonce' );
+		$request->set_param( 'session_token', 'active-session' );
+
+		$response = $controller->restartFormSession( $request );
+
+		self::assertInstanceOf( WP_REST_Response::class, $response );
+		self::assertSame( 200, $response->status );
+		self::assertTrue( $response->data['ok'] );
+		self::assertSame( 2, $response->data['reset_counter'] );
+	}
+
+	public function testUpsertFormSessionRejectsStaleResetCounter(): void {
+		wp_helpdesk_test_reset_state();
+
+		global $wpdb;
+
+		// Build a fake $wpdb that simulates a session with reset_counter=3.
+		$wpdb = new class {
+			public string $last_error   = '';
+			public string $base_prefix  = 'wp_';
+
+			public function prepare( string $query, ...$args ): string {
+				return $query;
+			}
+
+			public function get_row( string $query, $output = ARRAY_A ): ?array {
+				// Return a row with reset_counter=3.
+				return array( 'id' => 42, 'reset_counter' => 3 );
+			}
+
+			public function update(): void {}
+		};
+
+		$controller = new PublicTicketController();
+
+		$request = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid-rest-nonce' );
+		$request->set_param( 'session_token', 'some-token' );
+		$request->set_param( 'step_index', 2 );
+		// Client sends stale counter (1) but server has 3.
+		$request->set_param( 'reset_counter', 1 );
+
+		$response = $controller->upsertFormSession( $request );
+
+		self::assertInstanceOf( WP_REST_Response::class, $response );
+		self::assertSame( 409, $response->status );
+		self::assertFalse( $response->data['ok'] );
+		self::assertTrue( $response->data['stale'] );
+	}
 }

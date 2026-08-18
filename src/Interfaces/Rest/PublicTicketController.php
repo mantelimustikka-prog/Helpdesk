@@ -505,14 +505,28 @@ class PublicTicketController {
 		$expires_at = gmdate( 'Y-m-d H:i:s', time() + $ttl );
 		$user_id    = is_user_logged_in() ? get_current_user_id() : null;
 
-		$exists = (int) $wpdb->get_var(
+		// Client-supplied reset counter: null means omitted (legacy / new row).
+		$client_reset_counter = $request->get_param( 'reset_counter' );
+		$client_reset_counter = null !== $client_reset_counter ? (int) $client_reset_counter : null;
+
+		$existing = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT id FROM {$table} WHERE session_token = %s LIMIT 1",
+				"SELECT id, reset_counter FROM {$table} WHERE session_token = %s LIMIT 1",
 				$token
-			)
+			),
+			ARRAY_A
 		);
 
-		if ( $exists > 0 ) {
+		if ( $existing ) {
+			$server_counter = (int) ( $existing['reset_counter'] ?? 0 );
+
+			// If the client provided a reset_counter that doesn't match the server's,
+			// this write is stale (post-reset) – reject it silently so the server
+			// state set by the restart endpoint is not overwritten.
+			if ( null !== $client_reset_counter && $client_reset_counter !== $server_counter ) {
+				return new WP_REST_Response( array( 'ok' => false, 'stale' => true ), 409 );
+			}
+
 			$wpdb->update(
 				$table,
 				array(
@@ -524,7 +538,7 @@ class PublicTicketController {
 					'expires_at'       => $expires_at,
 					'updated_at'       => current_time( 'mysql' ),
 				),
-				array( 'id' => $exists ),
+				array( 'id' => (int) $existing['id'] ),
 				array( '%s', '%s', '%d', '%d', '%s', '%s', '%s' ),
 				array( '%d' )
 			);
@@ -539,12 +553,13 @@ class PublicTicketController {
 					'form_type'        => $form_type,
 					'current_topic_id' => $topic_id ?: null,
 					'step_index'       => $step_index,
+					'reset_counter'    => 0,
 					'payload_json'     => $payload_json,
 					'expires_at'       => $expires_at,
 					'created_at'       => current_time( 'mysql' ),
 					'updated_at'       => current_time( 'mysql' ),
 				),
-				array( '%d', '%d', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s' )
+				array( '%d', '%d', '%s', '%s', '%s', '%d', '%d', '%d', '%s', '%s', '%s', '%s' )
 			);
 		}
 
@@ -555,7 +570,7 @@ class PublicTicketController {
 	 * POST /form-sessions/restart – reset a session to step 0 and clear branch state.
 	 *
 	 * Requires the same nonce protection as upsertFormSession.
-	 * Returns 200 {"ok": true} on success, or a WP_Error on failure.
+	 * Returns 200 {"ok": true, "reset_counter": N} on success, or a WP_Error on failure.
 	 *
 	 * @param WP_REST_Request $request Request object.
 	 * @return WP_REST_Response|WP_Error
@@ -575,13 +590,13 @@ class PublicTicketController {
 		}
 
 		$session_service = new \WPHelpdesk\Domain\Session\SubmissionSessionService();
-		$ok              = $session_service->restart( $token );
+		$new_counter     = $session_service->restart( $token );
 
-		if ( ! $ok ) {
+		if ( false === $new_counter ) {
 			return new WP_Error( 'hd_session_not_found', __( 'Session not found or expired.', 'wp-helpdesk' ), array( 'status' => 404 ) );
 		}
 
-		return new WP_REST_Response( array( 'ok' => true ), 200 );
+		return new WP_REST_Response( array( 'ok' => true, 'reset_counter' => $new_counter ), 200 );
 	}
 
 	/**

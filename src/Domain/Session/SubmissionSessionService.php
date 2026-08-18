@@ -43,17 +43,18 @@ class SubmissionSessionService {
 
 		$id = $this->repository->create(
 			[
-				'network_id'      => $this->network_id,
-				'site_id'         => $site_id,
-				'session_token'   => $token,
-				'user_id'         => $user_id,
-				'form_type'       => in_array( $form_type, [ 'guest', 'member' ], true ) ? $form_type : 'guest',
+				'network_id'       => $this->network_id,
+				'site_id'          => $site_id,
+				'session_token'    => $token,
+				'user_id'          => $user_id,
+				'form_type'        => in_array( $form_type, [ 'guest', 'member' ], true ) ? $form_type : 'guest',
 				'current_topic_id' => $initial_payload['topic_id'] ?? null,
-				'step_index'      => 0,
-				'payload_json'    => wp_json_encode( $initial_payload ),
-				'expires_at'      => $expires,
-				'created_at'      => $now,
-				'updated_at'      => $now,
+				'step_index'       => 0,
+				'reset_counter'    => 0,
+				'payload_json'     => wp_json_encode( $initial_payload ),
+				'expires_at'       => $expires,
+				'created_at'       => $now,
+				'updated_at'       => $now,
 			]
 		);
 
@@ -90,11 +91,16 @@ class SubmissionSessionService {
 	/**
 	 * Advance a session to the next step, updating payload and topic.
 	 *
-	 * @param string               $token     Session token.
-	 * @param int                  $step      New step index.
-	 * @param int|null             $topic_id  Current topic id.
-	 * @param array<string, mixed> $payload   Merged payload data.
-	 * @param int                  $ttl_minutes Extend TTL on each save.
+	 * When $reset_counter is provided, it must match the session's stored
+	 * reset_counter; a mismatch means the client holds state from before the
+	 * last reset and the write is rejected to prevent stale rehydration.
+	 *
+	 * @param string               $token         Session token.
+	 * @param int                  $step          New step index.
+	 * @param int|null             $topic_id      Current topic id.
+	 * @param array<string, mixed> $payload       Merged payload data.
+	 * @param int                  $ttl_minutes   Extend TTL on each save.
+	 * @param int|null             $reset_counter Client-supplied reset counter for staleness check.
 	 * @return bool
 	 */
 	public function advance(
@@ -102,10 +108,16 @@ class SubmissionSessionService {
 		int $step,
 		?int $topic_id,
 		array $payload,
-		int $ttl_minutes = self::DEFAULT_TTL_MINUTES
+		int $ttl_minutes = self::DEFAULT_TTL_MINUTES,
+		?int $reset_counter = null
 	): bool {
 		$session = $this->resume( $token );
 		if ( ! $session ) {
+			return false;
+		}
+
+		// Reject the write if the client's reset_counter is stale.
+		if ( null !== $reset_counter && (int) ( $session['reset_counter'] ?? 0 ) !== $reset_counter ) {
 			return false;
 		}
 
@@ -133,33 +145,40 @@ class SubmissionSessionService {
 	/**
 	 * Restart a session: reset to step 0 and clear all branch-dependent state.
 	 *
+	 * Increments reset_counter so any in-flight upsert with the old counter
+	 * will be rejected, preventing stale state from writing back after reset.
+	 *
 	 * Preserves the session token, user_id, form_type, network_id, site_id, and
 	 * expiry so the browser session remains valid, but wipes topic selection,
 	 * step progress, and accumulated payload so the user can choose a fresh topic.
 	 *
 	 * @param string $token       Session token.
 	 * @param int    $ttl_minutes Extend TTL on restart.
-	 * @return bool False when the session does not exist or is already expired.
+	 * @return int|false New reset_counter on success, false when the session does not exist or is already expired.
 	 */
-	public function restart( string $token, int $ttl_minutes = self::DEFAULT_TTL_MINUTES ): bool {
+	public function restart( string $token, int $ttl_minutes = self::DEFAULT_TTL_MINUTES ): int|false {
 		$session = $this->resume( $token );
 		if ( ! $session ) {
 			return false;
 		}
 
-		$now     = current_time( 'mysql' );
-		$expires = date( 'Y-m-d H:i:s', strtotime( "+{$ttl_minutes} minutes", strtotime( $now ) ) );
+		$new_counter = (int) ( $session['reset_counter'] ?? 0 ) + 1;
+		$now         = current_time( 'mysql' );
+		$expires     = date( 'Y-m-d H:i:s', strtotime( "+{$ttl_minutes} minutes", strtotime( $now ) ) );
 
-		return $this->repository->updateByToken(
+		$ok = $this->repository->updateByToken(
 			$token,
 			[
 				'step_index'       => 0,
+				'reset_counter'    => $new_counter,
 				'current_topic_id' => null,
 				'payload_json'     => wp_json_encode( [] ),
 				'expires_at'       => $expires,
 				'updated_at'       => $now,
 			]
 		);
+
+		return $ok ? $new_counter : false;
 	}
 
 	/**

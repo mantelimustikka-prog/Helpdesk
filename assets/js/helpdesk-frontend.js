@@ -70,10 +70,12 @@
 		this.canContinueFromTopic = false;
 		this.storageKey = 'wpHelpdeskForm:' + formType;
 		this.sessionToken = this._getSessionToken();
+		this.resetCounter = this._loadResetCounter();
 		this.pendingState = null;
 		this.persistTimer = null;
 
 		this._bindEvents();
+		this._bindStorageEvent();
 		this._loadTopics();
 	}
 
@@ -123,6 +125,103 @@
 		this.container.addEventListener( 'change', function () {
 			self._saveState();
 		} );
+	};
+
+	/**
+	 * Load the persisted reset counter from sessionStorage (default: 0).
+	 */
+	FormController.prototype._loadResetCounter = function () {
+		var raw = window.sessionStorage.getItem( this.storageKey + ':v' );
+		return raw !== null ? parseInt( raw, 10 ) || 0 : 0;
+	};
+
+	/**
+	 * Persist the current reset counter to sessionStorage.
+	 */
+	FormController.prototype._saveResetCounter = function () {
+		window.sessionStorage.setItem( this.storageKey + ':v', String( this.resetCounter ) );
+	};
+
+	/**
+	 * Listen for storage events from other tabs.
+	 * When another tab increments the reset counter, this tab is immediately
+	 * hard-reset to step 0 to prevent stale multi-tab state.
+	 */
+	FormController.prototype._bindStorageEvent = function () {
+		var self = this;
+		window.addEventListener( 'storage', function ( event ) {
+			if ( event.key !== self.storageKey + ':v' ) {
+				return;
+			}
+			var newCounter = event.newValue !== null ? parseInt( event.newValue, 10 ) || 0 : 0;
+			if ( newCounter > self.resetCounter ) {
+				// Another tab reset the flow: synchronise and return to step 0.
+				self.resetCounter = newCounter;
+				self._hardReset();
+			}
+		} );
+	};
+
+	/**
+	 * Perform a hard client-side reset to step 0 without issuing a server call.
+	 * Used when a cross-tab storage event indicates the session was reset elsewhere.
+	 */
+	FormController.prototype._hardReset = function () {
+		this.selectedTopicId = 0;
+		this.selectedTopicTitle = '';
+		this.topicPath = [];
+		this.canContinueFromTopic = false;
+		this.pendingState = null;
+
+		if ( this.persistTimer ) {
+			window.clearTimeout( this.persistTimer );
+			this.persistTimer = null;
+		}
+
+		this.container.querySelectorAll( 'input[name], textarea[name]' ).forEach( function ( el ) {
+			if ( ! el.readOnly ) {
+				el.value = '';
+			}
+		} );
+
+		var topicSelect = this.container.querySelector( 'select[name="topic_id"]' );
+		if ( topicSelect ) {
+			topicSelect.value = '';
+		}
+		var branchContainer = this.container.querySelector( '[data-role="topic-branch"]' );
+		if ( branchContainer ) {
+			branchContainer.innerHTML = '';
+		}
+		var hintEl = this.container.querySelector( '[id$="-topic-description"]' );
+		if ( hintEl ) {
+			hintEl.textContent = '';
+		}
+		this._clearTopicError();
+		this._clearError();
+		var nextBtn = this.container.querySelector( '[id$="-step0-next"]' );
+		if ( nextBtn ) {
+			nextBtn.disabled = true;
+		}
+		this._renderKnowledgeBaseSuggestions( [] );
+
+		// Wipe client storage so this tab is fully clean.
+		window.sessionStorage.removeItem( this.storageKey );
+
+		// Navigate to step 0 without calling _saveState to avoid re-persisting.
+		if ( this.steps[ this.currentStep ] ) {
+			this.steps[ this.currentStep ].classList.add( 'hd-form-step--hidden' );
+		}
+		if ( this.steps[ 0 ] ) {
+			this.steps[ 0 ].classList.remove( 'hd-form-step--hidden' );
+		}
+		this.stepEls.forEach( function ( el ) {
+			el.classList.remove( 'hd-step--done', 'hd-step--active' );
+		} );
+		if ( this.stepEls[ 0 ] ) {
+			this.stepEls[ 0 ].classList.add( 'hd-step--active' );
+		}
+		this.currentStep = 0;
+		window.scrollTo( 0, 0 );
 	};
 
 	FormController.prototype._loadTopics = function () {
@@ -488,6 +587,7 @@
 	FormController.prototype._saveState = function () {
 		var payload = {
 			currentStep: this.currentStep,
+			resetCounter: this.resetCounter,
 			topicPath: this.topicPath.slice(),
 			data: this._gatherFields()
 		};
@@ -517,6 +617,14 @@
 			return;
 		}
 
+		// Step guard: if the saved state belongs to a previous reset cycle, discard it.
+		var savedCounter = parseInt( this.pendingState.resetCounter || 0, 10 );
+		if ( savedCounter !== this.resetCounter ) {
+			window.sessionStorage.removeItem( this.storageKey );
+			this.pendingState = null;
+			return;
+		}
+
 		var data = this.pendingState.data || {};
 		this.container.querySelectorAll( 'input[name], textarea[name]' ).forEach( function ( field ) {
 			if ( Object.prototype.hasOwnProperty.call( data, field.name ) && ! field.readOnly ) {
@@ -539,8 +647,12 @@
 			return;
 		}
 		var target = parseInt( this.pendingState.currentStep || 0, 10 );
+		var savedCounter = parseInt( this.pendingState.resetCounter || 0, 10 );
 		this.pendingState = null;
-		if ( target > 0 && this.canContinueFromTopic ) {
+
+		// Step guard: only advance past step 0 when the reset counter matches AND
+		// the user has a valid topic selected.
+		if ( target > 0 && savedCounter === this.resetCounter && this.canContinueFromTopic ) {
 			this._goToStep( Math.min( target, 1 ) );
 		}
 	};
@@ -550,6 +662,7 @@
 			session_token: this.sessionToken,
 			form_type: this.formType,
 			step_index: payload.currentStep,
+			reset_counter: payload.resetCounter,
 			current_topic_id: this.selectedTopicId || 0,
 			payload: payload.data,
 			topic_path: this.topicPath.slice()
@@ -557,11 +670,20 @@
 	};
 
 	FormController.prototype._clearState = function () {
+		// Cancel any pending server persist to prevent a stale write after reset.
+		if ( this.persistTimer ) {
+			window.clearTimeout( this.persistTimer );
+			this.persistTimer = null;
+		}
 		window.sessionStorage.removeItem( this.storageKey );
 	};
 
 	FormController.prototype._startOver = function () {
 		var self = this;
+
+		// Increment the local reset counter FIRST, before any state is cleared,
+		// so that any storage event seen by other tabs carries the new counter.
+		this.resetCounter += 1;
 
 		// Reset all branch-dependent client-side state.
 		this.selectedTopicId = 0;
@@ -605,10 +727,13 @@
 		// Clear KB suggestions.
 		this._renderKnowledgeBaseSuggestions( [] );
 
-		// Clear persisted client storage.
+		// Clear persisted client storage (cancels the persist timer as well).
 		this._clearState();
 
-		// Navigate back to step 0 immediately (best-effort: fire-and-forget persist).
+		// Persist the new reset counter so other tabs can detect the change.
+		this._saveResetCounter();
+
+		// Navigate back to step 0 (saves clean state with the new resetCounter).
 		this._goToStep( 0 );
 
 		// Reset step indicator done-states.
@@ -619,9 +744,17 @@
 			this.stepEls[ 0 ].classList.add( 'hd-step--active' );
 		}
 
-		// Persist the reset to the server (fire-and-forget).
+		// Persist the reset to the server; update local counter from server response
+		// so subsequent upserts use the authoritative counter value.
 		apiPost( 'form-sessions/restart', {
 			session_token: self.sessionToken
+		} ).then( function ( res ) {
+			if ( res && typeof res.reset_counter === 'number' ) {
+				self.resetCounter = res.reset_counter;
+				self._saveResetCounter();
+				// Re-save clean state with the authoritative counter.
+				self._saveState();
+			}
 		} ).catch( function () {} );
 	};
 
