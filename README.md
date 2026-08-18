@@ -1,8 +1,68 @@
-# Helpdesk
-Helpdesk plugin for multisite Wordpress network. The plugin will be network based under network menu. There are 2 different support contact forms, 1. A simple form for non-logged in customers 2. Complex step by step conditional selection form for logged in users.  The plugin will be facilitated with a knowledge base. 
-Both previously mentioned forms are constructed with a subject line, which is interactive by searching and showing topics from existing knowledge base.
-The simple form for non-logged in users should also contain fields: A. Name B. email C. Phone, all fields are required to fill.
-The complex form for non-logged in users name, email address and phone number is collected from network database and make them visible when customer starts 1st step of opening a support ticket. All support ticket has a unique #ID which is incremental. In Admin Settings page, admin can set the 1st incremental number from which plugin starts the incremental ticket number#
-In 1st step of logged-in users' form there is a dropdown list of topics for which customer wants to open support ticket. This dropdown list does not select anything by default but shows text "Select your Topic". Selecting Topic is obligatory, by facilitating the form with a "Next" button, which remains deactivated until "Topic" selected. In Admin Settings there is a "Topics" tab where Admin can add as many Topics as required.
+# WP Helpdesk
 
-In "Topics" creating tab each Topic can be A. "Final step" or B. has a conditional Next step. In conditional next step Admin can create a dropdown list of Topics, in front end user must select a topic to continue. Once a Topic reaches to the point of "Final step", Admin can save it. In front end user interface there is a multiline obligatory text box to fill (minimum 20 characters) in the form and a "Send Request" button. 
+WP Helpdesk is a network-only WordPress multisite plugin scaffold for managing support tickets, topic flows, outbound notifications, attachments, and Android admin app access.
+
+## Current scaffold scope
+
+- Network admin menu with Dashboard, Tickets, Topics, and Settings pages
+- Network-global custom tables using `$wpdb->base_prefix . 'hd_'`
+- REST API namespace: `/wp-json/helpdesk/v1/`
+- Email notification abstraction through `NotificationService`
+- Push notification abstraction through FCM
+- Attachment upload scaffolding for tickets and messages
+
+## Architecture
+
+### Network activation
+
+1. Copy the plugin into your multisite plugins directory.
+2. Activate **WP Helpdesk** from **Network Admin → Plugins**.
+3. Activation runs all migrations and creates the `wp_hd_*` network tables using the network base prefix.
+4. Activation also seeds default `hd_*` network options and registers the custom helpdesk capabilities.
+
+### CKEditor email header/footer
+
+The **Email Header & Footer** settings tab expects a bundled CKEditor 4 copy:
+
+1. Download CKEditor 4 from https://ckeditor.com/ckeditor-4/download/
+2. Extract the distribution into:
+
+   `assets/vendor/ckeditor/`
+
+3. Confirm the editor file exists at:
+
+   `assets/vendor/ckeditor/ckeditor.js`
+
+The plugin enqueues this bundled file for the network settings editor.
+
+### Email delivery
+
+All outbound plugin email must go through:
+
+`WPHelpdesk\Domain\Notification\NotificationService`
+
+That service is the only place that wraps email content with the configured network header and footer layout before calling `wp_mail()`.
+
+### Android admin API
+
+The Android admin application should authenticate over HTTPS using WordPress Application Passwords.
+
+- Base URL: `/wp-json/helpdesk/v1/admin/`
+- Recommended auth: WordPress Application Passwords
+- For browser-based requests, send a valid `X-WP-Nonce` nonce
+
+### Push notifications
+
+Set the `hd_fcm_server_key` network option with your Firebase Cloud Messaging server key before enabling push delivery.
+
+The current scaffold uses an abstraction layer and includes a legacy HTTP call placeholder with a TODO for full FCM v1 support.
+
+## Legacy product notes
+
+The intended product direction remains:
+
+- Guest and member ticket forms
+- Topic-driven multi-step flows
+- Knowledge base assisted submission
+- Incremental ticket numbering
+- Agent replies, status changes, and attachments
