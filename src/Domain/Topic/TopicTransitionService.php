@@ -8,6 +8,7 @@ namespace WPHelpdesk\Domain\Topic;
 use WPHelpdesk\Support\Helpers;
 
 class TopicTransitionService {
+	public const ADMIN_TRANSITION_MARKER = '__hd_admin_topic_link__';
 
 	protected TopicTransitionRepository $repository;
 	protected TopicRepository $topic_repository;
@@ -28,6 +29,37 @@ class TopicTransitionService {
 	 */
 	public function listFrom( int $from_topic_id, bool $active_only = true ): array {
 		return $this->repository->listFrom( $from_topic_id, $this->network_id, $active_only );
+	}
+
+	/**
+	 * List only runtime-valid transitions from a topic.
+	 *
+	 * @param int  $from_topic_id Source topic id.
+	 * @param bool $active_only   Whether to limit to active transitions.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function listValidFrom( int $from_topic_id, bool $active_only = true ): array {
+		$topic = $this->topic_repository->find( $from_topic_id, $this->network_id );
+		if ( ! $topic || ! empty( $topic['is_final'] ) || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
+			return array();
+		}
+
+		$valid = array();
+		foreach ( $this->repository->listFrom( $from_topic_id, $this->network_id, $active_only ) as $transition ) {
+			$to_topic_id = (int) ( $transition['to_topic_id'] ?? 0 );
+			if ( $to_topic_id <= 0 || $to_topic_id === $from_topic_id ) {
+				continue;
+			}
+
+			$target = $this->topic_repository->find( $to_topic_id, $this->network_id );
+			if ( ! $target || ( isset( $target['is_active'] ) && empty( $target['is_active'] ) ) ) {
+				continue;
+			}
+
+			$valid[] = $transition;
+		}
+
+		return $valid;
 	}
 
 	/**
@@ -166,7 +198,7 @@ class TopicTransitionService {
 	 * @return int|null Next topic id, or null if no matching transition found.
 	 */
 	public function resolveNextTopic( int $from_topic_id, array $context = [] ): ?int {
-		$transitions = $this->repository->listFrom( $from_topic_id, $this->network_id, true );
+		$transitions = $this->listValidFrom( $from_topic_id, true );
 
 		foreach ( $transitions as $transition ) {
 			if ( $this->evaluateCondition( $transition, $context ) ) {
@@ -194,7 +226,173 @@ class TopicTransitionService {
 			return true;
 		}
 
-		return $this->repository->countActiveFrom( $topic_id, $this->network_id ) >= 1;
+		return count( $this->listValidFrom( $topic_id, true ) ) >= 1;
+	}
+
+	/**
+	 * Return unique valid next-topic ids for admin editing.
+	 *
+	 * @param int $topic_id Source topic id.
+	 * @return array<int, int>
+	 */
+	public function getSelectableNextTopicIds( int $topic_id ): array {
+		$ids = array();
+		foreach ( $this->listValidFrom( $topic_id, false ) as $transition ) {
+			$to_topic_id = (int) ( $transition['to_topic_id'] ?? 0 );
+			if ( $to_topic_id > 0 ) {
+				$ids[ $to_topic_id ] = $to_topic_id;
+			}
+		}
+
+		return array_values( $ids );
+	}
+
+	/**
+	 * Normalize candidate next-topic ids for persistence.
+	 *
+	 * @param array<int, mixed> $topic_ids Raw ids.
+	 * @param int               $current_topic_id Current topic id.
+	 * @return array<int, int>
+	 */
+	public function normalizeNextTopicIds( array $topic_ids, int $current_topic_id = 0 ): array {
+		$normalized = array();
+
+		foreach ( $topic_ids as $topic_id ) {
+			$topic_id = (int) $topic_id;
+			if ( $topic_id <= 0 || $topic_id === $current_topic_id ) {
+				continue;
+			}
+
+			$normalized[ $topic_id ] = $topic_id;
+		}
+
+		return array_values( $normalized );
+	}
+
+	/**
+	 * Validate final-vs-branch configuration selected in admin flows.
+	 *
+	 * @param int               $topic_id Topic id.
+	 * @param bool              $is_final Whether the topic is final.
+	 * @param array<int, mixed> $next_topic_ids Selected next topic ids.
+	 * @return string|null
+	 */
+	public function validateBranchConfiguration( int $topic_id, bool $is_final, array $next_topic_ids ): ?string {
+		if ( $is_final ) {
+			return null;
+		}
+
+		foreach ( $next_topic_ids as $next_topic_id ) {
+			if ( $topic_id > 0 && (int) $next_topic_id === $topic_id ) {
+				return 'invalid-transition';
+			}
+		}
+
+		$next_topic_ids = $this->normalizeNextTopicIds( $next_topic_ids, $topic_id );
+		if ( empty( $next_topic_ids ) ) {
+			return 'branch-missing-transition';
+		}
+
+		foreach ( $next_topic_ids as $next_topic_id ) {
+			$topic = $this->topic_repository->find( $next_topic_id, $this->network_id );
+			if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
+				return 'invalid-transition';
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Sync admin-managed follow-up transitions for a topic.
+	 *
+	 * @param int               $from_topic_id Source topic id.
+	 * @param array<int, mixed> $next_topic_ids Selected next topic ids.
+	 * @return bool
+	 */
+	public function syncAdminNextTopics( int $from_topic_id, array $next_topic_ids ): bool {
+		$source = $this->topic_repository->find( $from_topic_id, $this->network_id );
+		if ( ! $source ) {
+			return false;
+		}
+
+		$next_topic_ids = $this->normalizeNextTopicIds( $next_topic_ids, $from_topic_id );
+		foreach ( $next_topic_ids as $next_topic_id ) {
+			$topic = $this->topic_repository->find( $next_topic_id, $this->network_id );
+			if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
+				return false;
+			}
+		}
+
+		$existing_transitions = $this->repository->listFrom( $from_topic_id, $this->network_id, false );
+		$admin_transitions    = array();
+		$custom_targets       = array();
+
+		foreach ( $existing_transitions as $transition ) {
+			$to_topic_id = (int) ( $transition['to_topic_id'] ?? 0 );
+			if ( $to_topic_id <= 0 ) {
+				continue;
+			}
+
+			if ( $this->isAdminManagedTransition( $transition ) ) {
+				$admin_transitions[ $to_topic_id ] = $transition;
+				continue;
+			}
+
+			if ( ! empty( $transition['is_active'] ) ) {
+				$custom_targets[ $to_topic_id ] = true;
+			}
+		}
+
+		foreach ( $next_topic_ids as $next_topic_id ) {
+			$target = $this->topic_repository->find( $next_topic_id, $this->network_id );
+			$label  = isset( $target['title'] ) ? (string) $target['title'] : 'Topic #' . $next_topic_id;
+
+			if ( isset( $admin_transitions[ $next_topic_id ] ) ) {
+				$transition = $admin_transitions[ $next_topic_id ];
+				$transition_id = (int) ( $transition['id'] ?? 0 );
+				if ( $transition_id > 0 && ( empty( $transition['is_active'] ) || (string) ( $transition['label'] ?? '' ) !== $label ) ) {
+					$this->updateTransition(
+						$transition_id,
+						array(
+							'label'     => $label,
+							'is_active' => 1,
+						)
+					);
+				}
+				continue;
+			}
+
+			if ( isset( $custom_targets[ $next_topic_id ] ) ) {
+				continue;
+			}
+
+			if ( $this->createTransition(
+				array(
+					'from_topic_id'   => $from_topic_id,
+					'to_topic_id'     => $next_topic_id,
+					'label'           => $label,
+					'condition_type'  => 'always',
+					'condition_value' => self::ADMIN_TRANSITION_MARKER,
+					'is_active'       => 1,
+				)
+			) <= 0 ) {
+				return false;
+			}
+		}
+
+		foreach ( $admin_transitions as $to_topic_id => $transition ) {
+			if ( in_array( $to_topic_id, $next_topic_ids, true ) ) {
+				continue;
+			}
+
+			$transition_id = (int) ( $transition['id'] ?? 0 );
+			if ( $transition_id > 0 && ! $this->repository->delete( $transition_id, $this->network_id ) ) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -244,5 +442,16 @@ class TopicTransitionService {
 		$allowed = [ 'always', 'field_equals' ];
 
 		return in_array( $type, $allowed, true ) ? $type : 'always';
+	}
+
+	/**
+	 * Determine whether a transition is managed by the topic admin form.
+	 *
+	 * @param array<string, mixed> $transition Transition row.
+	 * @return bool
+	 */
+	private function isAdminManagedTransition( array $transition ): bool {
+		return 'always' === (string) ( $transition['condition_type'] ?? 'always' )
+			&& self::ADMIN_TRANSITION_MARKER === (string) ( $transition['condition_value'] ?? '' );
 	}
 }

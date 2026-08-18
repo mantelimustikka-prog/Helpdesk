@@ -93,6 +93,7 @@ class MemberTicketForm extends GuestTicketForm {
 					<p class="hd-field-hint" id="hd-member-topic-description" aria-live="polite"></p>
 				</div>
 				<div class="hd-branch-container" data-role="topic-branch"></div>
+				<div class="hd-kb-suggestions" data-role="kb-suggestions" aria-live="polite"></div>
 				<p class="hd-error-message" id="hd-member-topic-error" aria-live="assertive" role="alert"></p>
 				<div class="hd-form-actions">
 					<button type="button" class="hd-btn hd-btn--primary" id="hd-member-step0-next" disabled>

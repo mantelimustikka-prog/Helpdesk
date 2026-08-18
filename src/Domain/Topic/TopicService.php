@@ -129,6 +129,7 @@ class TopicService {
 				'title'       => $name,
 				'slug'        => $slug,
 				'description' => isset( $data['description'] ) ? sanitize_textarea_field( (string) $data['description'] ) : '',
+				'is_final'    => $this->resolveIsFinalFlag( $data ) ? 1 : 0,
 				'is_active'   => isset( $data['is_active'] ) ? (int) (bool) $data['is_active'] : 1,
 				'sort_order'  => isset( $data['sort_order'] ) ? (int) $data['sort_order'] : 0,
 				'created_at'  => current_time( 'mysql' ),
@@ -182,6 +183,10 @@ class TopicService {
 
 		if ( isset( $data['sort_order'] ) ) {
 			$update['sort_order'] = (int) $data['sort_order'];
+		}
+
+		if ( array_key_exists( 'is_final', $data ) || array_key_exists( 'node_type', $data ) ) {
+			$update['is_final'] = $this->resolveIsFinalFlag( $data, ! empty( $existing['is_final'] ) ) ? 1 : 0;
 		}
 
 		return $this->repository->update( $id, $update, $this->network_id );
@@ -258,5 +263,24 @@ class TopicService {
 			: $transition_count >= 1;
 
 		return $row;
+	}
+
+	/**
+	 * Resolve the persisted final-step flag from a payload.
+	 *
+	 * @param array<string, mixed> $data Topic payload.
+	 * @param bool                 $default Default fallback.
+	 * @return bool
+	 */
+	protected function resolveIsFinalFlag( array $data, bool $default = false ): bool {
+		if ( array_key_exists( 'node_type', $data ) ) {
+			return 'final' === sanitize_key( (string) $data['node_type'] );
+		}
+
+		if ( array_key_exists( 'is_final', $data ) ) {
+			return (bool) $data['is_final'];
+		}
+
+		return $default;
 	}
 }

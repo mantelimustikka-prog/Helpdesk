@@ -5,6 +5,7 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseProviderInterface;
 use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseService;
+use WPHelpdesk\Domain\KnowledgeBase\WordPressKnowledgeBaseProvider;
 use WPHelpdesk\Interfaces\Frontend\FormDefinitionFactory;
 use WPHelpdesk\Support\Constants;
 
@@ -54,5 +55,34 @@ final class ArchitectureSupportTest extends TestCase {
 		self::assertSame( 'Match billing', $service->searchTopics( 'billing' )[0]['title'] );
 		self::assertSame( 2, $service->getTopicById( 2 )['id'] );
 		self::assertSame( 'reset', $service->suggestByPath( array( 'account' ), 'reset' )[0]['query'] );
+	}
+
+	public function testWordPressKnowledgeBaseProviderMapsSearchAndLookupResults(): void {
+		$GLOBALS['wp_posts_index'] = array(
+			10 => (object) array(
+				'ID'           => 10,
+				'post_title'   => 'Billing FAQ',
+				'post_content' => 'Billing help article content',
+				'post_excerpt' => '',
+				'post_status'  => 'publish',
+			),
+			11 => (object) array(
+				'ID'           => 11,
+				'post_title'   => 'Draft Article',
+				'post_content' => 'Draft',
+				'post_excerpt' => '',
+				'post_status'  => 'draft',
+			),
+		);
+
+		$provider = new WordPressKnowledgeBaseProvider();
+
+		$results = $provider->searchTopics( '', array( 'Billing' ), 5 );
+
+		self::assertCount( 1, $results );
+		self::assertSame( 10, $results[0]['id'] );
+		self::assertSame( 'Billing FAQ', $provider->getTopicById( 10 )['title'] );
+		self::assertNull( $provider->getTopicById( 11 ) );
+		self::assertSame( 10, $provider->suggestByPath( array( 'Billing' ), '', 5 )[0]['id'] );
 	}
 }

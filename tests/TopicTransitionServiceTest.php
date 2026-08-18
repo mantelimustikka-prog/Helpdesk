@@ -105,6 +105,114 @@ final class TopicTransitionServiceTest extends TestCase {
 		self::assertNull( $service->resolveNextTopic( 1, [ 'type' => 'basic' ] ) );
 	}
 
+	public function testResolveNextTopicReturnsNullForFinalSourceTopic(): void {
+		$topic_repo = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return [ 'id' => $id, 'is_final' => 1 ];
+			}
+		};
+
+		$transition_repo = new class extends TopicTransitionRepository {
+			public function listFrom( int $from_topic_id, int $network_id, bool $active_only = true ): array {
+				return [
+					[ 'to_topic_id' => 2, 'condition_type' => 'always', 'condition_value' => null, 'sort_order' => 0 ],
+				];
+			}
+		};
+
+		$service = $this->makeService( $topic_repo, $transition_repo );
+
+		self::assertNull( $service->resolveNextTopic( 1 ) );
+	}
+
+	public function testResolveNextTopicSkipsBrokenAndSelfReferentialTransitions(): void {
+		$topic_repo = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return match ( $id ) {
+					1 => [ 'id' => 1, 'is_final' => 0 ],
+					3 => [ 'id' => 3, 'is_final' => 0, 'is_active' => 1 ],
+					default => null,
+				};
+			}
+		};
+
+		$transition_repo = new class extends TopicTransitionRepository {
+			public function listFrom( int $from_topic_id, int $network_id, bool $active_only = true ): array {
+				return [
+					[ 'to_topic_id' => 1, 'condition_type' => 'always', 'condition_value' => null, 'sort_order' => 0 ],
+					[ 'to_topic_id' => 2, 'condition_type' => 'always', 'condition_value' => null, 'sort_order' => 1 ],
+					[ 'to_topic_id' => 3, 'condition_type' => 'always', 'condition_value' => null, 'sort_order' => 2 ],
+				];
+			}
+		};
+
+		$service = $this->makeService( $topic_repo, $transition_repo );
+
+		self::assertSame( 3, $service->resolveNextTopic( 1 ) );
+	}
+
+	public function testValidateBranchConfigurationRequiresValidNextTopics(): void {
+		$topic_repo = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return 9 === $id ? null : [ 'id' => $id, 'is_final' => 0, 'is_active' => 1 ];
+			}
+		};
+
+		$service = $this->makeService( $topic_repo, new TopicTransitionRepository() );
+
+		self::assertSame( 'branch-missing-transition', $service->validateBranchConfiguration( 4, false, [] ) );
+		self::assertSame( 'invalid-transition', $service->validateBranchConfiguration( 4, false, [ 4 ] ) );
+		self::assertSame( 'invalid-transition', $service->validateBranchConfiguration( 4, false, [ 9 ] ) );
+		self::assertNull( $service->validateBranchConfiguration( 4, true, [] ) );
+	}
+
+	public function testSyncAdminNextTopicsCreatesAndRemovesManagedTransitions(): void {
+		$topic_repo = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return match ( $id ) {
+					1 => [ 'id' => 1, 'title' => 'Start', 'is_final' => 0, 'is_active' => 1 ],
+					2 => [ 'id' => 2, 'title' => 'Billing', 'is_final' => 0, 'is_active' => 1 ],
+					3 => [ 'id' => 3, 'title' => 'Shipping', 'is_final' => 1, 'is_active' => 1 ],
+					default => null,
+				};
+			}
+		};
+
+		$transition_repo = new class extends TopicTransitionRepository {
+			public array $created = array();
+			public array $deleted = array();
+
+			public function listFrom( int $from_topic_id, int $network_id, bool $active_only = true ): array {
+				return array(
+					array(
+						'id'              => 8,
+						'to_topic_id'     => 2,
+						'label'           => 'Billing',
+						'condition_type'  => 'always',
+						'condition_value' => \WPHelpdesk\Domain\Topic\TopicTransitionService::ADMIN_TRANSITION_MARKER,
+						'is_active'       => 1,
+					),
+				);
+			}
+
+			public function create( array $data ): int {
+				$this->created[] = $data;
+				return 25;
+			}
+
+			public function delete( int $id, int $network_id ): bool {
+				$this->deleted[] = $id;
+				return true;
+			}
+		};
+
+		$service = $this->makeService( $topic_repo, $transition_repo );
+
+		self::assertTrue( $service->syncAdminNextTopics( 1, [ 3 ] ) );
+		self::assertSame( 8, $transition_repo->deleted[0] );
+		self::assertSame( 3, $transition_repo->created[0]['to_topic_id'] );
+	}
+
 	public function testBranchTopicValidationRequiresAtLeastOneActiveTransition(): void {
 		$topic_repo = new class extends TopicRepository {
 			public function find( int $id, int $network_id ): ?array {
@@ -113,8 +221,8 @@ final class TopicTransitionServiceTest extends TestCase {
 		};
 
 		$transition_repo = new class extends TopicTransitionRepository {
-			public function countActiveFrom( int $from_topic_id, int $network_id ): int {
-				return 0;
+			public function listFrom( int $from_topic_id, int $network_id, bool $active_only = true ): array {
+				return [];
 			}
 		};
 
