@@ -36,5 +36,23 @@ class Activator {
 		if ( ! $network_wide && is_multisite() ) {
 			update_site_option( 'hd_last_non_network_activation', gmdate( 'Y-m-d H:i:s' ) );
 		}
+
+		// Bootstrap frontend pages (per-site; iterate on network activation).
+		if ( $network_wide && is_multisite() ) {
+			$sites = get_sites( array( 'number' => 0 ) );
+			foreach ( $sites as $site ) {
+				switch_to_blog( (int) $site->blog_id );
+				PageBootstrapper::ensurePages();
+				// Stamp rewrite version so version-check flush runs on first boot.
+				update_option( Constants::OPTION_REWRITE_VERSION, Constants::REWRITE_VERSION );
+				restore_current_blog();
+			}
+		} else {
+			PageBootstrapper::ensurePages();
+			update_option( Constants::OPTION_REWRITE_VERSION, Constants::REWRITE_VERSION );
+		}
+
+		// Flush rewrite rules once at activation time.
+		flush_rewrite_rules( false );
 	}
 }
