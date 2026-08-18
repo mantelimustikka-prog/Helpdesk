@@ -11,6 +11,7 @@ use WPHelpdesk\Domain\Push\FirebasePushProvider;
 use WPHelpdesk\Domain\Push\PushService;
 use WPHelpdesk\Infrastructure\Logger;
 use WPHelpdesk\Interfaces\Admin\NetworkMenu;
+use WPHelpdesk\Interfaces\Frontend\FrontendRouter;
 use WPHelpdesk\Interfaces\Rest\Routes;
 
 class Plugin {
@@ -20,6 +21,7 @@ class Plugin {
 	protected PushService $push_service;
 	protected AttachmentService $attachment_service;
 	protected Logger $logger;
+	protected FrontendRouter $frontend_router;
 
 	public function __construct(
 		?NetworkMenu $network_menu = null,
@@ -27,7 +29,8 @@ class Plugin {
 		?NotificationService $notification_service = null,
 		?PushService $push_service = null,
 		?AttachmentService $attachment_service = null,
-		?Logger $logger = null
+		?Logger $logger = null,
+		?FrontendRouter $frontend_router = null
 	) {
 		$this->network_menu         = $network_menu ?: new NetworkMenu();
 		$this->routes               = $routes ?: new Routes();
@@ -35,6 +38,7 @@ class Plugin {
 		$this->push_service         = $push_service ?: new PushService( new FirebasePushProvider() );
 		$this->attachment_service   = $attachment_service ?: new AttachmentService();
 		$this->logger               = $logger ?: new Logger();
+		$this->frontend_router      = $frontend_router ?: new FrontendRouter();
 	}
 
 	/**
@@ -47,6 +51,8 @@ class Plugin {
 
 		add_action( 'network_admin_menu', array( $this->network_menu, 'register' ) );
 		add_action( 'rest_api_init', array( $this->routes, 'register_rest_routes' ) );
+
+		$this->frontend_router->register();
 
 		add_action( 'hd_ticket_replied', array( $this, 'handleTicketReplied' ), 10, 2 );
 		add_action( 'hd_ticket_status_changed', array( $this, 'handleTicketStatusChanged' ), 10, 3 );
