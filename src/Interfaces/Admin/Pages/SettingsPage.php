@@ -130,7 +130,7 @@ class SettingsPage {
 				'wp-helpdesk-ckeditor',
 				Helpers::pluginUrl( 'assets/vendor/ckeditor/ckeditor.js' ),
 				array(),
-				HD_VERSION,
+				'4.22.1',
 				true
 			);
 
