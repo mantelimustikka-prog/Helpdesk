@@ -10,6 +10,7 @@ use WPHelpdesk\Infrastructure\Security\Capabilities;
 use WPHelpdesk\Domain\SLA\SlaService;
 use WPHelpdesk\Domain\Privacy\RetentionService;
 use WPHelpdesk\Support\Constants;
+use WPHelpdesk\Bootstrap\PageBootstrapper;
 
 class Activator {
 	/**
@@ -41,5 +42,24 @@ class Activator {
 
 		SlaService::scheduleCron();
 		RetentionService::scheduleCron();
+
+		// Bootstrap frontend pages (per-site; iterate on network activation).
+		if ( $network_wide && is_multisite() ) {
+			$sites = get_sites( array( 'number' => 0 ) );
+			foreach ( $sites as $site ) {
+				switch_to_blog( (int) $site->blog_id );
+				PageBootstrapper::ensurePages();
+				// Stamp rewrite version to prevent a redundant flush on first boot
+				// (activation already flushed above via flush_rewrite_rules()).
+				update_option( Constants::OPTION_REWRITE_VERSION, Constants::REWRITE_VERSION );
+				restore_current_blog();
+			}
+		} else {
+			PageBootstrapper::ensurePages();
+			update_option( Constants::OPTION_REWRITE_VERSION, Constants::REWRITE_VERSION );
+		}
+
+		// Flush rewrite rules once at activation time.
+		flush_rewrite_rules( false );
 	}
 }
