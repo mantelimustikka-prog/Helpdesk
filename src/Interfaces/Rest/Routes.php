@@ -16,6 +16,7 @@ class Routes {
 	protected AdminDashboardController $admin_dashboard_controller;
 	protected DeviceController $device_controller;
 	protected AttachmentController $attachment_controller;
+	protected PublicTicketController $public_ticket_controller;
 
 	public function __construct() {
 		$this->admin_me_controller        = new AdminMeController();
@@ -23,6 +24,7 @@ class Routes {
 		$this->admin_dashboard_controller = new AdminDashboardController();
 		$this->device_controller          = new DeviceController();
 		$this->attachment_controller      = new AttachmentController( new AttachmentService() );
+		$this->public_ticket_controller   = new PublicTicketController();
 	}
 
 	/**
@@ -149,6 +151,8 @@ class Routes {
 				),
 			)
 		);
+
+		$this->public_ticket_controller->register( $namespace );
 	}
 
 	/**
