@@ -111,6 +111,37 @@ class TopicRepository {
 	}
 
 	/**
+	 * Find multiple topics by id within a network.
+	 *
+	 * @param array<int, int> $ids Topic ids.
+	 * @param int             $network_id Network id.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function findMany( array $ids, int $network_id ): array {
+		global $wpdb;
+
+		$ids = array_values( array_filter( array_map( 'intval', $ids ) ) );
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$table        = Schema::table( Constants::TABLE_TOPICS );
+		$placeholders = implode( ', ', array_fill( 0, count( $ids ), '%d' ) );
+		$params       = array_merge( array( $network_id ), $ids );
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE network_id = %d AND id IN ({$placeholders})",
+				...$params
+			),
+			ARRAY_A
+		);
+
+		return $rows ?: array();
+	}
+
+	/**
 	 * Insert a new topic row.
 	 *
 	 * @param array<string, mixed> $data Column data.

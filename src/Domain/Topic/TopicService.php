@@ -88,6 +88,30 @@ class TopicService {
 	}
 
 	/**
+	 * Fetch multiple normalized topics keyed by id.
+	 *
+	 * @param array<int, int> $ids Topic ids.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function getTopicsByIds( array $ids ): array {
+		$ids   = array_values( array_filter( array_map( 'intval', $ids ) ) );
+		$rows  = $this->repository->findMany( $ids, $this->network_id );
+		$count = $this->repository->getActiveTransitionCounts( $ids, $this->network_id );
+		$items = array();
+
+		foreach ( $rows as $row ) {
+			$topic_id = (int) ( $row['id'] ?? 0 );
+			if ( $topic_id <= 0 ) {
+				continue;
+			}
+
+			$items[ $topic_id ] = $this->normalizeRow( $row, $count[ $topic_id ] ?? 0 );
+		}
+
+		return $items;
+	}
+
+	/**
 	 * Determine whether a branch topic has at least one active next edge.
 	 *
 	 * @param int $id Topic id.
@@ -129,6 +153,7 @@ class TopicService {
 				'title'       => $name,
 				'slug'        => $slug,
 				'description' => isset( $data['description'] ) ? sanitize_textarea_field( (string) $data['description'] ) : '',
+				'is_final'    => $this->resolveIsFinalFlag( $data ) ? 1 : 0,
 				'is_active'   => isset( $data['is_active'] ) ? (int) (bool) $data['is_active'] : 1,
 				'sort_order'  => isset( $data['sort_order'] ) ? (int) $data['sort_order'] : 0,
 				'created_at'  => current_time( 'mysql' ),
@@ -182,6 +207,10 @@ class TopicService {
 
 		if ( isset( $data['sort_order'] ) ) {
 			$update['sort_order'] = (int) $data['sort_order'];
+		}
+
+		if ( array_key_exists( 'is_final', $data ) || array_key_exists( 'node_type', $data ) ) {
+			$update['is_final'] = $this->resolveIsFinalFlag( $data, ! empty( $existing['is_final'] ) ) ? 1 : 0;
 		}
 
 		return $this->repository->update( $id, $update, $this->network_id );
@@ -258,5 +287,24 @@ class TopicService {
 			: $transition_count >= 1;
 
 		return $row;
+	}
+
+	/**
+	 * Resolve the persisted final-step flag from a payload.
+	 *
+	 * @param array<string, mixed> $data Topic payload.
+	 * @param bool                 $default Default fallback.
+	 * @return bool
+	 */
+	protected function resolveIsFinalFlag( array $data, bool $default = false ): bool {
+		if ( array_key_exists( 'node_type', $data ) ) {
+			return 'final' === sanitize_key( (string) $data['node_type'] );
+		}
+
+		if ( array_key_exists( 'is_final', $data ) ) {
+			return (bool) $data['is_final'];
+		}
+
+		return $default;
 	}
 }

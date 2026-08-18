@@ -8,10 +8,13 @@ namespace WPHelpdesk\Interfaces\Rest;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
+use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseService;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Infrastructure\Security\RateLimiter;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
+use WPHelpdesk\Domain\Topic\TopicService;
+use WPHelpdesk\Domain\Topic\TopicTransitionService;
 
 /**
  * Handles public (customer-facing) REST endpoints:
@@ -20,6 +23,15 @@ use WPHelpdesk\Support\Helpers;
  *  POST /helpdesk/v1/tickets/member    – create ticket as logged-in user
  */
 class PublicTicketController {
+	protected TopicService $topic_service;
+	protected TopicTransitionService $topic_transition_service;
+	protected KnowledgeBaseService $kb_service;
+
+	public function __construct( ?TopicService $topic_service = null, ?TopicTransitionService $topic_transition_service = null, ?KnowledgeBaseService $kb_service = null ) {
+		$this->topic_service            = $topic_service ?: new TopicService();
+		$this->topic_transition_service = $topic_transition_service ?: new TopicTransitionService();
+		$this->kb_service               = $kb_service ?: new KnowledgeBaseService();
+	}
 
 	/**
 	 * Register routes via Routes class; called from Routes::register_rest_routes().
@@ -79,6 +91,36 @@ class PublicTicketController {
 				'permission_callback' => '__return_true',
 			)
 		);
+
+		register_rest_route(
+			$namespace,
+			'/kb/search',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'searchKnowledgeBase' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/kb/topics/(?P<article_id>[^/]+)',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'getKnowledgeBaseTopic' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/kb/suggest',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'suggestKnowledgeBase' ),
+				'permission_callback' => '__return_true',
+			)
+		);
 	}
 
 	/**
@@ -127,46 +169,78 @@ class PublicTicketController {
 	 * @return WP_REST_Response
 	 */
 	public function listTransitions( WP_REST_Request $request ): WP_REST_Response {
-		global $wpdb;
-
-		$transitions_table = Schema::table( Constants::TABLE_TOPIC_TRANSITIONS );
-		$topics_table      = Schema::table( Constants::TABLE_TOPICS );
-		$network_id        = Helpers::getNetworkId();
 		$topic_id          = (int) $request['id'];
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT t.to_topic_id, t.label, tt.title AS to_topic_title, tt.description AS to_topic_description, tt.is_final AS to_topic_is_final
-				 FROM {$transitions_table} t
-				 INNER JOIN {$topics_table} tt ON tt.id = t.to_topic_id
-				 WHERE t.network_id = %d
-				   AND t.from_topic_id = %d
-				   AND t.is_active = 1
-				   AND tt.is_active = 1
-				 ORDER BY t.sort_order ASC, t.id ASC",
-				$network_id,
-				$topic_id
-			),
-			ARRAY_A
+		$payload           = array();
+		$transitions       = $this->topic_transition_service->listValidFrom( $topic_id, true );
+		$target_topics     = $this->topic_service->getTopicsByIds(
+			array_map(
+				static fn( array $transition ): int => (int) ( $transition['to_topic_id'] ?? 0 ),
+				$transitions
+			)
 		);
 
-		$payload = array_map(
-			static function ( array $row ): array {
-				return array(
-					'to_topic_id' => (int) $row['to_topic_id'],
-					'label'       => (string) $row['label'],
-					'to_topic'    => array(
-						'title'       => (string) $row['to_topic_title'],
-						'description' => (string) $row['to_topic_description'],
-						'is_final'    => (int) $row['to_topic_is_final'],
-					),
-				);
-			},
-			$rows ?: array()
-		);
+		foreach ( $transitions as $transition ) {
+			$to_topic_id = (int) ( $transition['to_topic_id'] ?? 0 );
+			$target      = $target_topics[ $to_topic_id ] ?? null;
+			if ( ! $target ) {
+				continue;
+			}
+
+			$payload[] = array(
+				'to_topic_id' => $to_topic_id,
+				'label'       => (string) ( $transition['label'] ?? '' ),
+				'to_topic'    => array(
+					'title'       => (string) ( $target['name'] ?? $target['title'] ?? '' ),
+					'description' => (string) ( $target['description'] ?? '' ),
+					'is_final'    => (int) ! empty( $target['is_final'] ),
+				),
+			);
+		}
 
 		return new WP_REST_Response( $payload, 200 );
+	}
+
+	/**
+	 * GET /kb/search – search KB content using topic-path context.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 * @return WP_REST_Response
+	 */
+	public function searchKnowledgeBase( WP_REST_Request $request ): WP_REST_Response {
+		$query      = sanitize_text_field( (string) $request->get_param( 'query' ) );
+		$topic_path = $this->normalizeKnowledgeBasePath( $request->get_param( 'topic_path' ) );
+		$limit      = max( 1, min( 10, (int) ( $request->get_param( 'limit' ) ?: 5 ) ) );
+
+		return new WP_REST_Response( $this->kb_service->searchTopics( $query, $topic_path, $limit ), 200 );
+	}
+
+	/**
+	 * GET /kb/topics/{article_id} – retrieve one KB result.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 * @return WP_REST_Response
+	 */
+	public function getKnowledgeBaseTopic( WP_REST_Request $request ): WP_REST_Response {
+		$article = $this->kb_service->getTopicById( (string) $request['article_id'] );
+		if ( null === $article ) {
+			return new WP_REST_Response( array( 'message' => 'Knowledge base topic not found.' ), 404 );
+		}
+
+		return new WP_REST_Response( $article, 200 );
+	}
+
+	/**
+	 * GET /kb/suggest – suggest KB entries from the current topic path.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 * @return WP_REST_Response
+	 */
+	public function suggestKnowledgeBase( WP_REST_Request $request ): WP_REST_Response {
+		$query      = sanitize_text_field( (string) $request->get_param( 'query' ) );
+		$topic_path = $this->normalizeKnowledgeBasePath( $request->get_param( 'topic_path' ) );
+		$limit      = max( 1, min( 10, (int) ( $request->get_param( 'limit' ) ?: 5 ) ) );
+
+		return new WP_REST_Response( $this->kb_service->suggestByPath( $topic_path, $query, $limit ), 200 );
 	}
 
 	/**
@@ -504,6 +578,25 @@ class PublicTicketController {
 		}
 
 		return $path;
+	}
+
+	/**
+	 * Normalize topic-path context for knowledge-base queries.
+	 *
+	 * @param mixed $raw_path Raw topic path input.
+	 * @return array<int, int>
+	 */
+	protected function normalizeKnowledgeBasePath( $raw_path ): array {
+		if ( is_array( $raw_path ) ) {
+			return array_values(
+				array_filter(
+					array_map( 'intval', $raw_path ),
+					static fn( int $value ): bool => $value > 0
+				)
+			);
+		}
+
+		return array();
 	}
 
 	/**

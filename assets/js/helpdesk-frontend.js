@@ -9,6 +9,28 @@
 	var restNonce = config.restNonce || '';
 	var i18n = config.i18n || {};
 
+	function buildQuery( params ) {
+		var searchParams = new window.URLSearchParams();
+
+		Object.keys( params || {} ).forEach( function ( key ) {
+			var value = params[ key ];
+			if ( Array.isArray( value ) ) {
+				value.forEach( function ( item ) {
+					if ( item !== undefined && item !== null && item !== '' ) {
+						searchParams.append( key + '[]', item );
+					}
+				} );
+				return;
+			}
+
+			if ( value !== undefined && value !== null && value !== '' ) {
+				searchParams.append( key, value );
+			}
+		} );
+
+		return searchParams.toString();
+	}
+
 	function apiGet( path ) {
 		return window.fetch( restBase + path, {
 			credentials: 'same-origin',
@@ -149,6 +171,7 @@
 
 		if ( ! val ) {
 			this.selectedTopicId = 0;
+			this._renderKnowledgeBaseSuggestions( [] );
 			if ( this._isTopicRequired() ) {
 				this._showTopicError( i18n.errorSelectTopic || 'Please select a topic.' );
 			} else {
@@ -167,6 +190,7 @@
 		this.selectedTopicId = parseInt( val, 10 );
 		this.selectedTopicTitle = opt ? opt.textContent.trim() : '';
 		this._clearTopicError();
+		this._refreshKnowledgeBaseSuggestions();
 
 		if ( hintEl ) {
 			hintEl.textContent = opt && opt.dataset.description ? opt.dataset.description : '';
@@ -195,6 +219,72 @@
 			self._showTopicError( i18n.errorLoadTransitions || 'Could not load follow-up topics. Please try again.' );
 			self._saveState();
 		} );
+	};
+
+	FormController.prototype._refreshKnowledgeBaseSuggestions = function () {
+		var self = this;
+		if ( ! Array.isArray( this.topicPath ) || this.topicPath.length === 0 ) {
+			this._renderKnowledgeBaseSuggestions( [] );
+			return;
+		}
+
+		apiGet( 'kb/suggest?' + buildQuery( {
+			topic_path: this.topicPath.slice(),
+			limit: 5
+		} ) ).then( function ( items ) {
+			self._renderKnowledgeBaseSuggestions( Array.isArray( items ) ? items : [] );
+		} ).catch( function () {
+			self._renderKnowledgeBaseSuggestions( [] );
+		} );
+	};
+
+	FormController.prototype._renderKnowledgeBaseSuggestions = function ( items ) {
+		var container = this.container.querySelector( '[data-role="kb-suggestions"]' );
+		if ( ! container ) {
+			return;
+		}
+
+		container.innerHTML = '';
+		if ( ! Array.isArray( items ) || items.length === 0 ) {
+			return;
+		}
+
+		var title = document.createElement( 'h3' );
+		var list = document.createElement( 'ul' );
+
+		title.className = 'hd-form-step__title';
+		title.textContent = i18n.kbSuggestionsTitle || 'Helpful articles';
+		list.className = 'hd-kb-suggestions__list';
+
+		items.forEach( function ( item ) {
+			var listItem = document.createElement( 'li' );
+			var excerpt = document.createElement( 'p' );
+			var link;
+
+			if ( item.url ) {
+				link = document.createElement( 'a' );
+				link.href = item.url;
+				link.textContent = item.title || '';
+				link.target = '_blank';
+				link.rel = 'noopener noreferrer';
+				listItem.appendChild( link );
+			} else {
+				link = document.createElement( 'span' );
+				link.textContent = item.title || '';
+				listItem.appendChild( link );
+			}
+
+			if ( item.excerpt ) {
+				excerpt.className = 'hd-field-hint';
+				excerpt.textContent = item.excerpt;
+				listItem.appendChild( excerpt );
+			}
+
+			list.appendChild( listItem );
+		} );
+
+		container.appendChild( title );
+		container.appendChild( list );
 	};
 
 	FormController.prototype._renderTransitionSelect = function ( transitions, level ) {

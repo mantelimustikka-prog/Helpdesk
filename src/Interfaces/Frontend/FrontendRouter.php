@@ -204,6 +204,8 @@ class FrontendRouter {
 					'errorSelectTopic'   => __( 'Please select a topic.', 'wp-helpdesk' ),
 					'errorCompleteTopic' => __( 'Please complete topic selection.', 'wp-helpdesk' ),
 					'errorLoadTransitions' => __( 'Could not load follow-up topics. Please try again.', 'wp-helpdesk' ),
+					'kbSuggestionsTitle' => __( 'Helpful articles', 'wp-helpdesk' ),
+					'kbNoSuggestions'    => __( 'No related knowledge base articles were found for this topic yet.', 'wp-helpdesk' ),
 				),
 			)
 		);

@@ -30,12 +30,14 @@ final class TopicServiceTest extends TestCase {
 			array(
 				'name'        => 'Billing',
 				'description' => 'Invoices and payments',
+				'node_type'   => 'final',
 			)
 		);
 
 		self::assertSame( 99, $topic_id );
 		self::assertSame( 'Billing', $repository->created_data['title'] );
 		self::assertSame( 'billing-2', $repository->created_data['slug'] );
+		self::assertSame( 1, $repository->created_data['is_final'] );
 		self::assertSame( 1, $repository->created_data['network_id'] );
 	}
 
@@ -54,6 +56,32 @@ final class TopicServiceTest extends TestCase {
 		$this->injectRepository( $service, $repository );
 
 		self::assertFalse( $service->updateTopic( 7, array( 'name' => '   ' ) ) );
+	}
+
+	public function testUpdateTopicPersistsNodeTypeChanges(): void {
+		$repository = new class extends TopicRepository {
+			public array $updated = array();
+
+			public function find( int $id, int $network_id ): ?array {
+				return array(
+					'id'       => $id,
+					'title'    => 'Existing Topic',
+					'slug'     => 'existing-topic',
+					'is_final' => 0,
+				);
+			}
+
+			public function update( int $id, array $data, int $network_id ): bool {
+				$this->updated = $data;
+				return true;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		self::assertTrue( $service->updateTopic( 7, array( 'node_type' => 'final' ) ) );
+		self::assertSame( 1, $repository->updated['is_final'] );
 	}
 
 	public function testListTopicsAddsNameAlias(): void {

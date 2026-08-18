@@ -8,12 +8,15 @@ namespace WPHelpdesk\Interfaces\Rest;
 use WP_REST_Request;
 use WP_REST_Response;
 use WPHelpdesk\Domain\Topic\TopicService;
+use WPHelpdesk\Domain\Topic\TopicTransitionService;
 
 class AdminTopicsController {
 	protected TopicService $topic_service;
+	protected TopicTransitionService $topic_transition_service;
 
-	public function __construct() {
-		$this->topic_service = new TopicService();
+	public function __construct( ?TopicService $topic_service = null, ?TopicTransitionService $topic_transition_service = null ) {
+		$this->topic_service            = $topic_service ?: new TopicService();
+		$this->topic_transition_service = $topic_transition_service ?: new TopicTransitionService();
 	}
 
 	/**
@@ -61,12 +64,24 @@ class AdminTopicsController {
 	 * @return WP_REST_Response
 	 */
 	public function createTopic( WP_REST_Request $request ): WP_REST_Response {
-		$topic_id = $this->topic_service->createTopic( $this->extractPayload( $request ) );
+		$payload        = $this->extractPayload( $request );
+		$next_topic_ids = $this->extractNextTopicIds( $request );
+		$error_code     = $this->topic_transition_service->validateBranchConfiguration( 0, ! empty( $payload['is_final'] ), $next_topic_ids );
+
+		if ( null !== $error_code ) {
+			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
+		}
+
+		$topic_id = $this->topic_service->createTopic( $payload );
 		if ( $topic_id <= 0 ) {
 			return new WP_REST_Response( array( 'message' => 'Failed to create topic.' ), 400 );
 		}
 
-		$topic = $this->topic_service->getTopic( $topic_id );
+		if ( ! $this->topic_transition_service->syncAdminNextTopics( $topic_id, ! empty( $payload['is_final'] ) ? array() : $next_topic_ids ) ) {
+			return new WP_REST_Response( array( 'message' => 'Failed to save follow-up topics.' ), 400 );
+		}
+
+		$topic = $this->buildTopicResponse( $topic_id );
 
 		return new WP_REST_Response( $topic, 201 );
 	}
@@ -78,7 +93,7 @@ class AdminTopicsController {
 	 * @return WP_REST_Response
 	 */
 	public function getTopic( WP_REST_Request $request ): WP_REST_Response {
-		$topic = $this->topic_service->getTopic( (int) $request['id'] );
+		$topic = $this->buildTopicResponse( (int) $request['id'] );
 		if ( ! $topic ) {
 			return new WP_REST_Response( array( 'message' => 'Topic not found.' ), 404 );
 		}
@@ -93,13 +108,25 @@ class AdminTopicsController {
 	 * @return WP_REST_Response
 	 */
 	public function updateTopic( WP_REST_Request $request ): WP_REST_Response {
-		$topic_id = (int) $request['id'];
-		$updated  = $this->topic_service->updateTopic( $topic_id, $this->extractPayload( $request ) );
+		$topic_id       = (int) $request['id'];
+		$payload        = $this->extractPayload( $request );
+		$next_topic_ids = $this->extractNextTopicIds( $request );
+		$error_code     = $this->topic_transition_service->validateBranchConfiguration( $topic_id, ! empty( $payload['is_final'] ), $next_topic_ids );
+
+		if ( null !== $error_code ) {
+			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
+		}
+
+		$updated = $this->topic_service->updateTopic( $topic_id, $payload );
 		if ( ! $updated ) {
 			return new WP_REST_Response( array( 'message' => 'Unable to update topic.' ), 400 );
 		}
 
-		$topic = $this->topic_service->getTopic( $topic_id );
+		if ( ! $this->topic_transition_service->syncAdminNextTopics( $topic_id, ! empty( $payload['is_final'] ) ? array() : $next_topic_ids ) ) {
+			return new WP_REST_Response( array( 'message' => 'Failed to save follow-up topics.' ), 400 );
+		}
+
+		$topic = $this->buildTopicResponse( $topic_id );
 
 		return new WP_REST_Response( $topic, 200 );
 	}
@@ -185,12 +212,60 @@ class AdminTopicsController {
 	protected function extractPayload( WP_REST_Request $request ): array {
 		$payload = array();
 
-		foreach ( array( 'name', 'slug', 'description', 'sort_order', 'is_active' ) as $field ) {
+		foreach ( array( 'name', 'slug', 'description', 'sort_order', 'is_active', 'is_final', 'node_type' ) as $field ) {
 			if ( null !== $request->get_param( $field ) ) {
 				$payload[ $field ] = $request->get_param( $field );
 			}
 		}
 
 		return $payload;
+	}
+
+	/**
+	 * Extract selected follow-up topic ids.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return array<int, int>
+	 */
+	protected function extractNextTopicIds( WP_REST_Request $request ): array {
+		$next_topic_ids = $request->get_param( 'next_topic_ids' );
+
+		if ( ! is_array( $next_topic_ids ) ) {
+			return array();
+		}
+
+		return array_values( array_unique( array_filter( array_map( 'intval', $next_topic_ids ) ) ) );
+	}
+
+	/**
+	 * Build a normalized topic response payload.
+	 *
+	 * @param int $topic_id Topic id.
+	 * @return array<string, mixed>|null
+	 */
+	protected function buildTopicResponse( int $topic_id ): ?array {
+		$topic = $this->topic_service->getTopic( $topic_id );
+		if ( ! $topic ) {
+			return null;
+		}
+
+		$topic['next_topic_ids'] = $this->topic_transition_service->getSelectableNextTopicIds( $topic_id );
+
+		return $topic;
+	}
+
+	/**
+	 * Map an internal validation code to an API response message.
+	 *
+	 * @param string $error_code Validation code.
+	 * @return string
+	 */
+	protected function messageForErrorCode( string $error_code ): string {
+		$messages = array(
+			'branch-missing-transition' => 'Branch topics must include at least one valid follow-up topic.',
+			'invalid-transition'        => 'One or more selected follow-up topics are invalid.',
+		);
+
+		return $messages[ $error_code ] ?? 'Unable to save topic graph.';
 	}
 }
