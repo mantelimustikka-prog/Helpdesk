@@ -50,6 +50,13 @@ class MemberTicketForm extends GuestTicketForm {
 		$user       = wp_get_current_user();
 		$user_name  = $user->display_name ?: ( $user->first_name . ' ' . $user->last_name );
 		$user_email = $user->user_email;
+		$user_phone = (string) get_user_meta( $user->ID, 'phone', true );
+		if ( '' === trim( $user_phone ) ) {
+			$user_phone = (string) get_user_meta( $user->ID, 'billing_phone', true );
+		}
+		if ( '' === trim( $user_phone ) ) {
+			$user_phone = (string) get_site_option( 'hd_default_customer_phone', '' );
+		}
 		?>
 		<div class="hd-form-container" id="hd-member-form" data-form-type="member">
 
@@ -78,10 +85,12 @@ class MemberTicketForm extends GuestTicketForm {
 						<span class="hd-required" aria-hidden="true">*</span>
 					</label>
 					<select id="hd-topic-member" name="topic_id" class="hd-select" required aria-required="true">
-						<option value=""><?php esc_html_e( '— Select a topic —', 'wp-helpdesk' ); ?></option>
+						<option value=""><?php esc_html_e( 'Select …', 'wp-helpdesk' ); ?></option>
 					</select>
-					<p class="hd-field-hint" id="hd-topic-description-member" aria-live="polite"></p>
+					<p class="hd-field-hint" id="hd-member-topic-description" aria-live="polite"></p>
 				</div>
+				<div class="hd-branch-container" data-role="topic-branch"></div>
+				<p class="hd-error-message" id="hd-member-topic-error" aria-live="assertive" role="alert"></p>
 				<div class="hd-form-actions">
 					<button type="button" class="hd-btn hd-btn--primary" id="hd-member-step0-next" disabled>
 						<?php esc_html_e( 'Continue', 'wp-helpdesk' ); ?>
@@ -102,8 +111,9 @@ class MemberTicketForm extends GuestTicketForm {
 						name="requester_name"
 						class="hd-input"
 						value="<?php echo esc_attr( trim( $user_name ) ); ?>"
-						readonly
-						aria-readonly="true"
+						required
+						aria-required="true"
+						autocomplete="name"
 					>
 				</div>
 				<div class="hd-field">
@@ -118,6 +128,24 @@ class MemberTicketForm extends GuestTicketForm {
 						value="<?php echo esc_attr( $user_email ); ?>"
 						readonly
 						aria-readonly="true"
+						required
+						aria-required="true"
+					>
+				</div>
+				<div class="hd-field">
+					<label for="hd-member-phone" class="hd-label">
+						<?php esc_html_e( 'Phone number', 'wp-helpdesk' ); ?>
+						<span class="hd-required" aria-hidden="true">*</span>
+					</label>
+					<input
+						type="tel"
+						id="hd-member-phone"
+						name="requester_phone"
+						class="hd-input"
+						value="<?php echo esc_attr( trim( $user_phone ) ); ?>"
+						required
+						aria-required="true"
+						autocomplete="tel"
 					>
 				</div>
 				<div class="hd-field">

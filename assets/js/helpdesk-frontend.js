@@ -1,28 +1,21 @@
 /**
  * WP Helpdesk – Customer-facing frontend script
- *
- * Handles:
- *  - Loading topics into dropdowns via REST
- *  - Topic selection state + description hint
- *  - Multi-step form navigation (next/back)
- *  - Form submission (guest and member flows)
  */
 ( function ( window, document ) {
 	'use strict';
 
 	var config = window.WPHelpdesk || {};
-	var restBase  = config.restBase  || '';
+	var restBase = config.restBase || '';
 	var restNonce = config.restNonce || '';
-
-	/* -----------------------------------------------------------------------
-	 * Utility helpers
-	 * --------------------------------------------------------------------- */
+	var i18n = config.i18n || {};
 
 	function apiGet( path ) {
 		return window.fetch( restBase + path, {
 			credentials: 'same-origin',
 			headers: { 'X-WP-Nonce': restNonce }
-		} ).then( function ( res ) { return res.json(); } );
+		} ).then( function ( res ) {
+			return res.json();
+		} );
 	}
 
 	function apiPost( path, body ) {
@@ -42,23 +35,20 @@
 		} );
 	}
 
-	/* -----------------------------------------------------------------------
-	 * Generic multi-step form controller
-	 *
-	 * @param {HTMLElement} container  Root .hd-form-container element
-	 * @param {string}      formType   'guest' | 'member'
-	 * --------------------------------------------------------------------- */
-
 	function FormController( container, formType ) {
 		this.container = container;
-		this.formType  = formType;
-		this.steps     = Array.from( container.querySelectorAll( '.hd-form-step' ) );
-		this.stepEls   = Array.from( container.querySelectorAll( '.hd-steps .hd-step' ) );
+		this.formType = formType;
+		this.steps = Array.from( container.querySelectorAll( '.hd-form-step' ) );
+		this.stepEls = Array.from( container.querySelectorAll( '.hd-steps .hd-step' ) );
 		this.currentStep = 0;
-
-		// Topic state
-		this.selectedTopicId    = 0;
+		this.selectedTopicId = 0;
 		this.selectedTopicTitle = '';
+		this.topicPath = [];
+		this.canContinueFromTopic = false;
+		this.storageKey = 'wpHelpdeskForm:' + formType;
+		this.sessionToken = this._getSessionToken();
+		this.pendingState = null;
+		this.persistTimer = null;
 
 		this._bindEvents();
 		this._loadTopics();
@@ -66,42 +56,48 @@
 
 	FormController.prototype._bindEvents = function () {
 		var self = this;
-
-		// Topic select change
 		var topicSelect = this.container.querySelector( 'select[name="topic_id"]' );
+		var nextBtn0 = this.container.querySelector( '[id$="-step0-next"]' );
+		var submitBtn = this.container.querySelector( '[id$="-step1-submit"]' );
+
 		if ( topicSelect ) {
 			topicSelect.addEventListener( 'change', function () {
-				self._onTopicChange( topicSelect );
+				self._onTopicChange( topicSelect, 0 );
 			} );
 		}
 
-		// Step 0 "Continue" button
-		var nextBtn0 = this.container.querySelector( '[id$="-step0-next"]' );
 		if ( nextBtn0 ) {
 			nextBtn0.addEventListener( 'click', function () {
+				if ( ! self.canContinueFromTopic ) {
+					self._showTopicError( i18n.errorCompleteTopic || 'Please complete topic selection.' );
+					return;
+				}
 				self._goToStep( 1 );
 			} );
 		}
 
-		// "Back" buttons (data-action="prev")
-		var backBtns = this.container.querySelectorAll( '[data-action="prev"]' );
-		backBtns.forEach( function ( btn ) {
+		this.container.querySelectorAll( '[data-action="prev"]' ).forEach( function ( btn ) {
 			btn.addEventListener( 'click', function () {
 				self._goToStep( self.currentStep - 1 );
 			} );
 		} );
 
-		// Submit button
-		var submitBtn = this.container.querySelector( '[id$="-step1-submit"]' );
 		if ( submitBtn ) {
 			submitBtn.addEventListener( 'click', function () {
 				self._submitForm( submitBtn );
 			} );
 		}
+
+		this.container.addEventListener( 'input', function () {
+			self._saveState();
+		} );
+		this.container.addEventListener( 'change', function () {
+			self._saveState();
+		} );
 	};
 
 	FormController.prototype._loadTopics = function () {
-		var self   = this;
+		var self = this;
 		var select = this.container.querySelector( 'select[name="topic_id"]' );
 		if ( ! select ) {
 			return;
@@ -114,42 +110,130 @@
 
 			topics.forEach( function ( topic ) {
 				var opt = document.createElement( 'option' );
-				opt.value       = topic.id;
+				opt.value = topic.id;
 				opt.textContent = topic.title;
 				opt.dataset.description = topic.description || '';
 				select.appendChild( opt );
 			} );
+
+			self._restoreState();
 		} ).catch( function () {
-			// Silently ignore topic load errors; the field just stays empty.
+			// Ignore topic load failure.
 		} );
 	};
 
-	FormController.prototype._onTopicChange = function ( select ) {
-		var val       = select.value;
-		var nextBtn   = this.container.querySelector( '[id$="-step0-next"]' );
-		var hintEl    = this.container.querySelector( '[id$="-topic-description"]' );
+	FormController.prototype._onTopicChange = function ( select, level ) {
+		var self = this;
+		var val = select.value;
+		var nextBtn = this.container.querySelector( '[id$="-step0-next"]' );
+		var hintEl = this.container.querySelector( '[id$="-topic-description"]' );
+		var branchContainer = this.container.querySelector( '[data-role="topic-branch"]' );
 
-		if ( val ) {
-			var opt = select.options[ select.selectedIndex ];
-			this.selectedTopicId    = parseInt( val, 10 );
-			this.selectedTopicTitle = opt ? opt.textContent.trim() : '';
-
-			if ( hintEl ) {
-				hintEl.textContent = ( opt && opt.dataset.description ) ? opt.dataset.description : '';
-			}
-			if ( nextBtn ) {
-				nextBtn.disabled = false;
-			}
-		} else {
-			this.selectedTopicId    = 0;
-			this.selectedTopicTitle = '';
-			if ( hintEl ) {
-				hintEl.textContent = '';
-			}
-			if ( nextBtn ) {
-				nextBtn.disabled = true;
-			}
+		while ( branchContainer && branchContainer.children.length > level ) {
+			branchContainer.removeChild( branchContainer.lastChild );
 		}
+
+		this.topicPath = this.topicPath.slice( 0, level );
+		this.canContinueFromTopic = false;
+		if ( nextBtn ) {
+			nextBtn.disabled = true;
+		}
+
+		if ( ! val ) {
+			this.selectedTopicId = 0;
+			this._showTopicError( i18n.errorSelectTopic || 'Please select a topic.' );
+			this._saveState();
+			return;
+		}
+
+		var opt = select.options[ select.selectedIndex ];
+		this.topicPath[ level ] = parseInt( val, 10 );
+		this.selectedTopicId = parseInt( val, 10 );
+		this.selectedTopicTitle = opt ? opt.textContent.trim() : '';
+		this._clearTopicError();
+
+		if ( hintEl ) {
+			hintEl.textContent = opt && opt.dataset.description ? opt.dataset.description : '';
+		}
+
+		apiGet( 'topics/' + encodeURIComponent( val ) + '/transitions' ).then( function ( transitions ) {
+			if ( ! Array.isArray( transitions ) || transitions.length === 0 ) {
+				self.canContinueFromTopic = true;
+				if ( nextBtn ) {
+					nextBtn.disabled = false;
+				}
+				self._tryRestoreStep();
+				self._saveState();
+				return;
+			}
+
+			var transitionSelect = self._renderTransitionSelect( transitions, level + 1 );
+
+			if ( self.pendingState && Array.isArray( self.pendingState.topicPath ) && self.pendingState.topicPath[ level + 1 ] ) {
+				transitionSelect.value = String( self.pendingState.topicPath[ level + 1 ] );
+				self._onTopicChange( transitionSelect, level + 1 );
+			}
+
+			self._saveState();
+		} ).catch( function () {
+			self._showTopicError( i18n.errorLoadTransitions || 'Could not load follow-up topics. Please try again.' );
+			self._saveState();
+		} );
+	};
+
+	FormController.prototype._renderTransitionSelect = function ( transitions, level ) {
+		var self = this;
+		var branchContainer = this.container.querySelector( '[data-role="topic-branch"]' );
+		var field = document.createElement( 'div' );
+		var label = document.createElement( 'label' );
+		var select = document.createElement( 'select' );
+		var placeholder = document.createElement( 'option' );
+
+		field.className = 'hd-field';
+		label.className = 'hd-label';
+		label.textContent = i18n.followupTopicLabel || 'Follow-up topic';
+		label.setAttribute( 'for', 'hd-transition-' + this.formType + '-' + level );
+
+		select.className = 'hd-select';
+		select.required = true;
+		select.setAttribute( 'aria-required', 'true' );
+		select.id = 'hd-transition-' + this.formType + '-' + level;
+
+		placeholder.value = '';
+		placeholder.textContent = i18n.selectPlaceholder || 'Select …';
+		select.appendChild( placeholder );
+
+		transitions.forEach( function ( transition ) {
+			var topic = transition.to_topic || {};
+			var option = document.createElement( 'option' );
+			option.value = String( transition.to_topic_id );
+			option.textContent = transition.label || topic.title || ( 'Topic #' + transition.to_topic_id );
+			option.dataset.description = topic.description || '';
+			select.appendChild( option );
+		} );
+
+		select.addEventListener( 'change', function () {
+			self._onTopicChange( select, level );
+		} );
+
+		field.appendChild( label );
+		field.appendChild( select );
+		if ( branchContainer ) {
+			branchContainer.appendChild( field );
+		}
+
+		return select;
+	};
+
+	FormController.prototype._showTopicError = function ( message ) {
+		var topicError = this.container.querySelector( '[id$="-topic-error"]' );
+		if ( topicError ) {
+			topicError.textContent = message || '';
+		}
+	};
+
+	FormController.prototype._clearTopicError = function () {
+		this._showTopicError( '' );
 	};
 
 	FormController.prototype._goToStep = function ( index ) {
@@ -157,11 +241,9 @@
 			return;
 		}
 
-		// Hide current, show target
 		this.steps[ this.currentStep ].classList.add( 'hd-form-step--hidden' );
 		this.steps[ index ].classList.remove( 'hd-form-step--hidden' );
 
-		// Update step indicator
 		if ( this.stepEls[ this.currentStep ] ) {
 			this.stepEls[ this.currentStep ].classList.remove( 'hd-step--active' );
 			if ( index > this.currentStep ) {
@@ -175,13 +257,17 @@
 
 		this.currentStep = index;
 		window.scrollTo( 0, 0 );
+		this._saveState();
 	};
 
 	FormController.prototype._gatherFields = function () {
-		var data = { topic_id: this.selectedTopicId };
+		var data = {
+			topic_id: this.selectedTopicId,
+			topic_path: this.topicPath.slice(),
+			form_session_token: this.sessionToken
+		};
 
-		var fields = this.container.querySelectorAll( 'input[name], textarea[name]' );
-		fields.forEach( function ( el ) {
+		this.container.querySelectorAll( 'input[name], textarea[name]' ).forEach( function ( el ) {
 			data[ el.name ] = el.value;
 		} );
 
@@ -194,20 +280,18 @@
 		if ( ! data.topic_id ) {
 			errors.push( 'Please select a topic.' );
 		}
-
-		if ( this.formType === 'guest' ) {
-			if ( ! data.requester_name || data.requester_name.trim() === '' ) {
-				errors.push( 'Please enter your name.' );
-			}
-			if ( ! data.requester_email || ! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test( data.requester_email ) ) {
-				errors.push( 'Please enter a valid email address.' );
-			}
+		if ( ! data.requester_name || data.requester_name.trim() === '' ) {
+			errors.push( 'Please enter your name.' );
 		}
-
+		if ( ! data.requester_email || ! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test( data.requester_email ) ) {
+			errors.push( 'Please enter a valid email address.' );
+		}
+		if ( ! data.requester_phone || data.requester_phone.trim() === '' ) {
+			errors.push( 'Please enter your phone number.' );
+		}
 		if ( ! data.subject || data.subject.trim() === '' ) {
 			errors.push( 'Please enter a subject.' );
 		}
-
 		if ( ! data.message || data.message.trim() === '' ) {
 			errors.push( 'Please enter a message.' );
 		}
@@ -230,33 +314,27 @@
 	};
 
 	FormController.prototype._submitForm = function ( submitBtn ) {
-		var self   = this;
-		var data   = this._gatherFields();
+		var self = this;
+		var data = this._gatherFields();
 		var errors = this._validate( data );
 
 		this._clearError();
-
 		if ( errors.length ) {
 			this._showError( errors[ 0 ] );
 			return;
 		}
 
 		submitBtn.disabled = true;
-
-		var endpoint = this.formType === 'member' ? 'tickets/member' : 'tickets/guest';
-
-		apiPost( endpoint, data ).then( function ( res ) {
+		apiPost( this.formType === 'member' ? 'tickets/member' : 'tickets/guest', data ).then( function ( res ) {
 			if ( res.__status >= 200 && res.__status < 300 ) {
-				// Show confirmation step
 				var confirmMsg = self.container.querySelector( '[id$="-confirm-msg"]' );
 				if ( confirmMsg && res.ticket_no ) {
-					confirmMsg.textContent =
-						'Your request ' + res.ticket_no + ' has been submitted. We will be in touch via email.';
+					confirmMsg.textContent = 'Your request ' + res.ticket_no + ' has been submitted. We will be in touch via email.';
 				}
 				self._goToStep( 2 );
+				self._clearState();
 			} else {
-				var msg = ( res && res.message ) ? res.message : 'An error occurred. Please try again.';
-				self._showError( msg );
+				self._showError( res && res.message ? res.message : 'An error occurred. Please try again.' );
 				submitBtn.disabled = false;
 			}
 		} ).catch( function () {
@@ -265,18 +343,99 @@
 		} );
 	};
 
-	/* -----------------------------------------------------------------------
-	 * Initialisation
-	 * --------------------------------------------------------------------- */
+	FormController.prototype._getSessionToken = function () {
+		var key = this.storageKey + ':token';
+		var token = window.sessionStorage.getItem( key );
+		if ( token ) {
+			return token;
+		}
+		token = String( Date.now() ) + '-' + Math.random().toString( 16 ).slice( 2 );
+		window.sessionStorage.setItem( key, token );
+		return token;
+	};
+
+	FormController.prototype._saveState = function () {
+		var payload = {
+			currentStep: this.currentStep,
+			topicPath: this.topicPath.slice(),
+			data: this._gatherFields()
+		};
+		window.sessionStorage.setItem( this.storageKey, JSON.stringify( payload ) );
+		this._schedulePersist( payload );
+	};
+
+	FormController.prototype._schedulePersist = function ( payload ) {
+		var self = this;
+		if ( this.persistTimer ) {
+			window.clearTimeout( this.persistTimer );
+		}
+		this.persistTimer = window.setTimeout( function () {
+			self._persistSession( payload );
+		}, 900 );
+	};
+
+	FormController.prototype._restoreState = function () {
+		var raw = window.sessionStorage.getItem( this.storageKey );
+		if ( ! raw ) {
+			return;
+		}
+
+		try {
+			this.pendingState = JSON.parse( raw );
+		} catch ( e ) {
+			return;
+		}
+
+		var data = this.pendingState.data || {};
+		this.container.querySelectorAll( 'input[name], textarea[name]' ).forEach( function ( field ) {
+			if ( Object.prototype.hasOwnProperty.call( data, field.name ) && ! field.readOnly ) {
+				field.value = data[ field.name ];
+			}
+		} );
+
+		var topicPath = Array.isArray( this.pendingState.topicPath ) ? this.pendingState.topicPath : [];
+		var topicSelect = this.container.querySelector( 'select[name="topic_id"]' );
+		if ( topicSelect && topicPath.length > 0 ) {
+			topicSelect.value = String( topicPath[ 0 ] );
+			this._onTopicChange( topicSelect, 0 );
+		} else {
+			this._tryRestoreStep();
+		}
+	};
+
+	FormController.prototype._tryRestoreStep = function () {
+		if ( ! this.pendingState ) {
+			return;
+		}
+		var target = parseInt( this.pendingState.currentStep || 0, 10 );
+		this.pendingState = null;
+		if ( target > 0 && this.canContinueFromTopic ) {
+			this._goToStep( Math.min( target, 1 ) );
+		}
+	};
+
+	FormController.prototype._persistSession = function ( payload ) {
+		apiPost( 'form-sessions', {
+			session_token: this.sessionToken,
+			form_type: this.formType,
+			step_index: payload.currentStep,
+			current_topic_id: this.selectedTopicId || 0,
+			payload: payload.data,
+			topic_path: this.topicPath.slice()
+		} ).catch( function () {} );
+	};
+
+	FormController.prototype._clearState = function () {
+		window.sessionStorage.removeItem( this.storageKey );
+	};
 
 	document.addEventListener( 'DOMContentLoaded', function () {
-		var guestContainer  = document.getElementById( 'hd-guest-form' );
+		var guestContainer = document.getElementById( 'hd-guest-form' );
 		var memberContainer = document.getElementById( 'hd-member-form' );
 
 		if ( guestContainer ) {
 			new FormController( guestContainer, 'guest' );
 		}
-
 		if ( memberContainer ) {
 			new FormController( memberContainer, 'member' );
 		}
