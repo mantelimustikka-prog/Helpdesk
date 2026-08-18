@@ -72,6 +72,10 @@ final class TopicServiceTest extends TestCase {
 			public function countActiveTransitionsFromTopic( int $topic_id, int $network_id ): int {
 				return 2;
 			}
+
+			public function getActiveTransitionCounts( array $topic_ids, int $network_id ): array {
+				return array( 3 => 2 );
+			}
 		};
 
 		$service = new TopicService();

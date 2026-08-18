@@ -32,8 +32,6 @@ class FormDefinitionFactory {
 
 		if ( 'guest' === $form_type ) {
 			$detail_fields = array_merge( array( 'requester_name', 'requester_email' ), $detail_fields );
-		} else {
-			$detail_fields = array_merge( array( 'requester_name', 'requester_email' ), $detail_fields );
 		}
 
 		return array(

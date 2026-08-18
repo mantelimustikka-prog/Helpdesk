@@ -256,6 +256,47 @@ class TopicRepository {
 	}
 
 	/**
+	 * Get active outgoing transition counts for multiple topics.
+	 *
+	 * @param array<int, int> $topic_ids   Topic ids.
+	 * @param int             $network_id  Network id.
+	 * @return array<int, int>
+	 */
+	public function getActiveTransitionCounts( array $topic_ids, int $network_id ): array {
+		global $wpdb;
+
+		$topic_ids = array_values( array_filter( array_map( 'intval', $topic_ids ) ) );
+		if ( empty( $topic_ids ) ) {
+			return array();
+		}
+
+		$table        = Schema::table( Constants::TABLE_TOPIC_TRANSITIONS );
+		$placeholders = implode( ', ', array_fill( 0, count( $topic_ids ), '%d' ) );
+		$params       = array_merge( array( $network_id ), $topic_ids );
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT from_topic_id, COUNT(*) AS total
+				 FROM {$table}
+				 WHERE network_id = %d
+				   AND is_active = 1
+				   AND from_topic_id IN ({$placeholders})
+				 GROUP BY from_topic_id",
+				...$params
+			),
+			ARRAY_A
+		);
+
+		$counts = array();
+		foreach ( $rows ?: array() as $row ) {
+			$counts[ (int) $row['from_topic_id'] ] = (int) $row['total'];
+		}
+
+		return $counts;
+	}
+
+	/**
 	 * Build the common WHERE clause for topic list/count queries.
 	 *
 	 * @param int                  $network_id Network id.
