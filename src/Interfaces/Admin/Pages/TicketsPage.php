@@ -288,34 +288,27 @@ class TicketsPage {
 		$network_id = Helpers::getNetworkId();
 		$allowed    = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
 
+		$where  = 'WHERE network_id = %d';
+		$params = array( $network_id );
+
 		if ( '' !== $status_filter && in_array( $status_filter, $allowed, true ) ) {
-			$rows = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT id, ticket_no, subject, requester_name, requester_email, requester_phone, status, updated_at
-					 FROM {$table}
-					 WHERE network_id = %d AND status = %s
-					 ORDER BY created_at DESC
-					 LIMIT %d",
-					$network_id,
-					$status_filter,
-					max( 1, $limit )
-				),
-				ARRAY_A
-			);
-		} else {
-			$rows = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT id, ticket_no, subject, requester_name, requester_email, requester_phone, status, updated_at
-					 FROM {$table}
-					 WHERE network_id = %d
-					 ORDER BY created_at DESC
-					 LIMIT %d",
-					$network_id,
-					max( 1, $limit )
-				),
-				ARRAY_A
-			);
+			$where   .= ' AND status = %s';
+			$params[] = $status_filter;
 		}
+
+		$params[] = max( 1, $limit );
+
+		$rows = $wpdb->get_results( // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+			$wpdb->prepare(
+				"SELECT id, ticket_no, subject, requester_name, requester_email, requester_phone, status, updated_at
+				 FROM {$table}
+				 {$where}
+				 ORDER BY created_at DESC
+				 LIMIT %d",
+				...$params
+			),
+			ARRAY_A
+		);
 
 		return $rows ?: array();
 	}

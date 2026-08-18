@@ -126,6 +126,9 @@ class Plugin {
 	public function handleTicketCreated( array $ticket ): void {
 		// P3: apply routing rules.
 		$routing = $this->routing_service->resolveForTicket( $ticket );
+		// If the matched rule specifies an extra notification_email (e.g. a queue
+		// mailbox), send the ticket-created notification to that address in addition
+		// to the requester and the network admin below.
 		if ( ! empty( $routing['notification_email'] ) ) {
 			$this->notification_service->sendTicketCreated( $ticket, $routing['notification_email'] );
 		}

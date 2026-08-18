@@ -44,8 +44,9 @@ class RetentionService {
 		// Collect IDs of expired tickets.
 		$ticket_ids = $wpdb->get_col(
 			$wpdb->prepare(
-				"SELECT id FROM {$tickets_table} WHERE closed_at < %s AND status = 'closed'",
-				$cutoff
+				"SELECT id FROM {$tickets_table} WHERE closed_at < %s AND status = 'closed' AND network_id = %d",
+				$cutoff,
+				get_current_network_id()
 			)
 		);
 

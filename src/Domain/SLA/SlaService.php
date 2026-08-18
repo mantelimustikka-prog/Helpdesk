@@ -61,7 +61,7 @@ class SlaService {
 
 		$table      = Schema::table( Constants::TABLE_TICKETS );
 		$network_id = Helpers::getNetworkId();
-		$now        = current_time( 'mysql', true );
+		$now        = gmdate( 'Y-m-d H:i:s' );
 
 		// First-response breaches: open tickets past first-response deadline with no agent reply.
 		$first_response_breached = $wpdb->get_results(
