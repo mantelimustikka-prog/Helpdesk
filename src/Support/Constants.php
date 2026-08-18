@@ -18,6 +18,38 @@ class Constants {
 	public const OPTION_SLA_FIRST_RESPONSE = 'hd_sla_first_response_hours';
 	public const OPTION_SLA_RESOLUTION     = 'hd_sla_resolution_hours';
 
+	// General tab option keys.
+	public const OPTION_GENERAL_TICKET_NUMBER_START  = 'hd_general_ticket_number_start';
+	public const OPTION_GENERAL_TICKET_NUMBER_INC    = 'hd_general_ticket_number_increment';
+	public const OPTION_GENERAL_DEFAULT_STATUS       = 'hd_general_default_status';
+	public const OPTION_GENERAL_DEFAULT_PRIORITY     = 'hd_general_default_priority';
+	public const OPTION_GENERAL_ALLOW_GUEST          = 'hd_general_allow_guest_tickets';
+	public const OPTION_GENERAL_REQUIRE_TOPIC        = 'hd_general_require_topic';
+	public const OPTION_GENERAL_AUTO_ASSIGN_MODE     = 'hd_general_auto_assign_mode';
+	public const OPTION_GENERAL_TIMEZONE_MODE        = 'hd_general_timezone_mode';
+	public const OPTION_GENERAL_DATE_FORMAT          = 'hd_general_date_format';
+
+	// Integration – Email option keys.
+	public const OPTION_EMAIL_FROM_NAME       = 'hd_email_from_name';
+	public const OPTION_EMAIL_FROM_ADDRESS    = 'hd_email_from_address';
+	public const OPTION_EMAIL_REPLY_TO        = 'hd_email_reply_to_address';
+	public const OPTION_EMAIL_HEADER_ENABLED  = 'hd_email_header_enabled';
+	public const OPTION_EMAIL_FOOTER_ENABLED  = 'hd_email_footer_enabled';
+
+	// Integration – Push/FCM option keys.
+	public const OPTION_PUSH_ENABLED               = 'hd_push_enabled';
+	public const OPTION_FCM_PROJECT_ID             = 'hd_fcm_project_id';
+	public const OPTION_FCM_SERVICE_ACCOUNT_JSON   = 'hd_fcm_service_account_json';
+	public const OPTION_FCM_MODE                   = 'hd_fcm_mode';
+	public const OPTION_PUSH_TICKET_EVENTS         = 'hd_push_ticket_events';
+
+	// Integration – Android/API option keys.
+	public const OPTION_API_ENABLED                    = 'hd_api_enabled';
+	public const OPTION_API_REQUIRE_APP_PASSWORDS      = 'hd_api_require_application_passwords';
+	public const OPTION_API_RATE_LIMIT                 = 'hd_api_rate_limit_per_minute';
+	public const OPTION_API_LOG_REQUESTS               = 'hd_api_log_requests';
+	public const OPTION_API_ALLOWED_ORIGINS            = 'hd_api_allowed_origins';
+
 	// Frontend page option keys (per-site, stored in blog options).
 	public const OPTION_PAGE_INDEX      = 'hd_page_id_index';
 	public const OPTION_PAGE_NEW        = 'hd_page_id_new';
@@ -53,6 +85,34 @@ class Constants {
 			self::OPTION_PAGINATION,
 			self::OPTION_SLA_FIRST_RESPONSE,
 			self::OPTION_SLA_RESOLUTION,
+			// General tab.
+			self::OPTION_GENERAL_TICKET_NUMBER_START,
+			self::OPTION_GENERAL_TICKET_NUMBER_INC,
+			self::OPTION_GENERAL_DEFAULT_STATUS,
+			self::OPTION_GENERAL_DEFAULT_PRIORITY,
+			self::OPTION_GENERAL_ALLOW_GUEST,
+			self::OPTION_GENERAL_REQUIRE_TOPIC,
+			self::OPTION_GENERAL_AUTO_ASSIGN_MODE,
+			self::OPTION_GENERAL_TIMEZONE_MODE,
+			self::OPTION_GENERAL_DATE_FORMAT,
+			// Integration – Email.
+			self::OPTION_EMAIL_FROM_NAME,
+			self::OPTION_EMAIL_FROM_ADDRESS,
+			self::OPTION_EMAIL_REPLY_TO,
+			self::OPTION_EMAIL_HEADER_ENABLED,
+			self::OPTION_EMAIL_FOOTER_ENABLED,
+			// Integration – Push/FCM.
+			self::OPTION_PUSH_ENABLED,
+			self::OPTION_FCM_PROJECT_ID,
+			self::OPTION_FCM_SERVICE_ACCOUNT_JSON,
+			self::OPTION_FCM_MODE,
+			self::OPTION_PUSH_TICKET_EVENTS,
+			// Integration – API.
+			self::OPTION_API_ENABLED,
+			self::OPTION_API_REQUIRE_APP_PASSWORDS,
+			self::OPTION_API_RATE_LIMIT,
+			self::OPTION_API_LOG_REQUESTS,
+			self::OPTION_API_ALLOWED_ORIGINS,
 		);
 	}
 
