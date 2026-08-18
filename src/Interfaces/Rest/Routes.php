@@ -14,6 +14,7 @@ class Routes {
 	protected AdminMeController $admin_me_controller;
 	protected AdminTicketController $admin_ticket_controller;
 	protected AdminDashboardController $admin_dashboard_controller;
+	protected AdminTopicsController $admin_topics_controller;
 	protected DeviceController $device_controller;
 	protected AttachmentController $attachment_controller;
 	protected PublicTicketController $public_ticket_controller;
@@ -22,6 +23,7 @@ class Routes {
 		$this->admin_me_controller        = new AdminMeController();
 		$this->admin_ticket_controller    = new AdminTicketController();
 		$this->admin_dashboard_controller = new AdminDashboardController();
+		$this->admin_topics_controller    = new AdminTopicsController();
 		$this->device_controller          = new DeviceController();
 		$this->attachment_controller      = new AttachmentController( new AttachmentService() );
 		$this->public_ticket_controller   = new PublicTicketController();
@@ -42,6 +44,55 @@ class Routes {
 				'methods'             => 'GET',
 				'callback'            => array( $this->admin_me_controller, 'getMe' ),
 				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_reply_tickets' ) ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/admin/topics',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => array( $this->admin_topics_controller, 'listTopics' ),
+					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
+				),
+				array(
+					'methods'             => 'POST',
+					'callback'            => array( $this->admin_topics_controller, 'createTopic' ),
+					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
+				),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/admin/topics/reorder',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this->admin_topics_controller, 'reorderTopics' ),
+				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/admin/topics/(?P<id>\d+)',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => array( $this->admin_topics_controller, 'getTopic' ),
+					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
+				),
+				array(
+					'methods'             => 'PUT, PATCH',
+					'callback'            => array( $this->admin_topics_controller, 'updateTopic' ),
+					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
+				),
+				array(
+					'methods'             => 'DELETE',
+					'callback'            => array( $this->admin_topics_controller, 'deleteTopic' ),
+					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
+				),
 			)
 		);
 

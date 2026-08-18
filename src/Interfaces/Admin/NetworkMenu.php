@@ -90,6 +90,7 @@ class NetworkMenu {
 	 * @return void
 	 */
 	public function bootstrapPages(): void {
+		$this->topics_page->handlePost();
 		$this->settings_page->handlePost();
 	}
 
