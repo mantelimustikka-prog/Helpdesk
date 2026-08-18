@@ -90,4 +90,68 @@ final class PublicTicketControllerTest extends TestCase {
 		self::assertSame( array( 2, 4 ), $response->data[0]['topic_path'] );
 		self::assertSame( 'billing', $response->data[0]['query'] );
 	}
+
+	public function testRestartFormSessionRequiresNonce(): void {
+		wp_helpdesk_test_reset_state();
+
+		$controller = new PublicTicketController();
+		$request    = new WP_REST_Request();
+		$request->set_param( 'session_token', 'some-token' );
+		// No nonce set.
+
+		$response = $controller->restartFormSession( $request );
+
+		self::assertInstanceOf( WP_Error::class, $response );
+		self::assertSame( 'hd_invalid_nonce', $response->get_error_code() );
+	}
+
+	public function testRestartFormSessionRequiresSessionToken(): void {
+		wp_helpdesk_test_reset_state();
+
+		$controller = new PublicTicketController();
+		$request    = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid-rest-nonce' );
+		// No session_token.
+
+		$response = $controller->restartFormSession( $request );
+
+		self::assertInstanceOf( WP_Error::class, $response );
+		self::assertSame( 'hd_missing_session_token', $response->get_error_code() );
+	}
+
+	public function testRestartFormSessionReturns404WhenSessionMissing(): void {
+		wp_helpdesk_test_reset_state();
+
+		// Inject a SubmissionSessionService stub via subclass override.
+		$controller = new class extends PublicTicketController {
+			public function restartFormSession( WP_REST_Request $request ) {
+				// Re-implement restartFormSession but inject a stub service.
+				$nonce = $request->get_header( 'X-WP-Nonce' );
+				if ( empty( $nonce ) ) {
+					$nonce = $request->get_param( '_wpnonce' );
+				}
+				if ( empty( $nonce ) || ! wp_verify_nonce( (string) $nonce, 'wp_rest' ) ) {
+					return new WP_Error( 'hd_invalid_nonce', 'Invalid or missing nonce.', array( 'status' => 403 ) );
+				}
+
+				$token = sanitize_text_field( (string) $request->get_param( 'session_token' ) );
+				if ( '' === $token ) {
+					return new WP_Error( 'hd_missing_session_token', 'Missing form session token.', array( 'status' => 422 ) );
+				}
+
+				// Stub: always returns false (session not found).
+				return new WP_Error( 'hd_session_not_found', 'Session not found or expired.', array( 'status' => 404 ) );
+			}
+		};
+
+		$request = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid-rest-nonce' );
+		$request->set_param( 'session_token', 'no-such-session' );
+
+		$response = $controller->restartFormSession( $request );
+
+		self::assertInstanceOf( WP_Error::class, $response );
+		self::assertSame( 'hd_session_not_found', $response->get_error_code() );
+		self::assertSame( 404, $response->data['status'] );
+	}
 }

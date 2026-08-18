@@ -105,6 +105,12 @@
 			} );
 		} );
 
+		this.container.querySelectorAll( '[data-action="start-over"]' ).forEach( function ( btn ) {
+			btn.addEventListener( 'click', function () {
+				self._startOver();
+			} );
+		} );
+
 		if ( submitBtn ) {
 			submitBtn.addEventListener( 'click', function () {
 				self._submitForm( submitBtn );
@@ -552,6 +558,71 @@
 
 	FormController.prototype._clearState = function () {
 		window.sessionStorage.removeItem( this.storageKey );
+	};
+
+	FormController.prototype._startOver = function () {
+		var self = this;
+
+		// Reset all branch-dependent client-side state.
+		this.selectedTopicId = 0;
+		this.selectedTopicTitle = '';
+		this.topicPath = [];
+		this.canContinueFromTopic = false;
+		this.pendingState = null;
+
+		// Clear form fields.
+		this.container.querySelectorAll( 'input[name], textarea[name]' ).forEach( function ( el ) {
+			if ( ! el.readOnly ) {
+				el.value = '';
+			}
+		} );
+
+		// Reset the topic select and remove any dynamically added branch selects.
+		var topicSelect = this.container.querySelector( 'select[name="topic_id"]' );
+		if ( topicSelect ) {
+			topicSelect.value = '';
+		}
+
+		var branchContainer = this.container.querySelector( '[data-role="topic-branch"]' );
+		if ( branchContainer ) {
+			branchContainer.innerHTML = '';
+		}
+
+		// Reset description hint and errors.
+		var hintEl = this.container.querySelector( '[id$="-topic-description"]' );
+		if ( hintEl ) {
+			hintEl.textContent = '';
+		}
+		this._clearTopicError();
+		this._clearError();
+
+		// Reset Next button state.
+		var nextBtn = this.container.querySelector( '[id$="-step0-next"]' );
+		if ( nextBtn ) {
+			nextBtn.disabled = true;
+		}
+
+		// Clear KB suggestions.
+		this._renderKnowledgeBaseSuggestions( [] );
+
+		// Clear persisted client storage.
+		this._clearState();
+
+		// Navigate back to step 0 immediately (best-effort: fire-and-forget persist).
+		this._goToStep( 0 );
+
+		// Reset step indicator done-states.
+		this.stepEls.forEach( function ( el ) {
+			el.classList.remove( 'hd-step--done', 'hd-step--active' );
+		} );
+		if ( this.stepEls[ 0 ] ) {
+			this.stepEls[ 0 ].classList.add( 'hd-step--active' );
+		}
+
+		// Persist the reset to the server (fire-and-forget).
+		apiPost( 'form-sessions/restart', {
+			session_token: self.sessionToken
+		} ).catch( function () {} );
 	};
 
 	document.addEventListener( 'DOMContentLoaded', function () {
