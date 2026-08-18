@@ -235,6 +235,27 @@ class TopicRepository {
 	}
 
 	/**
+	 * Count active outgoing transitions for a topic.
+	 *
+	 * @param int $topic_id    Topic id.
+	 * @param int $network_id  Network id.
+	 * @return int
+	 */
+	public function countActiveTransitionsFromTopic( int $topic_id, int $network_id ): int {
+		global $wpdb;
+
+		$table = Schema::table( Constants::TABLE_TOPIC_TRANSITIONS );
+
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$table} WHERE from_topic_id = %d AND network_id = %d AND is_active = 1",
+				$topic_id,
+				$network_id
+			)
+		);
+	}
+
+	/**
 	 * Build the common WHERE clause for topic list/count queries.
 	 *
 	 * @param int                  $network_id Network id.

@@ -18,7 +18,41 @@ class KnowledgeBaseService {
 	protected KnowledgeBaseProviderInterface $provider;
 
 	public function __construct( ?KnowledgeBaseProviderInterface $provider = null ) {
-		$this->provider = $provider ?? new NullKnowledgeBaseProvider();
+		$this->provider = $provider ?? new WordPressKnowledgeBaseProvider();
+	}
+
+	/**
+	 * Search knowledge-base entries using optional topic path context.
+	 *
+	 * @param string            $query      Query string.
+	 * @param array<int, mixed> $topic_path Optional topic path.
+	 * @param int               $limit      Maximum results.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function searchTopics( string $query, array $topic_path = array(), int $limit = 5 ): array {
+		return $this->provider->searchTopics( $query, $topic_path, max( 1, $limit ) );
+	}
+
+	/**
+	 * Fetch one knowledge-base entry by id.
+	 *
+	 * @param int|string $article_id Article id.
+	 * @return array<string, mixed>|null
+	 */
+	public function getTopicById( int|string $article_id ): ?array {
+		return $this->provider->getTopicById( $article_id );
+	}
+
+	/**
+	 * Suggest entries from a topic path.
+	 *
+	 * @param array<int, mixed> $topic_path Topic path.
+	 * @param string            $query      Optional query.
+	 * @param int               $limit      Maximum results.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function suggestByPath( array $topic_path, string $query = '', int $limit = 5 ): array {
+		return $this->provider->suggestByPath( $topic_path, $query, max( 1, $limit ) );
 	}
 
 	/**
@@ -30,7 +64,7 @@ class KnowledgeBaseService {
 	 * @return array<int, array<string, mixed>>
 	 */
 	public function suggest( string $query, ?int $topic_id = null, int $limit = 5 ): array {
-		if ( '' === trim( $query ) ) {
+		if ( '' === trim( $query ) && null === $topic_id ) {
 			return array();
 		}
 

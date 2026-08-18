@@ -78,6 +78,25 @@ class TopicService {
 	}
 
 	/**
+	 * Determine whether a branch topic has at least one active next edge.
+	 *
+	 * @param int $id Topic id.
+	 * @return bool
+	 */
+	public function isBranchTopicValid( int $id ): bool {
+		$topic = $this->repository->find( $id, $this->network_id );
+		if ( ! $topic ) {
+			return false;
+		}
+
+		if ( ! empty( $topic['is_final'] ) ) {
+			return true;
+		}
+
+		return $this->repository->countActiveTransitionsFromTopic( $id, $this->network_id ) >= 1;
+	}
+
+	/**
 	 * Create a topic.
 	 *
 	 * @param array<string, mixed> $data Topic payload.
@@ -223,6 +242,10 @@ class TopicService {
 	 */
 	protected function normalizeRow( array $row ): array {
 		$row['name'] = isset( $row['title'] ) ? (string) $row['title'] : '';
+		$row['node_type'] = ! empty( $row['is_final'] ) ? 'final' : 'branch';
+		$row['graph_is_valid'] = ! empty( $row['is_final'] )
+			? true
+			: $this->repository->countActiveTransitionsFromTopic( (int) ( $row['id'] ?? 0 ), $this->network_id ) >= 1;
 
 		return $row;
 	}

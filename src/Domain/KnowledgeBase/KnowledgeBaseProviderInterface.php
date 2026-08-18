@@ -14,6 +14,34 @@ namespace WPHelpdesk\Domain\KnowledgeBase;
  */
 interface KnowledgeBaseProviderInterface {
 	/**
+	 * Search knowledge-base entries using free text and optional topic path context.
+	 *
+	 * @param string            $query      Query string.
+	 * @param array<int, mixed> $topic_path Optional topic path context.
+	 * @param int               $limit      Maximum results.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function searchTopics( string $query, array $topic_path = array(), int $limit = 5 ): array;
+
+	/**
+	 * Return a single article by identifier.
+	 *
+	 * @param int|string $article_id Provider-specific article identifier.
+	 * @return array<string, mixed>|null
+	 */
+	public function getTopicById( int|string $article_id ): ?array;
+
+	/**
+	 * Suggest articles from a topic path and optional free-text query.
+	 *
+	 * @param array<int, mixed> $topic_path Topic path ids or labels.
+	 * @param string            $query      Optional query text.
+	 * @param int               $limit      Maximum results.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function suggestByPath( array $topic_path, string $query = '', int $limit = 5 ): array;
+
+	/**
 	 * Find articles that best match the given query text and optional topic.
 	 *
 	 * @param string   $query    Free-text search string.
@@ -28,10 +56,10 @@ interface KnowledgeBaseProviderInterface {
 	public function suggest( string $query, ?int $topic_id = null, int $limit = 5 ): array;
 
 	/**
-	 * Return a single article by identifier.
+	 * Backward-compatible single article lookup.
 	 *
 	 * @param int|string $article_id Provider-specific article identifier.
-	 * @return array<string, mixed>|null Article record or null if not found.
+	 * @return array<string, mixed>|null
 	 */
 	public function get( int|string $article_id ): ?array;
 }

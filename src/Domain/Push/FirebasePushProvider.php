@@ -18,8 +18,10 @@ class FirebasePushProvider implements PushProviderInterface {
 	 * TODO: Replace send() implementation with FCM v1 API + service-account OAuth flow.
 	 */
 	protected string $server_key;
+	protected string $mode;
 
 	public function __construct() {
+		$this->mode       = (string) get_site_option( Constants::OPTION_FCM_MODE, 'legacy' );
 		$this->server_key = (string) get_site_option( Constants::OPTION_FCM_SERVER_KEY, '' );
 	}
 
@@ -33,7 +35,15 @@ class FirebasePushProvider implements PushProviderInterface {
 	 * @return bool
 	 */
 	public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
-		if ( '' === $this->server_key || empty( $device_tokens ) ) {
+		if ( empty( $device_tokens ) ) {
+			return false;
+		}
+
+		if ( 'legacy' !== $this->mode ) {
+			return false;
+		}
+
+		if ( '' === $this->server_key ) {
 			return false;
 		}
 

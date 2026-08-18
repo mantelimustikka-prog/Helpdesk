@@ -51,6 +51,7 @@ class MemberTicketForm extends GuestTicketForm {
 		$user_name  = $user->display_name ?: ( $user->first_name . ' ' . $user->last_name );
 		$user_email = $user->user_email;
 		$user_phone = (string) get_user_meta( $user->ID, 'phone', true );
+		$topic_required = $this->isTopicRequired();
 		if ( '' === trim( $user_phone ) ) {
 			$user_phone = (string) get_user_meta( $user->ID, 'billing_phone', true );
 		}
@@ -82,9 +83,11 @@ class MemberTicketForm extends GuestTicketForm {
 				<div class="hd-field">
 					<label for="hd-topic-member" class="hd-label">
 						<?php esc_html_e( 'Topic', 'wp-helpdesk' ); ?>
-						<span class="hd-required" aria-hidden="true">*</span>
+						<?php if ( $topic_required ) : ?>
+							<span class="hd-required" aria-hidden="true">*</span>
+						<?php endif; ?>
 					</label>
-					<select id="hd-topic-member" name="topic_id" class="hd-select" required aria-required="true">
+					<select id="hd-topic-member" name="topic_id" class="hd-select" <?php echo $topic_required ? 'required aria-required="true"' : ''; ?>>
 						<option value=""><?php esc_html_e( 'Select …', 'wp-helpdesk' ); ?></option>
 					</select>
 					<p class="hd-field-hint" id="hd-member-topic-description" aria-live="polite"></p>
