@@ -24,8 +24,18 @@ class TopicService {
 	 */
 	public function listTopics( array $args = [] ): array {
 		$rows = $this->repository->list( $this->network_id, $args );
+		$transition_counts = $this->repository->getActiveTransitionCounts(
+			array_map(
+				static fn( array $row ): int => (int) ( $row['id'] ?? 0 ),
+				$rows
+			),
+			$this->network_id
+		);
 
-		return array_map( array( $this, 'normalizeRow' ), $rows );
+		return array_map(
+			fn( array $row ): array => $this->normalizeRow( $row, $transition_counts[ (int) ( $row['id'] ?? 0 ) ] ?? 0 ),
+			$rows
+		);
 	}
 
 	/**
@@ -74,7 +84,26 @@ class TopicService {
 	public function getTopic( int $id ): ?array {
 		$row = $this->repository->find( $id, $this->network_id );
 
-		return $row ? $this->normalizeRow( $row ) : null;
+		return $row ? $this->normalizeRow( $row, $this->repository->countActiveTransitionsFromTopic( $id, $this->network_id ) ) : null;
+	}
+
+	/**
+	 * Determine whether a branch topic has at least one active next edge.
+	 *
+	 * @param int $id Topic id.
+	 * @return bool
+	 */
+	public function isBranchTopicValid( int $id ): bool {
+		$topic = $this->repository->find( $id, $this->network_id );
+		if ( ! $topic ) {
+			return false;
+		}
+
+		if ( ! empty( $topic['is_final'] ) ) {
+			return true;
+		}
+
+		return $this->repository->countActiveTransitionsFromTopic( $id, $this->network_id ) >= 1;
 	}
 
 	/**
@@ -221,8 +250,12 @@ class TopicService {
 	 * @param array<string, mixed> $row Topic row.
 	 * @return array<string, mixed>
 	 */
-	protected function normalizeRow( array $row ): array {
+	protected function normalizeRow( array $row, int $transition_count = 0 ): array {
 		$row['name'] = isset( $row['title'] ) ? (string) $row['title'] : '';
+		$row['node_type'] = ! empty( $row['is_final'] ) ? 'final' : 'branch';
+		$row['graph_is_valid'] = ! empty( $row['is_final'] )
+			? true
+			: $transition_count >= 1;
 
 		return $row;
 	}

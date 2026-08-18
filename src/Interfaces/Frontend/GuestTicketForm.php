@@ -5,6 +5,8 @@
 
 namespace WPHelpdesk\Interfaces\Frontend;
 
+use WPHelpdesk\Support\Constants;
+
 /**
  * Renders the guest (non-logged-in) ticket submission form at /helpdesk/new/.
  *
@@ -44,6 +46,7 @@ class GuestTicketForm extends HelpdeskPage {
 	 * @return void
 	 */
 	protected function renderForm(): void {
+		$topic_required = $this->isTopicRequired();
 		?>
 		<div class="hd-form-container" id="hd-guest-form" data-form-type="guest">
 
@@ -69,9 +72,11 @@ class GuestTicketForm extends HelpdeskPage {
 				<div class="hd-field">
 					<label for="hd-topic" class="hd-label">
 						<?php esc_html_e( 'Topic', 'wp-helpdesk' ); ?>
-						<span class="hd-required" aria-hidden="true">*</span>
+						<?php if ( $topic_required ) : ?>
+							<span class="hd-required" aria-hidden="true">*</span>
+						<?php endif; ?>
 					</label>
-					<select id="hd-topic" name="topic_id" class="hd-select" required aria-required="true">
+					<select id="hd-topic" name="topic_id" class="hd-select" <?php echo $topic_required ? 'required aria-required="true"' : ''; ?>>
 						<option value=""><?php esc_html_e( 'Select …', 'wp-helpdesk' ); ?></option>
 					</select>
 					<p class="hd-field-hint" id="hd-topic-description" aria-live="polite"></p>
@@ -188,5 +193,14 @@ class GuestTicketForm extends HelpdeskPage {
 
 		</div><!-- .hd-form-container -->
 		<?php
+	}
+
+	/**
+	 * Check whether topic selection is required.
+	 *
+	 * @return bool
+	 */
+	protected function isTopicRequired(): bool {
+		return 1 === (int) get_site_option( Constants::OPTION_GENERAL_REQUIRE_TOPIC, 1 );
 	}
 }

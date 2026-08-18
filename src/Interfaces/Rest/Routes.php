@@ -8,6 +8,7 @@ namespace WPHelpdesk\Interfaces\Rest;
 use WP_Error;
 use WP_REST_Request;
 use WPHelpdesk\Domain\Attachment\AttachmentService;
+use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
 
 class Routes {
@@ -214,6 +215,10 @@ class Routes {
 	 * @return bool|WP_Error
 	 */
 	protected function authorize( WP_REST_Request $request, array $capabilities ) {
+		if ( 1 !== (int) get_site_option( Constants::OPTION_API_ENABLED, 1 ) ) {
+			return new WP_Error( 'hd_api_disabled', 'The Helpdesk API is disabled.', array( 'status' => 403 ) );
+		}
+
 		if ( ! is_user_logged_in() ) {
 			return new WP_Error( 'hd_rest_auth_required', 'Authentication required.', array( 'status' => 401 ) );
 		}

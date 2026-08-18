@@ -176,6 +176,10 @@ class PublicTicketController {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function submitGuestTicket( WP_REST_Request $request ) {
+		if ( 1 !== (int) get_site_option( Constants::OPTION_GENERAL_ALLOW_GUEST, 1 ) ) {
+			return new WP_Error( 'hd_guest_disabled', __( 'Guest ticket submission is disabled.', 'wp-helpdesk' ), array( 'status' => 403 ) );
+		}
+
 		$nonce = $request->get_header( 'X-WP-Nonce' );
 		if ( empty( $nonce ) ) {
 			$nonce = $request->get_param( '_wpnonce' );
@@ -282,7 +286,9 @@ class PublicTicketController {
 	protected function createTicket( array $data ) {
 		global $wpdb;
 
-		if ( empty( $data['topic_id'] ) || empty( $data['subject'] ) || empty( $data['message'] ) || empty( $data['requester_phone'] ) ) {
+		$require_topic = 1 === (int) get_site_option( Constants::OPTION_GENERAL_REQUIRE_TOPIC, 1 );
+
+		if ( ( $require_topic && empty( $data['topic_id'] ) ) || empty( $data['subject'] ) || empty( $data['message'] ) || empty( $data['requester_phone'] ) ) {
 			return new WP_Error( 'hd_missing_fields', __( 'Please fill in all required fields.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
 
@@ -358,7 +364,7 @@ class PublicTicketController {
 	 */
 	protected function guestTicketArgs(): array {
 		return array(
-			'topic_id'       => array( 'required' => true, 'type' => 'integer', 'minimum' => 1 ),
+			'topic_id'       => array( 'required' => false, 'type' => 'integer', 'minimum' => 0 ),
 			'requester_name' => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
 			'requester_email'=> array( 'required' => true, 'type' => 'string', 'format' => 'email' ),
 			'requester_phone'=> array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 50 ),
@@ -374,7 +380,7 @@ class PublicTicketController {
 	 */
 	protected function memberTicketArgs(): array {
 		return array(
-			'topic_id' => array( 'required' => true, 'type' => 'integer', 'minimum' => 1 ),
+			'topic_id' => array( 'required' => false, 'type' => 'integer', 'minimum' => 0 ),
 			'requester_phone'=> array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 50 ),
 			'subject'  => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
 			'message'  => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),

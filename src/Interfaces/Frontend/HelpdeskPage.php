@@ -5,6 +5,8 @@
 
 namespace WPHelpdesk\Interfaces\Frontend;
 
+use WPHelpdesk\Support\Constants;
+
 /**
  * Renders the main helpdesk landing page at /helpdesk/.
  */
@@ -17,6 +19,7 @@ class HelpdeskPage {
 	 */
 	public function render(): void {
 		$this->outputHeader( __( 'Support Centre', 'wp-helpdesk' ) );
+		$allow_guest = 1 === (int) get_site_option( Constants::OPTION_GENERAL_ALLOW_GUEST, 1 );
 		?>
 		<div class="hd-wrap">
 			<h1 class="hd-title"><?php esc_html_e( 'How can we help you?', 'wp-helpdesk' ); ?></h1>
@@ -29,9 +32,11 @@ class HelpdeskPage {
 						<?php esc_html_e( 'Submit a request', 'wp-helpdesk' ); ?>
 					</a>
 				<?php else : ?>
-					<a href="<?php echo esc_url( home_url( '/helpdesk/new/' ) ); ?>" class="hd-btn hd-btn--primary">
-						<?php esc_html_e( 'Submit a request', 'wp-helpdesk' ); ?>
-					</a>
+					<?php if ( $allow_guest ) : ?>
+						<a href="<?php echo esc_url( home_url( '/helpdesk/new/' ) ); ?>" class="hd-btn hd-btn--primary">
+							<?php esc_html_e( 'Submit a request', 'wp-helpdesk' ); ?>
+						</a>
+					<?php endif; ?>
 					<a href="<?php echo esc_url( wp_login_url( home_url( '/helpdesk/member/new/' ) ) ); ?>" class="hd-btn hd-btn--secondary">
 						<?php esc_html_e( 'Sign in to submit', 'wp-helpdesk' ); ?>
 					</a>

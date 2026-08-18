@@ -61,11 +61,20 @@ final class TopicServiceTest extends TestCase {
 			public function list( int $network_id, array $args = [] ): array {
 				return array(
 					array(
-						'id'    => 3,
-						'title' => 'Account Access',
-						'slug'  => 'account-access',
+						'id'       => 3,
+						'title'    => 'Account Access',
+						'slug'     => 'account-access',
+						'is_final' => 0,
 					),
 				);
+			}
+
+			public function countActiveTransitionsFromTopic( int $topic_id, int $network_id ): int {
+				return 2;
+			}
+
+			public function getActiveTransitionCounts( array $topic_ids, int $network_id ): array {
+				return array( 3 => 2 );
 			}
 		};
 
@@ -76,6 +85,29 @@ final class TopicServiceTest extends TestCase {
 
 		self::assertSame( 'Account Access', $topics[0]['name'] );
 		self::assertSame( 'account-access', $topics[0]['slug'] );
+		self::assertSame( 'branch', $topics[0]['node_type'] );
+		self::assertTrue( $topics[0]['graph_is_valid'] );
+	}
+
+	public function testBranchTopicValidationRequiresAtLeastOneActiveTransition(): void {
+		$repository = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return array(
+					'id'       => $id,
+					'title'    => 'Billing',
+					'is_final' => 0,
+				);
+			}
+
+			public function countActiveTransitionsFromTopic( int $topic_id, int $network_id ): int {
+				return 0;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		self::assertFalse( $service->isBranchTopicValid( 8 ) );
 	}
 
 	private function injectRepository( TopicService $service, TopicRepository $repository ): void {

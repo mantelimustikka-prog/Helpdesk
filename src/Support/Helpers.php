@@ -50,16 +50,25 @@ class Helpers {
 		global $wpdb;
 
 		$option_name = Constants::OPTION_TICKET_COUNTER;
-		$start       = (int) get_site_option( Constants::OPTION_TICKET_START, 1000 );
+		$start       = (int) get_site_option(
+			Constants::OPTION_GENERAL_TICKET_NUMBER_START,
+			(int) get_site_option( Constants::OPTION_TICKET_START, 1000 )
+		);
+		$increment   = max( 1, (int) get_site_option( Constants::OPTION_GENERAL_TICKET_NUMBER_INC, 1 ) );
+		$network_id  = get_current_network_id();
 
-		// Attempt an atomic UPDATE increment. If the row doesn't exist yet, initialise it.
+		// Attempt an atomic UPDATE increment. The stored counter tracks the next
+		// available number, while the issued ticket number is the value prior to
+		// the increment.
 		$updated = $wpdb->query(
 			$wpdb->prepare(
-				"UPDATE {$wpdb->sitemeta} SET meta_value = GREATEST(meta_value + 1, %d + 1)
+				"UPDATE {$wpdb->sitemeta}
+				 SET meta_value = LAST_INSERT_ID(GREATEST(CAST(meta_value AS UNSIGNED), %d) + %d)
 				 WHERE meta_key = %s AND site_id = %d",
 				$start,
+				$increment,
 				$option_name,
-				get_current_network_id()
+				$network_id
 			)
 		);
 
@@ -69,7 +78,7 @@ class Helpers {
 				$wpdb->prepare(
 					"INSERT IGNORE INTO {$wpdb->sitemeta} (site_id, meta_key, meta_value)
 					 VALUES (%d, %s, %d)",
-					get_current_network_id(),
+					$network_id,
 					$option_name,
 					$start
 				)
@@ -78,24 +87,21 @@ class Helpers {
 			// Re-run the atomic increment after insert.
 			$wpdb->query(
 				$wpdb->prepare(
-					"UPDATE {$wpdb->sitemeta} SET meta_value = GREATEST(meta_value + 1, %d + 1)
+					"UPDATE {$wpdb->sitemeta}
+					 SET meta_value = LAST_INSERT_ID(GREATEST(CAST(meta_value AS UNSIGNED), %d) + %d)
 					 WHERE meta_key = %s AND site_id = %d",
 					$start,
+					$increment,
 					$option_name,
-					get_current_network_id()
+					$network_id
 				)
 			);
 		}
 
-		$counter = (int) $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT meta_value FROM {$wpdb->sitemeta} WHERE meta_key = %s AND site_id = %d",
-				$option_name,
-				get_current_network_id()
-			)
-		);
+		$next_counter  = (int) $wpdb->get_var( 'SELECT LAST_INSERT_ID()' );
+		$ticket_number = max( $start, $next_counter - $increment );
 
-		return sprintf( 'HD-%06d', $counter );
+		return sprintf( 'HD-%06d', $ticket_number );
 	}
 
 	/**

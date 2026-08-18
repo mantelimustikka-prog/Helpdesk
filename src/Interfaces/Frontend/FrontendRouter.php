@@ -7,6 +7,7 @@ namespace WPHelpdesk\Interfaces\Frontend;
 
 use WPHelpdesk\Support\Helpers;
 use WPHelpdesk\Support\Constants;
+use WPHelpdesk\Interfaces\Frontend\FormDefinitionFactory;
 
 /**
  * Registers WordPress rewrite rules for the customer-facing helpdesk pages
@@ -107,6 +108,10 @@ class FrontendRouter {
 				exit;
 
 			case 'new':
+				if ( 1 !== (int) get_site_option( Constants::OPTION_GENERAL_ALLOW_GUEST, 1 ) ) {
+					wp_safe_redirect( home_url( '/helpdesk/' ) );
+					exit;
+				}
 				$this->guest_form->render();
 				exit;
 
@@ -192,6 +197,7 @@ class FrontendRouter {
 				'memberUrl' => esc_url( home_url( '/helpdesk/member/new/' ) ),
 				'indexUrl'  => esc_url( home_url( '/helpdesk/' ) ),
 				'isLoggedIn' => is_user_logged_in() ? '1' : '0',
+				'formDefinitions' => ( new FormDefinitionFactory() )->getDefinitions(),
 				'i18n' => array(
 					'followupTopicLabel' => __( 'Follow-up topic', 'wp-helpdesk' ),
 					'selectPlaceholder'  => __( 'Select …', 'wp-helpdesk' ),

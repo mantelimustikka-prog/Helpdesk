@@ -22,6 +22,10 @@ class PushService {
 	 * @return void
 	 */
 	public function notifyNewTicket( array $ticket ): void {
+		if ( ! $this->shouldSendEvent( 'ticket_created' ) ) {
+			return;
+		}
+
 		$this->provider->send(
 			$this->getAdminTokens(),
 			'New ticket created',
@@ -38,6 +42,10 @@ class PushService {
 	 * @return void
 	 */
 	public function notifyNewReply( array $ticket, array $message ): void {
+		if ( ! $this->shouldSendEvent( 'ticket_replied' ) ) {
+			return;
+		}
+
 		$this->provider->send(
 			$this->getAdminTokens(),
 			'New ticket reply',
@@ -54,6 +62,10 @@ class PushService {
 	 * @return void
 	 */
 	public function notifyStatusChanged( array $ticket, string $new_status ): void {
+		if ( ! $this->shouldSendEvent( 'status_changed' ) ) {
+			return;
+		}
+
 		$this->provider->send(
 			$this->getAdminTokens(),
 			'Ticket status changed',
@@ -70,6 +82,10 @@ class PushService {
 	 * @return void
 	 */
 	public function notifyAssigned( array $ticket, int $assigned_to ): void {
+		if ( ! $this->isPushEnabled() || ! $this->hasValidConfiguration() ) {
+			return;
+		}
+
 		$this->provider->send(
 			$this->getUserTokens( $assigned_to ),
 			'Ticket assigned',
@@ -83,7 +99,7 @@ class PushService {
 	 *
 	 * @return array<int, string>
 	 */
-	private function getAdminTokens(): array {
+	protected function getAdminTokens(): array {
 		$user_ids = get_users(
 			array(
 				'fields'         => 'ID',
@@ -105,7 +121,7 @@ class PushService {
 	 * @param int $user_id User ID.
 	 * @return array<int, string>
 	 */
-	private function getUserTokens( int $user_id ): array {
+	protected function getUserTokens( int $user_id ): array {
 		global $wpdb;
 
 		$table = Schema::table( Constants::TABLE_DEVICE_TOKENS );
@@ -119,5 +135,55 @@ class PushService {
 				)
 			)
 		);
+	}
+
+	/**
+	 * Check whether a push event should be sent.
+	 *
+	 * @param string $event Event key.
+	 * @return bool
+	 */
+	protected function shouldSendEvent( string $event ): bool {
+		if ( ! $this->isPushEnabled() || ! $this->hasValidConfiguration() ) {
+			return false;
+		}
+
+		$events = (array) get_site_option( Constants::OPTION_PUSH_TICKET_EVENTS, array() );
+		return in_array( $event, $events, true );
+	}
+
+	/**
+	 * Check whether push delivery is enabled.
+	 *
+	 * @return bool
+	 */
+	protected function isPushEnabled(): bool {
+		return 1 === (int) get_site_option( Constants::OPTION_PUSH_ENABLED, 0 );
+	}
+
+	/**
+	 * Validate the currently saved push configuration.
+	 *
+	 * @return bool
+	 */
+	protected function hasValidConfiguration(): bool {
+		$mode = (string) get_site_option( Constants::OPTION_FCM_MODE, 'legacy' );
+
+		if ( 'legacy' === $mode ) {
+			return '' !== trim( (string) get_site_option( Constants::OPTION_FCM_SERVER_KEY, '' ) );
+		}
+
+		if ( 'v1' !== $mode ) {
+			return false;
+		}
+
+		$project_id   = trim( (string) get_site_option( Constants::OPTION_FCM_PROJECT_ID, '' ) );
+		$service_json = trim( (string) get_site_option( Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON, '' ) );
+		if ( '' === $project_id || '' === $service_json ) {
+			return false;
+		}
+
+		json_decode( $service_json );
+		return JSON_ERROR_NONE === json_last_error();
 	}
 }

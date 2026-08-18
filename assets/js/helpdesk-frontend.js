@@ -38,6 +38,7 @@
 	function FormController( container, formType ) {
 		this.container = container;
 		this.formType = formType;
+		this.definition = config.formDefinitions && config.formDefinitions[ formType ] ? config.formDefinitions[ formType ] : null;
 		this.steps = Array.from( container.querySelectorAll( '.hd-form-step' ) );
 		this.stepEls = Array.from( container.querySelectorAll( '.hd-steps .hd-step' ) );
 		this.currentStep = 0;
@@ -72,7 +73,7 @@
 					self._showTopicError( i18n.errorCompleteTopic || 'Please complete topic selection.' );
 					return;
 				}
-				self._goToStep( 1 );
+				self._goToStep( self._getNextStepIndex( 'continue' ) );
 			} );
 		}
 
@@ -117,6 +118,13 @@
 			} );
 
 			self._restoreState();
+			if ( ! self._isTopicRequired() ) {
+				self.canContinueFromTopic = true;
+				var nextBtn = self.container.querySelector( '[id$="-step0-next"]' );
+				if ( nextBtn ) {
+					nextBtn.disabled = false;
+				}
+			}
 		} ).catch( function () {
 			// Ignore topic load failure.
 		} );
@@ -141,7 +149,15 @@
 
 		if ( ! val ) {
 			this.selectedTopicId = 0;
-			this._showTopicError( i18n.errorSelectTopic || 'Please select a topic.' );
+			if ( this._isTopicRequired() ) {
+				this._showTopicError( i18n.errorSelectTopic || 'Please select a topic.' );
+			} else {
+				this._clearTopicError();
+				this.canContinueFromTopic = true;
+				if ( nextBtn ) {
+					nextBtn.disabled = false;
+				}
+			}
 			this._saveState();
 			return;
 		}
@@ -276,8 +292,9 @@
 
 	FormController.prototype._validate = function ( data ) {
 		var errors = [];
+		var topicSelect = this.container.querySelector( 'select[name="topic_id"]' );
 
-		if ( ! data.topic_id ) {
+		if ( topicSelect && topicSelect.required && ! data.topic_id ) {
 			errors.push( 'Please select a topic.' );
 		}
 		if ( ! data.requester_name || data.requester_name.trim() === '' ) {
@@ -297,6 +314,24 @@
 		}
 
 		return errors;
+	};
+
+	FormController.prototype._isTopicRequired = function () {
+		if ( this.definition && this.definition.fields && this.definition.fields.topic_id ) {
+			return !! this.definition.fields.topic_id.required;
+		}
+
+		var topicSelect = this.container.querySelector( 'select[name="topic_id"]' );
+		return !! ( topicSelect && topicSelect.required );
+	};
+
+	FormController.prototype._getNextStepIndex = function ( action ) {
+		var stepMap = this.definition && this.definition.next_step_map ? this.definition.next_step_map[ String( this.currentStep ) ] : null;
+		if ( stepMap && typeof stepMap[ action ] === 'number' ) {
+			return stepMap[ action ];
+		}
+
+		return this.currentStep + 1;
 	};
 
 	FormController.prototype._showError = function ( msg ) {
@@ -331,7 +366,7 @@
 				if ( confirmMsg && res.ticket_no ) {
 					confirmMsg.textContent = 'Your request ' + res.ticket_no + ' has been submitted. We will be in touch via email.';
 				}
-				self._goToStep( 2 );
+				self._goToStep( self._getNextStepIndex( 'submit' ) );
 				self._clearState();
 			} else {
 				self._showError( res && res.message ? res.message : 'An error occurred. Please try again.' );
