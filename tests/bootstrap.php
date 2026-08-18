@@ -92,6 +92,14 @@ if ( ! class_exists( 'WP_Error' ) ) {
 			$this->message = $message;
 			$this->data = $data;
 		}
+
+		public function get_error_code(): string {
+			return $this->code;
+		}
+
+		public function get_error_message(): string {
+			return $this->message;
+		}
 	}
 }
 
@@ -601,5 +609,31 @@ if ( ! function_exists( 'wp_remote_post' ) ) {
 if ( ! function_exists( 'wp_remote_retrieve_response_code' ) ) {
 	function wp_remote_retrieve_response_code( array $response ): int {
 		return (int) ( $response['response']['code'] ?? 0 );
+	}
+}
+
+if ( ! function_exists( 'wp_check_filetype_and_ext' ) ) {
+	function wp_check_filetype_and_ext( string $file, string $filename ): array {
+		if ( ! empty( $GLOBALS['hd_test_filetype'] ) ) {
+			return $GLOBALS['hd_test_filetype'];
+		}
+		$ext  = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+		$map  = array(
+			'jpg'  => 'image/jpeg',
+			'jpeg' => 'image/jpeg',
+			'png'  => 'image/png',
+			'gif'  => 'image/gif',
+			'pdf'  => 'application/pdf',
+			'txt'  => 'text/plain',
+			'zip'  => 'application/zip',
+		);
+		$type = $map[ $ext ] ?? 'application/octet-stream';
+		return array( 'type' => $type, 'ext' => $ext );
+	}
+}
+
+if ( ! function_exists( 'sanitize_file_name' ) ) {
+	function sanitize_file_name( string $name ): string {
+		return preg_replace( '/[^a-zA-Z0-9._-]/', '-', $name );
 	}
 }
