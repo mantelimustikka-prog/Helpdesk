@@ -5,23 +5,327 @@
 
 namespace WPHelpdesk\Interfaces\Admin\Pages;
 
+use WPHelpdesk\Infrastructure\Database\Schema;
+use WPHelpdesk\Support\Constants;
+use WPHelpdesk\Support\Helpers;
+
 class TicketsPage {
 	/**
-	 * Render the tickets scaffold.
+	 * Render the tickets queue and a basic ticket thread view.
 	 *
 	 * @return void
 	 */
 	public function render(): void {
-		if ( ! current_user_can( 'hd_manage_tickets' ) ) {
+		if ( ! current_user_can( 'hd_manage_tickets' ) && ! current_user_can( 'hd_reply_tickets' ) ) {
 			wp_die( esc_html__( 'You do not have permission to access this page.', 'wp-helpdesk' ) );
 		}
+
+		$this->handlePost();
+
+		$selected_ticket_id = isset( $_GET['ticket_id'] ) ? (int) $_GET['ticket_id'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$tickets            = $this->listTickets( 50 );
+		$selected_ticket    = $selected_ticket_id > 0 ? $this->findTicket( $selected_ticket_id ) : null;
+		$messages           = $selected_ticket ? $this->getMessages( (int) $selected_ticket['id'] ) : array();
+		$status_options     = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
 		?>
 		<div class="wrap hd-admin-wrap">
 			<h1><?php esc_html_e( 'Ticket Queue', 'wp-helpdesk' ); ?></h1>
+
 			<div class="hd-card">
-				<p><?php esc_html_e( 'TODO: full implementation. This scaffold will list tickets, filters, assignment actions, and reply tools for network agents.', 'wp-helpdesk' ); ?></p>
+				<h2><?php esc_html_e( 'Queue', 'wp-helpdesk' ); ?></h2>
+				<?php if ( empty( $tickets ) ) : ?>
+					<p><?php esc_html_e( 'No tickets found yet.', 'wp-helpdesk' ); ?></p>
+				<?php else : ?>
+					<table class="widefat striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Ticket', 'wp-helpdesk' ); ?></th>
+								<th><?php esc_html_e( 'Subject', 'wp-helpdesk' ); ?></th>
+								<th><?php esc_html_e( 'Requester', 'wp-helpdesk' ); ?></th>
+								<th><?php esc_html_e( 'Status', 'wp-helpdesk' ); ?></th>
+								<th><?php esc_html_e( 'Updated', 'wp-helpdesk' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $tickets as $ticket ) : ?>
+								<tr>
+									<td>
+										<a href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . (int) $ticket['id'] ) ); ?>">
+											<?php echo esc_html( (string) $ticket['ticket_no'] ); ?>
+										</a>
+									</td>
+									<td><?php echo esc_html( (string) $ticket['subject'] ); ?></td>
+									<td><?php echo esc_html( (string) $ticket['requester_name'] . ' (' . (string) $ticket['requester_email'] . ')' ); ?></td>
+									<td><?php echo esc_html( (string) $ticket['status'] ); ?></td>
+									<td><?php echo esc_html( (string) $ticket['updated_at'] ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				<?php endif; ?>
 			</div>
+
+			<?php if ( $selected_ticket ) : ?>
+				<div class="hd-card" style="margin-top: 20px;">
+					<h2>
+						<?php echo esc_html( sprintf( __( 'Ticket %s', 'wp-helpdesk' ), (string) $selected_ticket['ticket_no'] ) ); ?>
+					</h2>
+					<p><strong><?php esc_html_e( 'Subject:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['subject'] ); ?></p>
+					<p><strong><?php esc_html_e( 'Phone:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['requester_phone'] ); ?></p>
+					<p><strong><?php esc_html_e( 'Status:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['status'] ); ?></p>
+
+					<h3><?php esc_html_e( 'Thread', 'wp-helpdesk' ); ?></h3>
+					<?php if ( empty( $messages ) ) : ?>
+						<p><?php esc_html_e( 'No messages yet.', 'wp-helpdesk' ); ?></p>
+					<?php else : ?>
+						<ul>
+							<?php foreach ( $messages as $message ) : ?>
+								<li style="margin-bottom: 12px;">
+									<strong><?php echo esc_html( (string) $message['author_type'] ); ?></strong>
+									(<?php echo esc_html( (string) $message['created_at'] ); ?>)
+									<?php if ( ! empty( $message['is_internal'] ) ) : ?>
+										<em><?php esc_html_e( 'Internal', 'wp-helpdesk' ); ?></em>
+									<?php endif; ?>
+									<div><?php echo wp_kses_post( wpautop( (string) $message['body'] ) ); ?></div>
+								</li>
+							<?php endforeach; ?>
+						</ul>
+					<?php endif; ?>
+
+					<?php if ( current_user_can( 'hd_reply_tickets' ) || current_user_can( 'hd_manage_tickets' ) ) : ?>
+						<form method="post" style="margin-top: 16px;">
+							<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
+							<input type="hidden" name="hd_ticket_id" value="<?php echo esc_attr( (string) $selected_ticket['id'] ); ?>">
+							<input type="hidden" name="hd_ticket_action" value="reply">
+							<p>
+								<label for="hd-reply-body"><strong><?php esc_html_e( 'Reply', 'wp-helpdesk' ); ?></strong></label><br>
+								<textarea id="hd-reply-body" name="hd_reply_body" rows="5" class="large-text" required></textarea>
+							</p>
+							<p>
+								<label>
+									<input type="checkbox" name="hd_is_internal" value="1">
+									<?php esc_html_e( 'Internal note', 'wp-helpdesk' ); ?>
+								</label>
+							</p>
+							<?php submit_button( __( 'Add Reply', 'wp-helpdesk' ), 'secondary', 'submit', false ); ?>
+						</form>
+					<?php endif; ?>
+
+					<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
+						<form method="post" style="margin-top: 16px;">
+							<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
+							<input type="hidden" name="hd_ticket_id" value="<?php echo esc_attr( (string) $selected_ticket['id'] ); ?>">
+							<input type="hidden" name="hd_ticket_action" value="status">
+							<p>
+								<label for="hd-status-select"><strong><?php esc_html_e( 'Change status', 'wp-helpdesk' ); ?></strong></label><br>
+								<select id="hd-status-select" name="hd_status" required>
+									<?php foreach ( $status_options as $status_option ) : ?>
+										<option value="<?php echo esc_attr( $status_option ); ?>" <?php selected( $selected_ticket['status'], $status_option ); ?>>
+											<?php echo esc_html( $status_option ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+							</p>
+							<?php submit_button( __( 'Update Status', 'wp-helpdesk' ), 'primary', 'submit', false ); ?>
+						</form>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Process page form submissions.
+	 *
+	 * @return void
+	 */
+	protected function handlePost(): void {
+		if ( 'POST' !== strtoupper( $_SERVER['REQUEST_METHOD'] ?? '' ) ) {
+			return;
+		}
+		if ( 'wp-helpdesk-tickets' !== ( $_GET['page'] ?? '' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+
+		$nonce = isset( $_POST['hd_ticket_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['hd_ticket_nonce'] ) ) : '';
+		if ( ! wp_verify_nonce( $nonce, 'hd_ticket_action' ) ) {
+			wp_die( esc_html__( 'Security check failed.', 'wp-helpdesk' ) );
+		}
+
+		$action = isset( $_POST['hd_ticket_action'] ) ? sanitize_key( wp_unslash( $_POST['hd_ticket_action'] ) ) : '';
+		$ticket_id = isset( $_POST['hd_ticket_id'] ) ? (int) $_POST['hd_ticket_id'] : 0;
+		if ( $ticket_id <= 0 ) {
+			return;
+		}
+
+		if ( 'reply' === $action ) {
+			$this->handleReplyPost( $ticket_id );
+		}
+		if ( 'status' === $action ) {
+			$this->handleStatusPost( $ticket_id );
+		}
+	}
+
+	/**
+	 * Handle posting a reply in the thread.
+	 *
+	 * @param int $ticket_id Ticket id.
+	 * @return void
+	 */
+	protected function handleReplyPost( int $ticket_id ): void {
+		if ( ! current_user_can( 'hd_reply_tickets' ) && ! current_user_can( 'hd_manage_tickets' ) ) {
+			wp_die( esc_html__( 'You do not have permission to reply to tickets.', 'wp-helpdesk' ) );
+		}
+
+		$ticket = $this->findTicket( $ticket_id );
+		if ( ! $ticket ) {
+			return;
+		}
+
+		$body = isset( $_POST['hd_reply_body'] ) ? wp_kses_post( wp_unslash( $_POST['hd_reply_body'] ) ) : '';
+		if ( '' === trim( wp_strip_all_tags( $body ) ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$table = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+		$wpdb->insert(
+			$table,
+			array(
+				'ticket_id'      => $ticket_id,
+				'author_user_id' => get_current_user_id(),
+				'author_type'    => 'agent',
+				'body'           => $body,
+				'is_internal'    => isset( $_POST['hd_is_internal'] ) ? 1 : 0,
+				'created_at'     => current_time( 'mysql' ),
+			),
+			array( '%d', '%d', '%s', '%s', '%d', '%s' )
+		);
+
+		$message = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE id = %d LIMIT 1",
+				(int) $wpdb->insert_id
+			),
+			ARRAY_A
+		);
+
+		do_action( 'hd_ticket_replied', $ticket, $message ?: array() );
+
+		wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . $ticket_id ) );
+		exit;
+	}
+
+	/**
+	 * Handle changing a ticket status.
+	 *
+	 * @param int $ticket_id Ticket id.
+	 * @return void
+	 */
+	protected function handleStatusPost( int $ticket_id ): void {
+		if ( ! current_user_can( 'hd_manage_tickets' ) ) {
+			wp_die( esc_html__( 'You do not have permission to change ticket status.', 'wp-helpdesk' ) );
+		}
+
+		$ticket = $this->findTicket( $ticket_id );
+		if ( ! $ticket ) {
+			return;
+		}
+
+		$new_status = isset( $_POST['hd_status'] ) ? sanitize_key( wp_unslash( $_POST['hd_status'] ) ) : '';
+		$allowed = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
+		if ( ! in_array( $new_status, $allowed, true ) ) {
+			return;
+		}
+
+		global $wpdb;
+		$table = Schema::table( Constants::TABLE_TICKETS );
+		$wpdb->update(
+			$table,
+			array(
+				'status' => $new_status,
+				'updated_at' => current_time( 'mysql' ),
+				'closed_at' => 'closed' === $new_status ? current_time( 'mysql' ) : null,
+			),
+			array( 'id' => $ticket_id ),
+			array( '%s', '%s', '%s' ),
+			array( '%d' )
+		);
+
+		$updated_ticket = $this->findTicket( $ticket_id );
+		do_action( 'hd_ticket_status_changed', $updated_ticket ?: $ticket, (string) $ticket['status'], $new_status );
+
+		wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . $ticket_id ) );
+		exit;
+	}
+
+	/**
+	 * Fetch queue rows.
+	 *
+	 * @param int $limit Result limit.
+	 * @return array<int, array<string, mixed>>
+	 */
+	protected function listTickets( int $limit ): array {
+		global $wpdb;
+		$table = Schema::table( Constants::TABLE_TICKETS );
+		$network_id = Helpers::getNetworkId();
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT id, ticket_no, subject, requester_name, requester_email, requester_phone, status, updated_at
+				 FROM {$table}
+				 WHERE network_id = %d
+				 ORDER BY created_at DESC
+				 LIMIT %d",
+				$network_id,
+				max( 1, $limit )
+			),
+			ARRAY_A
+		);
+
+		return $rows ?: array();
+	}
+
+	/**
+	 * Find a single network-scoped ticket.
+	 *
+	 * @param int $ticket_id Ticket id.
+	 * @return array<string, mixed>|null
+	 */
+	protected function findTicket( int $ticket_id ): ?array {
+		global $wpdb;
+		$table = Schema::table( Constants::TABLE_TICKETS );
+		$network_id = Helpers::getNetworkId();
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE id = %d AND network_id = %d LIMIT 1",
+				$ticket_id,
+				$network_id
+			),
+			ARRAY_A
+		);
+
+		return $row ?: null;
+	}
+
+	/**
+	 * Get ticket messages by ticket id.
+	 *
+	 * @param int $ticket_id Ticket id.
+	 * @return array<int, array<string, mixed>>
+	 */
+	protected function getMessages( int $ticket_id ): array {
+		global $wpdb;
+		$table = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE ticket_id = %d ORDER BY created_at ASC",
+				$ticket_id
+			),
+			ARRAY_A
+		);
+
+		return $rows ?: array();
 	}
 }

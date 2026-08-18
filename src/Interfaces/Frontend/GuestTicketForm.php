@@ -72,10 +72,12 @@ class GuestTicketForm extends HelpdeskPage {
 						<span class="hd-required" aria-hidden="true">*</span>
 					</label>
 					<select id="hd-topic" name="topic_id" class="hd-select" required aria-required="true">
-						<option value=""><?php esc_html_e( '— Select a topic —', 'wp-helpdesk' ); ?></option>
+						<option value=""><?php esc_html_e( 'Select …', 'wp-helpdesk' ); ?></option>
 					</select>
 					<p class="hd-field-hint" id="hd-topic-description" aria-live="polite"></p>
 				</div>
+				<div class="hd-branch-container" data-role="topic-branch"></div>
+				<p class="hd-error-message" id="hd-topic-error" aria-live="assertive" role="alert"></p>
 				<div class="hd-form-actions">
 					<button type="button" class="hd-btn hd-btn--primary" id="hd-step0-next" disabled>
 						<?php esc_html_e( 'Continue', 'wp-helpdesk' ); ?>
@@ -114,6 +116,21 @@ class GuestTicketForm extends HelpdeskPage {
 						required
 						aria-required="true"
 						autocomplete="email"
+					>
+				</div>
+				<div class="hd-field">
+					<label for="hd-phone" class="hd-label">
+						<?php esc_html_e( 'Phone number', 'wp-helpdesk' ); ?>
+						<span class="hd-required" aria-hidden="true">*</span>
+					</label>
+					<input
+						type="tel"
+						id="hd-phone"
+						name="requester_phone"
+						class="hd-input"
+						required
+						aria-required="true"
+						autocomplete="tel"
 					>
 				</div>
 				<div class="hd-field">

@@ -133,6 +133,13 @@ class FrontendRouter {
 				'memberUrl' => esc_url( home_url( '/helpdesk/member/new/' ) ),
 				'indexUrl'  => esc_url( home_url( '/helpdesk/' ) ),
 				'isLoggedIn' => is_user_logged_in() ? '1' : '0',
+				'i18n' => array(
+					'followupTopicLabel' => __( 'Follow-up topic', 'wp-helpdesk' ),
+					'selectPlaceholder'  => __( 'Select …', 'wp-helpdesk' ),
+					'errorSelectTopic'   => __( 'Please select a topic.', 'wp-helpdesk' ),
+					'errorCompleteTopic' => __( 'Please complete topic selection.', 'wp-helpdesk' ),
+					'errorLoadTransitions' => __( 'Could not load follow-up topics. Please try again.', 'wp-helpdesk' ),
+				),
 			)
 		);
 	}
