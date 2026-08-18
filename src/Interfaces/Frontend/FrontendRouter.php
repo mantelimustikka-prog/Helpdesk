@@ -40,9 +40,24 @@ class FrontendRouter {
 	 */
 	public function register(): void {
 		add_action( 'init', array( $this, 'addRewriteRules' ) );
+		add_action( 'init', array( $this, 'maybeFlushRewrites' ) );
 		add_filter( 'query_vars', array( $this, 'addQueryVars' ) );
 		add_action( 'template_redirect', array( $this, 'dispatch' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueueAssets' ) );
+	}
+
+	/**
+	 * Flush rewrite rules once when the stored rewrite-version option does not
+	 * match the current constant.  Never flushes on ordinary requests.
+	 *
+	 * @return void
+	 */
+	public function maybeFlushRewrites(): void {
+		$stored = (string) get_option( Constants::OPTION_REWRITE_VERSION, '' );
+		if ( $stored !== Constants::REWRITE_VERSION ) {
+			flush_rewrite_rules( false );
+			update_option( Constants::OPTION_REWRITE_VERSION, Constants::REWRITE_VERSION );
+		}
 	}
 
 	/**
@@ -68,12 +83,19 @@ class FrontendRouter {
 	}
 
 	/**
-	 * Dispatch to the correct page controller based on the hd_page query var.
+	 * Dispatch to the correct page controller based on the hd_page query var,
+	 * with a path-based fallback so routes resolve even when rewrite rules have
+	 * not been flushed yet or when the mapped page is missing.
 	 *
 	 * @return void
 	 */
 	public function dispatch(): void {
-		$hd_page = get_query_var( 'hd_page', '' );
+		$hd_page = sanitize_key( (string) get_query_var( 'hd_page', '' ) );
+
+		// Path-based fallback when the query var is not set.
+		if ( '' === $hd_page ) {
+			$hd_page = $this->resolveFromPath();
+		}
 
 		if ( '' === $hd_page ) {
 			return;
@@ -96,6 +118,43 @@ class FrontendRouter {
 				$this->member_form->render();
 				exit;
 		}
+	}
+
+	/**
+	 * Derive the hd_page value from the current request path when the rewrite
+	 * query var is absent (e.g. rule not yet flushed, or mapped-page context).
+	 *
+	 * @return string One of 'index'|'new'|'member_new', or '' when not matched.
+	 */
+	protected function resolveFromPath(): string {
+		// Only run on front-end singular/page contexts or raw path checks.
+		$request_uri = isset( $_SERVER['REQUEST_URI'] )
+			? sanitize_text_field( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) )
+			: '';
+
+		// Strip query string.
+		$path = (string) parse_url( $request_uri, PHP_URL_PATH );
+		$path = rtrim( $path, '/' ) . '/';
+
+		// Normalise the home URL base so path comparison is site-relative.
+		$home_path = rtrim( (string) parse_url( home_url(), PHP_URL_PATH ), '/' );
+		if ( '' !== $home_path && 0 === strpos( $path, $home_path ) ) {
+			$path = substr( $path, strlen( $home_path ) );
+		}
+
+		if ( '/helpdesk/member/new/' === $path ) {
+			return 'member_new';
+		}
+
+		if ( '/helpdesk/new/' === $path ) {
+			return 'new';
+		}
+
+		if ( '/helpdesk/' === $path ) {
+			return 'index';
+		}
+
+		return '';
 	}
 
 	/**

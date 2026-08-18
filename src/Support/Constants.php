@@ -17,6 +17,15 @@ class Constants {
 	public const OPTION_PAGINATION         = 'hd_pagination_per_page';
 	public const OPTION_SLA_FIRST_RESPONSE = 'hd_sla_first_response_hours';
 	public const OPTION_SLA_RESOLUTION     = 'hd_sla_resolution_hours';
+
+	// Frontend page option keys (per-site, stored in blog options).
+	public const OPTION_PAGE_INDEX      = 'hd_page_id_index';
+	public const OPTION_PAGE_NEW        = 'hd_page_id_new';
+	public const OPTION_PAGE_MEMBER_NEW = 'hd_page_id_member_new';
+
+	// Rewrite flush version — bump to trigger a one-time flush.
+	public const REWRITE_VERSION        = '1';
+	public const OPTION_REWRITE_VERSION = 'hd_rewrite_version';
 	public const TABLE_TOPICS              = 'topics';
 	public const TABLE_TOPIC_TRANSITIONS   = 'topic_transitions';
 	public const TABLE_FORM_SESSIONS       = 'form_sessions';
