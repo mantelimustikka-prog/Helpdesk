@@ -66,6 +66,7 @@
 		this.currentStep = 0;
 		this.selectedTopicId = 0;
 		this.selectedTopicTitle = '';
+		this.selectedTopicDescription = '';
 		this.topicPath = [];
 		this.canContinueFromTopic = false;
 		this.storageKey = 'wpHelpdeskForm:' + formType;
@@ -169,6 +170,7 @@
 	FormController.prototype._hardReset = function () {
 		this.selectedTopicId = 0;
 		this.selectedTopicTitle = '';
+		this.selectedTopicDescription = '';
 		this.topicPath = [];
 		this.canContinueFromTopic = false;
 		this.pendingState = null;
@@ -195,6 +197,10 @@
 		var hintEl = this.container.querySelector( '[id$="-topic-description"]' );
 		if ( hintEl ) {
 			hintEl.textContent = '';
+		}
+		var summaryEl = this.container.querySelector( '[data-role="topic-description-step1"]' );
+		if ( summaryEl ) {
+			summaryEl.textContent = '';
 		}
 		this._clearTopicError();
 		this._clearError();
@@ -294,6 +300,7 @@
 		this.topicPath[ level ] = parseInt( val, 10 );
 		this.selectedTopicId = parseInt( val, 10 );
 		this.selectedTopicTitle = opt ? opt.textContent.trim() : '';
+		this.selectedTopicDescription = opt && opt.dataset.description ? opt.dataset.description : '';
 		this._clearTopicError();
 		this._refreshKnowledgeBaseSuggestions();
 
@@ -447,6 +454,24 @@
 		this._showTopicError( '' );
 	};
 
+	FormController.prototype._updateStep1TopicSummary = function () {
+		var summaryEl = this.container.querySelector( '[data-role="topic-description-step1"]' );
+		if ( ! summaryEl ) {
+			return;
+		}
+		summaryEl.textContent = '';
+		if ( this.selectedTopicDescription ) {
+			var label = document.createElement( 'p' );
+			var text = document.createElement( 'p' );
+			label.className = 'hd-topic-description-summary__label';
+			label.textContent = this.selectedTopicTitle || ( i18n.topicLabel || 'Topic' );
+			text.className = 'hd-topic-description-summary__text';
+			text.textContent = this.selectedTopicDescription;
+			summaryEl.appendChild( label );
+			summaryEl.appendChild( text );
+		}
+	};
+
 	FormController.prototype._goToStep = function ( index ) {
 		if ( index < 0 || index >= this.steps.length ) {
 			return;
@@ -468,6 +493,9 @@
 
 		this.currentStep = index;
 		window.scrollTo( 0, 0 );
+		if ( index === 1 ) {
+			this._updateStep1TopicSummary();
+		}
 		this._saveState();
 	};
 
@@ -688,6 +716,7 @@
 		// Reset all branch-dependent client-side state.
 		this.selectedTopicId = 0;
 		this.selectedTopicTitle = '';
+		this.selectedTopicDescription = '';
 		this.topicPath = [];
 		this.canContinueFromTopic = false;
 		this.pendingState = null;
@@ -714,6 +743,10 @@
 		var hintEl = this.container.querySelector( '[id$="-topic-description"]' );
 		if ( hintEl ) {
 			hintEl.textContent = '';
+		}
+		var summaryEl = this.container.querySelector( '[data-role="topic-description-step1"]' );
+		if ( summaryEl ) {
+			summaryEl.textContent = '';
 		}
 		this._clearTopicError();
 		this._clearError();

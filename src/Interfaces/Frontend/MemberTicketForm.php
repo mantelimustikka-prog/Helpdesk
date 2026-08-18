@@ -105,6 +105,7 @@ class MemberTicketForm extends GuestTicketForm {
 			<!-- Step 1: Message (name/email prefilled, email read-only) -->
 			<div class="hd-form-step hd-form-step--hidden" data-step="1">
 				<h2 class="hd-form-step__title"><?php esc_html_e( 'Describe your request', 'wp-helpdesk' ); ?></h2>
+				<div class="hd-topic-description-summary" data-role="topic-description-step1" aria-live="polite"></div>
 				<div class="hd-field">
 					<label for="hd-member-name" class="hd-label">
 						<?php esc_html_e( 'Your name', 'wp-helpdesk' ); ?>
