@@ -22,26 +22,26 @@ WP Helpdesk is a network-only WordPress multisite plugin scaffold for managing s
 
 ### CKEditor email header/footer
 
-The **Email Header & Footer** settings tab expects a bundled CKEditor 4 copy:
+CKEditor 4.22.1 (GPL-2.0 OR LGPL-2.1 OR MPL-1.1) is **bundled** with the plugin under `assets/vendor/ckeditor/`. No CDN dependency or manual download is required.
 
-1. Download CKEditor 4 from https://ckeditor.com/ckeditor-4/download/
-2. Extract the distribution into:
+To configure the email header and footer:
 
-   `assets/vendor/ckeditor/`
+1. Go to **Network Admin → Helpdesk → Settings**.
+2. Click the **Email Header & Footer** tab.
+3. Use the rich-text editors to compose the HTML header and footer content.
+4. Click **Save Settings**.
 
-3. Confirm the editor file exists at:
-
-   `assets/vendor/ckeditor/ckeditor.js`
-
-The plugin enqueues this bundled file for the network settings editor.
+The plugin enqueues the bundled `assets/vendor/ckeditor/ckeditor.js` only on the Email Header & Footer tab. If JavaScript is unavailable the fields gracefully fall back to plain textareas.
 
 ### Email delivery
 
-All outbound plugin email must go through:
+All outbound plugin email is sent through a single service:
 
 `WPHelpdesk\Domain\Notification\NotificationService`
 
-That service is the only place that wraps email content with the configured network header and footer layout before calling `wp_mail()`.
+That service is the only code path that calls `wp_mail()`. Before sending, it wraps every email body with the saved network header and footer (stored as `hd_email_header_html` and `hd_email_footer_html` network options). No support email bypasses this wrapper.
+
+**Inbound reply processing is not implemented.** Replies sent to notification From/Reply-To addresses are not parsed or imported back into tickets.
 
 ### Android admin API
 
