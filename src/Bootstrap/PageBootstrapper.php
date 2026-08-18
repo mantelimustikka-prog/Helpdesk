@@ -70,7 +70,7 @@ class PageBootstrapper {
 					'post_status'  => 'publish',
 					'post_type'    => 'page',
 					'post_content' => '',
-					'post_author'  => 1,
+					'post_author'  => self::resolveAuthorId(),
 				),
 				false
 			);
@@ -99,5 +99,30 @@ class PageBootstrapper {
 		}
 
 		return $id;
+	}
+
+	/**
+	 * Resolve a safe author ID for page creation.
+	 *
+	 * Uses the current user when available, otherwise falls back to the first
+	 * administrator account, and finally to 0 (no author required for pages).
+	 *
+	 * @return int
+	 */
+	private static function resolveAuthorId(): int {
+		$current_id = (int) get_current_user_id();
+		if ( $current_id > 0 ) {
+			return $current_id;
+		}
+
+		$admins = get_users(
+			array(
+				'role'   => 'administrator',
+				'number' => 1,
+				'fields' => 'ID',
+			)
+		);
+
+		return ! empty( $admins ) ? (int) $admins[0] : 0;
 	}
 }

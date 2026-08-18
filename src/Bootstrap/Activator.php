@@ -43,7 +43,8 @@ class Activator {
 			foreach ( $sites as $site ) {
 				switch_to_blog( (int) $site->blog_id );
 				PageBootstrapper::ensurePages();
-				// Stamp rewrite version so version-check flush runs on first boot.
+				// Stamp rewrite version to prevent a redundant flush on first boot
+				// (activation already flushed above via flush_rewrite_rules()).
 				update_option( Constants::OPTION_REWRITE_VERSION, Constants::REWRITE_VERSION );
 				restore_current_blog();
 			}
