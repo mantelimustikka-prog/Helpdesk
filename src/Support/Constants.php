@@ -26,6 +26,7 @@ class Constants {
 	public const TABLE_DEVICE_TOKENS       = 'device_tokens';
 	public const TABLE_ATTACHMENTS         = 'attachments';
 	public const TABLE_RATE_LIMITS         = 'rate_limits';
+	public const TABLE_ROUTING_RULES       = 'routing_rules';
 
 	/**
 	 * Get known network option keys.
@@ -62,6 +63,7 @@ class Constants {
 			self::TABLE_DEVICE_TOKENS,
 			self::TABLE_ATTACHMENTS,
 			self::TABLE_RATE_LIMITS,
+			self::TABLE_ROUTING_RULES,
 		);
 	}
 }

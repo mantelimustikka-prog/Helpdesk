@@ -23,13 +23,28 @@ class TicketsPage {
 		$this->handlePost();
 
 		$selected_ticket_id = isset( $_GET['ticket_id'] ) ? (int) $_GET['ticket_id'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$tickets            = $this->listTickets( 50 );
+		$status_filter      = isset( $_GET['status_filter'] ) ? sanitize_key( wp_unslash( $_GET['status_filter'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$tickets            = $this->listTickets( 50, $status_filter );
 		$selected_ticket    = $selected_ticket_id > 0 ? $this->findTicket( $selected_ticket_id ) : null;
 		$messages           = $selected_ticket ? $this->getMessages( (int) $selected_ticket['id'] ) : array();
 		$status_options     = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
 		?>
 		<div class="wrap hd-admin-wrap">
 			<h1><?php esc_html_e( 'Ticket Queue', 'wp-helpdesk' ); ?></h1>
+
+			<form method="get" style="margin-bottom:16px;">
+				<input type="hidden" name="page" value="wp-helpdesk-tickets">
+				<label for="hd-status-filter"><strong><?php esc_html_e( 'Filter by status:', 'wp-helpdesk' ); ?></strong></label>
+				<select id="hd-status-filter" name="status_filter">
+					<option value=""><?php esc_html_e( 'All', 'wp-helpdesk' ); ?></option>
+					<?php foreach ( $status_options as $status_opt ) : ?>
+						<option value="<?php echo esc_attr( $status_opt ); ?>" <?php selected( $status_filter, $status_opt ); ?>>
+							<?php echo esc_html( $status_opt ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+				<?php submit_button( __( 'Filter', 'wp-helpdesk' ), 'secondary small', 'filter_submit', false ); ?>
+			</form>
 
 			<div class="hd-card">
 				<h2><?php esc_html_e( 'Queue', 'wp-helpdesk' ); ?></h2>
@@ -263,26 +278,44 @@ class TicketsPage {
 	/**
 	 * Fetch queue rows.
 	 *
-	 * @param int $limit Result limit.
+	 * @param int    $limit         Result limit.
+	 * @param string $status_filter Optional status to filter by.
 	 * @return array<int, array<string, mixed>>
 	 */
-	protected function listTickets( int $limit ): array {
+	protected function listTickets( int $limit, string $status_filter = '' ): array {
 		global $wpdb;
-		$table = Schema::table( Constants::TABLE_TICKETS );
+		$table      = Schema::table( Constants::TABLE_TICKETS );
 		$network_id = Helpers::getNetworkId();
+		$allowed    = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
 
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT id, ticket_no, subject, requester_name, requester_email, requester_phone, status, updated_at
-				 FROM {$table}
-				 WHERE network_id = %d
-				 ORDER BY created_at DESC
-				 LIMIT %d",
-				$network_id,
-				max( 1, $limit )
-			),
-			ARRAY_A
-		);
+		if ( '' !== $status_filter && in_array( $status_filter, $allowed, true ) ) {
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT id, ticket_no, subject, requester_name, requester_email, requester_phone, status, updated_at
+					 FROM {$table}
+					 WHERE network_id = %d AND status = %s
+					 ORDER BY created_at DESC
+					 LIMIT %d",
+					$network_id,
+					$status_filter,
+					max( 1, $limit )
+				),
+				ARRAY_A
+			);
+		} else {
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT id, ticket_no, subject, requester_name, requester_email, requester_phone, status, updated_at
+					 FROM {$table}
+					 WHERE network_id = %d
+					 ORDER BY created_at DESC
+					 LIMIT %d",
+					$network_id,
+					max( 1, $limit )
+				),
+				ARRAY_A
+			);
+		}
 
 		return $rows ?: array();
 	}

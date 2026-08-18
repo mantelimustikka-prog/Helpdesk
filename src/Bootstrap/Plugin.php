@@ -6,9 +6,14 @@
 namespace WPHelpdesk\Bootstrap;
 
 use WPHelpdesk\Domain\Attachment\AttachmentService;
+use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseService;
 use WPHelpdesk\Domain\Notification\NotificationService;
+use WPHelpdesk\Domain\Privacy\GdprHandler;
+use WPHelpdesk\Domain\Privacy\RetentionService;
 use WPHelpdesk\Domain\Push\FirebasePushProvider;
 use WPHelpdesk\Domain\Push\PushService;
+use WPHelpdesk\Domain\Routing\RoutingService;
+use WPHelpdesk\Domain\SLA\SlaService;
 use WPHelpdesk\Infrastructure\Logger;
 use WPHelpdesk\Interfaces\Admin\NetworkMenu;
 use WPHelpdesk\Interfaces\Frontend\FrontendRouter;
@@ -22,6 +27,11 @@ class Plugin {
 	protected AttachmentService $attachment_service;
 	protected Logger $logger;
 	protected FrontendRouter $frontend_router;
+	protected SlaService $sla_service;
+	protected RoutingService $routing_service;
+	protected KnowledgeBaseService $kb_service;
+	protected GdprHandler $gdpr_handler;
+	protected RetentionService $retention_service;
 
 	public function __construct(
 		?NetworkMenu $network_menu = null,
@@ -30,7 +40,12 @@ class Plugin {
 		?PushService $push_service = null,
 		?AttachmentService $attachment_service = null,
 		?Logger $logger = null,
-		?FrontendRouter $frontend_router = null
+		?FrontendRouter $frontend_router = null,
+		?SlaService $sla_service = null,
+		?RoutingService $routing_service = null,
+		?KnowledgeBaseService $kb_service = null,
+		?GdprHandler $gdpr_handler = null,
+		?RetentionService $retention_service = null
 	) {
 		$this->network_menu         = $network_menu ?: new NetworkMenu();
 		$this->routes               = $routes ?: new Routes();
@@ -39,6 +54,11 @@ class Plugin {
 		$this->attachment_service   = $attachment_service ?: new AttachmentService();
 		$this->logger               = $logger ?: new Logger();
 		$this->frontend_router      = $frontend_router ?: new FrontendRouter();
+		$this->sla_service          = $sla_service ?: new SlaService();
+		$this->routing_service      = $routing_service ?: new RoutingService();
+		$this->kb_service           = $kb_service ?: new KnowledgeBaseService();
+		$this->gdpr_handler         = $gdpr_handler ?: new GdprHandler();
+		$this->retention_service    = $retention_service ?: new RetentionService();
 	}
 
 	/**
@@ -54,10 +74,38 @@ class Plugin {
 
 		$this->frontend_router->register();
 
+		// Ticket lifecycle hooks (notifications + push).
 		add_action( 'hd_ticket_replied', array( $this, 'handleTicketReplied' ), 10, 2 );
 		add_action( 'hd_ticket_status_changed', array( $this, 'handleTicketStatusChanged' ), 10, 3 );
 		add_action( 'hd_ticket_created', array( $this, 'handleTicketCreated' ), 10, 1 );
 		add_action( 'hd_ticket_assigned', array( $this, 'handleTicketAssigned' ), 10, 2 );
+
+		// P3: SLA cron.
+		add_filter( 'cron_schedules', array( $this, 'addCronSchedules' ) );
+		add_action( 'hd_sla_breach_check', array( $this->sla_service, 'checkBreaches' ) );
+
+		// P3: Retention cron.
+		add_action( 'hd_retention_purge', array( $this->retention_service, 'purgeExpired' ) );
+
+		// P3: GDPR export/erase hooks.
+		$this->gdpr_handler->register();
+	}
+
+	/**
+	 * Register helpdesk custom cron schedules.
+	 *
+	 * @param array<string, array<string, mixed>> $schedules Existing schedules.
+	 * @return array<string, array<string, mixed>>
+	 */
+	public function addCronSchedules( array $schedules ): array {
+		if ( ! isset( $schedules['hd_every_15_minutes'] ) ) {
+			$schedules['hd_every_15_minutes'] = array(
+				'interval' => 15 * MINUTE_IN_SECONDS,
+				'display'  => __( 'Every 15 minutes (WP Helpdesk)', 'wp-helpdesk' ),
+			);
+		}
+
+		return $schedules;
 	}
 
 	/**
@@ -76,12 +124,21 @@ class Plugin {
 	 * @return void
 	 */
 	public function handleTicketCreated( array $ticket ): void {
+		// P3: apply routing rules.
+		$routing = $this->routing_service->resolveForTicket( $ticket );
+		if ( ! empty( $routing['notification_email'] ) ) {
+			$this->notification_service->sendTicketCreated( $ticket, $routing['notification_email'] );
+		}
+
 		if ( ! empty( $ticket['requester_email'] ) ) {
 			$this->notification_service->sendTicketCreated( $ticket, (string) $ticket['requester_email'] );
 		}
 
 		$this->notification_service->sendTicketCreatedAdmin( $ticket );
 		$this->push_service->notifyNewTicket( $ticket );
+
+		// P3: stamp SLA deadlines.
+		$this->sla_service->stampDeadlines( $ticket );
 	}
 
 	/**
