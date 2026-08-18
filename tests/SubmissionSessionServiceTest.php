@@ -231,6 +231,7 @@ final class SubmissionSessionServiceTest extends TestCase {
 					'expires_at'       => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
 					'payload_json'     => '{"topic_id":3,"name":"Alice","message":"Help!"}',
 					'step_index'       => 2,
+					'reset_counter'    => 0,
 					'current_topic_id' => 3,
 				];
 			}
@@ -245,8 +246,9 @@ final class SubmissionSessionServiceTest extends TestCase {
 
 		$result = $service->restart( 'active-token' );
 
-		self::assertTrue( $result );
+		self::assertSame( 1, $result );
 		self::assertSame( 0, $repository->updated['step_index'] );
+		self::assertSame( 1, $repository->updated['reset_counter'] );
 		self::assertNull( $repository->updated['current_topic_id'] );
 		$payload = json_decode( $repository->updated['payload_json'], true );
 		self::assertSame( [], $payload );
@@ -267,6 +269,7 @@ final class SubmissionSessionServiceTest extends TestCase {
 						'expires_at'       => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
 						'payload_json'     => '{"topic_id":1}',
 						'step_index'       => 1,
+						'reset_counter'    => 0,
 						'current_topic_id' => 1,
 					];
 				}
@@ -277,6 +280,7 @@ final class SubmissionSessionServiceTest extends TestCase {
 					'expires_at'       => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
 					'payload_json'     => '{}',
 					'step_index'       => 0,
+					'reset_counter'    => 1,
 					'current_topic_id' => null,
 				];
 			}
@@ -289,9 +293,9 @@ final class SubmissionSessionServiceTest extends TestCase {
 
 		$service = $this->makeService( $repository );
 
-		// Simulate restart.
-		$ok = $service->restart( 'session-abc' );
-		self::assertTrue( $ok );
+		// Simulate restart: returns new reset_counter (1).
+		$new_counter = $service->restart( 'session-abc' );
+		self::assertSame( 1, $new_counter );
 
 		// After restart, advance with a completely different topic should work.
 		$advanced = $service->advance( 'session-abc', 1, 99, [ 'topic_id' => 99, 'name' => 'Bob' ] );
@@ -302,6 +306,182 @@ final class SubmissionSessionServiceTest extends TestCase {
 		$merged         = json_decode( $advance_update['payload_json'], true );
 		self::assertSame( 99, $merged['topic_id'] );
 		self::assertSame( 99, $advance_update['current_topic_id'] );
+	}
+
+	// ------------------------------------------------------------------
+	// reset_counter tests
+	// ------------------------------------------------------------------
+
+	public function testRestartIncrementsResetCounter(): void {
+		$repository = new class extends SubmissionSessionRepository {
+			public array $updated = [];
+
+			public function findByToken( string $token ): ?array {
+				return [
+					'id'            => 11,
+					'session_token' => $token,
+					'expires_at'    => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
+					'payload_json'  => '{"topic_id":5}',
+					'step_index'    => 2,
+					'reset_counter' => 3,
+				];
+			}
+
+			public function updateByToken( string $token, array $data ): bool {
+				$this->updated = $data;
+				return true;
+			}
+		};
+
+		$service     = $this->makeService( $repository );
+		$new_counter = $service->restart( 'token-inc' );
+
+		self::assertSame( 4, $new_counter );
+		self::assertSame( 4, $repository->updated['reset_counter'] );
+		self::assertSame( 0, $repository->updated['step_index'] );
+	}
+
+	public function testRestartReturnsIncrementedCounterStartingFromZero(): void {
+		$repository = new class extends SubmissionSessionRepository {
+			public function findByToken( string $token ): ?array {
+				return [
+					'id'            => 12,
+					'session_token' => $token,
+					'expires_at'    => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
+					'payload_json'  => '{}',
+					'step_index'    => 1,
+					// reset_counter absent (legacy row): treated as 0.
+				];
+			}
+
+			public function updateByToken( string $token, array $data ): bool {
+				return true;
+			}
+		};
+
+		$service = $this->makeService( $repository );
+		self::assertSame( 1, $service->restart( 'token-zero' ) );
+	}
+
+	public function testAdvanceIsRejectedWhenResetCounterIsStale(): void {
+		$repository = new class extends SubmissionSessionRepository {
+			public function findByToken( string $token ): ?array {
+				return [
+					'id'            => 13,
+					'session_token' => $token,
+					'expires_at'    => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
+					'payload_json'  => '{}',
+					'step_index'    => 0,
+					'reset_counter' => 2,
+				];
+			}
+
+			public function updateByToken( string $token, array $data ): bool {
+				return true;
+			}
+		};
+
+		$service = $this->makeService( $repository );
+
+		// Client sends reset_counter=1, but server has 2 → stale → rejected.
+		$result = $service->advance( 'token-stale', 1, 5, [ 'name' => 'Stale' ], 60, 1 );
+
+		self::assertFalse( $result );
+	}
+
+	public function testAdvanceSucceedsWhenResetCounterMatches(): void {
+		$repository = new class extends SubmissionSessionRepository {
+			public array $updated = [];
+
+			public function findByToken( string $token ): ?array {
+				return [
+					'id'            => 14,
+					'session_token' => $token,
+					'expires_at'    => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
+					'payload_json'  => '{}',
+					'step_index'    => 0,
+					'reset_counter' => 2,
+				];
+			}
+
+			public function updateByToken( string $token, array $data ): bool {
+				$this->updated = $data;
+				return true;
+			}
+		};
+
+		$service = $this->makeService( $repository );
+
+		// Matching reset_counter → should succeed.
+		$result = $service->advance( 'token-fresh', 1, 5, [ 'name' => 'Alice' ], 60, 2 );
+
+		self::assertTrue( $result );
+		self::assertSame( 1, $repository->updated['step_index'] );
+	}
+
+	public function testAdvanceSucceedsWithoutResetCounterArgument(): void {
+		$repository = new class extends SubmissionSessionRepository {
+			public function findByToken( string $token ): ?array {
+				return [
+					'id'            => 15,
+					'session_token' => $token,
+					'expires_at'    => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
+					'payload_json'  => '{}',
+					'step_index'    => 0,
+					'reset_counter' => 5,
+				];
+			}
+
+			public function updateByToken( string $token, array $data ): bool {
+				return true;
+			}
+		};
+
+		$service = $this->makeService( $repository );
+
+		// Omitting reset_counter (null) bypasses the staleness check.
+		$result = $service->advance( 'token-legacy', 1, 3, [ 'name' => 'Bob' ] );
+
+		self::assertTrue( $result );
+	}
+
+	public function testRestartCounterIncreasesMonotonically(): void {
+		$counter = 0;
+
+		$repository = new class( $counter ) extends SubmissionSessionRepository {
+			public int $counter;
+
+			public function __construct( int $counter ) {
+				$this->counter = $counter;
+			}
+
+			public function findByToken( string $token ): ?array {
+				return [
+					'id'            => 20,
+					'session_token' => $token,
+					'expires_at'    => date( 'Y-m-d H:i:s', strtotime( '+1 hour' ) ),
+					'payload_json'  => '{}',
+					'step_index'    => 1,
+					'reset_counter' => $this->counter,
+				];
+			}
+
+			public function updateByToken( string $token, array $data ): bool {
+				// Simulate the DB applying the update.
+				$this->counter = $data['reset_counter'];
+				return true;
+			}
+		};
+
+		$service = $this->makeService( $repository );
+
+		$c1 = $service->restart( 'tok' );
+		self::assertSame( 1, $c1 );
+
+		$c2 = $service->restart( 'tok' );
+		self::assertSame( 2, $c2 );
+
+		self::assertGreaterThan( $c1, $c2 );
 	}
 
 	private function makeService( SubmissionSessionRepository $repository ): SubmissionSessionService {

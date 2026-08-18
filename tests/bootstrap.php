@@ -28,6 +28,8 @@ defined( 'HOUR_IN_SECONDS' ) || define( 'HOUR_IN_SECONDS', 3600 );
 defined( 'HD_VERSION' ) || define( 'HD_VERSION', '1.0.0' );
 defined( 'HD_PATH' ) || define( 'HD_PATH', dirname( __DIR__ ) . '/' );
 defined( 'HD_URL' ) || define( 'HD_URL', 'https://example.test/wp-content/plugins/helpdesk/' );
+defined( 'ARRAY_A' ) || define( 'ARRAY_A', 'ARRAY_A' );
+defined( 'DB_NAME' ) || define( 'DB_NAME', 'wp_test' );
 defined( 'HD_BASENAME' ) || define( 'HD_BASENAME', 'helpdesk/helpdesk.php' );
 
 if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
