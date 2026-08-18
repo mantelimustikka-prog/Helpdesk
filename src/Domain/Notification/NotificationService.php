@@ -19,8 +19,16 @@ class NotificationService {
 	 * @return string
 	 */
 	private function wrapWithLayout( string $content ): string {
-		$header = (string) get_site_option( Constants::OPTION_EMAIL_HEADER_HTML, '' );
-		$footer = (string) get_site_option( Constants::OPTION_EMAIL_FOOTER_HTML, '' );
+		$header = '';
+		$footer = '';
+
+		if ( (int) get_site_option( Constants::OPTION_EMAIL_HEADER_ENABLED, 1 ) ) {
+			$header = (string) get_site_option( Constants::OPTION_EMAIL_HEADER_HTML, '' );
+		}
+
+		if ( (int) get_site_option( Constants::OPTION_EMAIL_FOOTER_ENABLED, 1 ) ) {
+			$footer = (string) get_site_option( Constants::OPTION_EMAIL_FOOTER_HTML, '' );
+		}
 
 		return $header . $content . $footer;
 	}
@@ -37,6 +45,19 @@ class NotificationService {
 	private function send( string $to, string $subject, string $content, array $headers = array() ): bool {
 		$body      = $this->wrapWithLayout( $content );
 		$headers[] = 'Content-Type: text/html; charset=UTF-8';
+
+		$from_name = (string) get_site_option( Constants::OPTION_EMAIL_FROM_NAME, '' );
+		$from_addr = (string) get_site_option( Constants::OPTION_EMAIL_FROM_ADDRESS, '' );
+		$reply_to  = (string) get_site_option( Constants::OPTION_EMAIL_REPLY_TO, '' );
+
+		if ( '' !== $from_addr ) {
+			$from_label = '' !== $from_name ? $from_name . ' <' . $from_addr . '>' : $from_addr;
+			$headers[]  = 'From: ' . $from_label;
+		}
+
+		if ( '' !== $reply_to ) {
+			$headers[] = 'Reply-To: ' . $reply_to;
+		}
 
 		return wp_mail( $to, $subject, $body, $headers );
 	}
