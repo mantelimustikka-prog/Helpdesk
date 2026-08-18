@@ -174,6 +174,11 @@ class TicketService {
 	/**
 	 * Generate a unique ticket number.
 	 *
+	 * NOTE: This uses a site-option-based counter which is not atomic under high
+	 * concurrency. The UNIQUE KEY on ticket_no in the schema prevents duplicates
+	 * at the DB level; callers should handle insert failures with a retry loop
+	 * in high-throughput environments.
+	 *
 	 * @return string
 	 */
 	protected function generateTicketNo(): string {

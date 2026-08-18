@@ -147,7 +147,7 @@ final class MessageServiceTest extends TestCase {
 	public function testDeleteMessageSucceedsForOwner(): void {
 		$deleted = false;
 
-		$repository = new class( $deleted ) extends MessageRepository {
+		$repository = new class extends MessageRepository {
 			public bool $deleted = false;
 
 			public function find( int $id ): ?array {

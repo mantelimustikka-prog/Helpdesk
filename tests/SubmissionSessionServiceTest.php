@@ -53,7 +53,7 @@ final class SubmissionSessionServiceTest extends TestCase {
 	public function testResumeReturnsNullAndDeletesExpiredSession(): void {
 		$deleted = false;
 
-		$repository = new class( $deleted ) extends SubmissionSessionRepository {
+		$repository = new class extends SubmissionSessionRepository {
 			public bool $deleted = false;
 
 			public function findByToken( string $token ): ?array {
