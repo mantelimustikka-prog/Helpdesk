@@ -128,8 +128,8 @@ class SettingsPage {
 		}
 
 		$increment = isset( $_POST['hd_general_ticket_number_increment'] ) ? (int) wp_unslash( $_POST['hd_general_ticket_number_increment'] ) : 1;
-		if ( $increment < 1 ) {
-			$errors[] = __( 'Ticket number increment must be at least 1.', 'wp-helpdesk' );
+		if ( $increment < 1 || $increment > 10000 ) {
+			$errors[] = __( 'Ticket number increment must be between 1 and 10,000.', 'wp-helpdesk' );
 		}
 
 		$status     = $this->sanitizeEnumFromPost( 'hd_general_default_status', self::VALID_STATUSES, 'open', $errors, __( 'Invalid default status value.', 'wp-helpdesk' ) );
@@ -315,7 +315,7 @@ class SettingsPage {
 				<tr>
 					<th scope="row"><label for="hd_general_ticket_number_increment"><?php esc_html_e( 'Increment Step', 'wp-helpdesk' ); ?></label></th>
 					<td>
-						<input type="number" id="hd_general_ticket_number_increment" name="hd_general_ticket_number_increment" value="<?php echo esc_attr( (string) $increment ); ?>" min="1" class="small-text">
+						<input type="number" id="hd_general_ticket_number_increment" name="hd_general_ticket_number_increment" value="<?php echo esc_attr( (string) $increment ); ?>" min="1" max="10000" class="small-text">
 					</td>
 				</tr>
 				<tr>
