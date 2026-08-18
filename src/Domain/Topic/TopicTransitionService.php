@@ -317,11 +317,14 @@ class TopicTransitionService {
 		}
 
 		$next_topic_ids = $this->normalizeNextTopicIds( $next_topic_ids, $from_topic_id );
+		$target_topics  = array();
 		foreach ( $next_topic_ids as $next_topic_id ) {
 			$topic = $this->topic_repository->find( $next_topic_id, $this->network_id );
 			if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
 				return false;
 			}
+
+			$target_topics[ $next_topic_id ] = $topic;
 		}
 
 		$existing_transitions = $this->repository->listFrom( $from_topic_id, $this->network_id, false );
@@ -345,7 +348,7 @@ class TopicTransitionService {
 		}
 
 		foreach ( $next_topic_ids as $next_topic_id ) {
-			$target = $this->topic_repository->find( $next_topic_id, $this->network_id );
+			$target = $target_topics[ $next_topic_id ] ?? array();
 			$label  = isset( $target['title'] ) ? (string) $target['title'] : 'Topic #' . $next_topic_id;
 
 			if ( isset( $admin_transitions[ $next_topic_id ] ) ) {

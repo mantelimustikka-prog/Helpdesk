@@ -88,6 +88,30 @@ class TopicService {
 	}
 
 	/**
+	 * Fetch multiple normalized topics keyed by id.
+	 *
+	 * @param array<int, int> $ids Topic ids.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function getTopicsByIds( array $ids ): array {
+		$ids   = array_values( array_filter( array_map( 'intval', $ids ) ) );
+		$rows  = $this->repository->findMany( $ids, $this->network_id );
+		$count = $this->repository->getActiveTransitionCounts( $ids, $this->network_id );
+		$items = array();
+
+		foreach ( $rows as $row ) {
+			$topic_id = (int) ( $row['id'] ?? 0 );
+			if ( $topic_id <= 0 ) {
+				continue;
+			}
+
+			$items[ $topic_id ] = $this->normalizeRow( $row, $count[ $topic_id ] ?? 0 );
+		}
+
+		return $items;
+	}
+
+	/**
 	 * Determine whether a branch topic has at least one active next edge.
 	 *
 	 * @param int $id Topic id.

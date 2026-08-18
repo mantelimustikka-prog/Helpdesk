@@ -171,10 +171,17 @@ class PublicTicketController {
 	public function listTransitions( WP_REST_Request $request ): WP_REST_Response {
 		$topic_id          = (int) $request['id'];
 		$payload           = array();
+		$transitions       = $this->topic_transition_service->listValidFrom( $topic_id, true );
+		$target_topics     = $this->topic_service->getTopicsByIds(
+			array_map(
+				static fn( array $transition ): int => (int) ( $transition['to_topic_id'] ?? 0 ),
+				$transitions
+			)
+		);
 
-		foreach ( $this->topic_transition_service->listValidFrom( $topic_id, true ) as $transition ) {
+		foreach ( $transitions as $transition ) {
 			$to_topic_id = (int) ( $transition['to_topic_id'] ?? 0 );
-			$target      = $this->topic_service->getTopic( $to_topic_id );
+			$target      = $target_topics[ $to_topic_id ] ?? null;
 			if ( ! $target ) {
 				continue;
 			}
@@ -201,7 +208,7 @@ class PublicTicketController {
 	 */
 	public function searchKnowledgeBase( WP_REST_Request $request ): WP_REST_Response {
 		$query      = sanitize_text_field( (string) $request->get_param( 'query' ) );
-		$topic_path = $this->normaliseKnowledgeBasePath( $request->get_param( 'topic_path' ) );
+		$topic_path = $this->normalizeKnowledgeBasePath( $request->get_param( 'topic_path' ) );
 		$limit      = max( 1, min( 10, (int) ( $request->get_param( 'limit' ) ?: 5 ) ) );
 
 		return new WP_REST_Response( $this->kb_service->searchTopics( $query, $topic_path, $limit ), 200 );
@@ -230,7 +237,7 @@ class PublicTicketController {
 	 */
 	public function suggestKnowledgeBase( WP_REST_Request $request ): WP_REST_Response {
 		$query      = sanitize_text_field( (string) $request->get_param( 'query' ) );
-		$topic_path = $this->normaliseKnowledgeBasePath( $request->get_param( 'topic_path' ) );
+		$topic_path = $this->normalizeKnowledgeBasePath( $request->get_param( 'topic_path' ) );
 		$limit      = max( 1, min( 10, (int) ( $request->get_param( 'limit' ) ?: 5 ) ) );
 
 		return new WP_REST_Response( $this->kb_service->suggestByPath( $topic_path, $query, $limit ), 200 );
@@ -579,7 +586,7 @@ class PublicTicketController {
 	 * @param mixed $raw_path Raw topic path input.
 	 * @return array<int, int>
 	 */
-	protected function normaliseKnowledgeBasePath( $raw_path ): array {
+	protected function normalizeKnowledgeBasePath( $raw_path ): array {
 		if ( is_array( $raw_path ) ) {
 			return array_values(
 				array_filter(

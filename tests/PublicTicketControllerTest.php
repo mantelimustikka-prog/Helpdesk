@@ -26,6 +26,15 @@ final class PublicTicketControllerTest extends TestCase {
 					'is_final'    => 3 === $id ? 1 : 0,
 				);
 			}
+
+			public function getTopicsByIds( array $ids ): array {
+				$items = array();
+				foreach ( $ids as $id ) {
+					$items[ (int) $id ] = $this->getTopic( (int) $id );
+				}
+
+				return $items;
+			}
 		};
 
 		$transition_service = new class extends TopicTransitionService {
