@@ -62,6 +62,50 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertArrayNotHasKey( 'woocommerce_account_menu_items', $GLOBALS['wp_filters'] );
 	}
 
+	/**
+	 * Regression: PHP Fatal error: Call to a member function get_page_permastruct() on null.
+	 *
+	 * When $wp_rewrite is null (plugins_loaded, CLI, cron, or REST-only contexts)
+	 * getAccountPageUrl() must return '' and register() must not register any hooks,
+	 * preventing a fatal in wp-includes/link-template.php.
+	 */
+	public function testRegisterDoesNothingWhenWpRewriteIsNull(): void {
+		$GLOBALS['wp_rewrite'] = null;
+
+		$this->integration->register();
+
+		self::assertArrayNotHasKey( 'init', $GLOBALS['wp_filters'] );
+		self::assertArrayNotHasKey( 'query_vars', $GLOBALS['wp_filters'] );
+		self::assertArrayNotHasKey( 'woocommerce_account_menu_items', $GLOBALS['wp_filters'] );
+		self::assertArrayNotHasKey( 'woocommerce_account_helpdesk_endpoint', $GLOBALS['wp_filters'] );
+	}
+
+	/**
+	 * Regression: getInterfaceLinks must not include WooCommerce links when $wp_rewrite is null.
+	 */
+	public function testGetInterfaceLinksExcludesWooCommerceLinksWhenWpRewriteIsNull(): void {
+		$GLOBALS['wp_rewrite'] = null;
+
+		$links = $this->integration->getInterfaceLinks();
+
+		$groups = array_column( $links, 'group' );
+		self::assertNotContains( 'WooCommerce My Account', $groups );
+		// Standalone pages must still be present.
+		self::assertContains( 'Standalone Helpdesk pages', $groups );
+	}
+
+	/**
+	 * Regression: register() must not fatal when WooCommerce class does not exist.
+	 */
+	public function testRegisterDoesNothingWhenWooCommerceClassAbsent(): void {
+		$integration = new WooCommerceClassAbsentDouble( $this->ticket_repository, $this->message_service );
+
+		$integration->register();
+
+		self::assertArrayNotHasKey( 'init', $GLOBALS['wp_filters'] );
+		self::assertArrayNotHasKey( 'woocommerce_account_menu_items', $GLOBALS['wp_filters'] );
+	}
+
 	public function testRenderOverviewShowsEmptyStateCta(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = '';
 
@@ -247,5 +291,12 @@ final class MessageServiceDouble extends MessageService {
 final class WooCommerceUnavailableAccountHelpdeskDouble extends WooCommerceAccountHelpdesk {
 	protected function getAccountPageUrl(): string {
 		return '';
+	}
+}
+
+/** Simulates an environment where the WooCommerce core class is not loaded. */
+final class WooCommerceClassAbsentDouble extends WooCommerceAccountHelpdesk {
+	protected function isWooCommerceAvailable(): bool {
+		return false;
 	}
 }

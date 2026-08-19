@@ -663,19 +663,38 @@ class WooCommerceAccountHelpdesk {
 	/**
 	 * Whether WooCommerce account pages appear to be available.
 	 *
+	 * Checks that WooCommerce core is loaded (class_exists guard) before
+	 * attempting any permalink resolution that depends on rewrite context.
+	 *
 	 * @return bool
 	 */
 	protected function isWooCommerceAvailable(): bool {
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			return false;
+		}
+
 		return '' !== $this->getAccountPageUrl();
 	}
 
 	/**
 	 * Resolve the WooCommerce My Account page permalink when it is available.
 	 *
+	 * Guards against a PHP fatal (Call to a member function get_page_permastruct()
+	 * on null) that occurs when WordPress's global $wp_rewrite object has not yet
+	 * been initialised — e.g. during plugins_loaded, WP-CLI, cron, or REST-only
+	 * requests where the normal rewrite boot sequence is skipped.
+	 *
 	 * @return string
 	 */
 	protected function getAccountPageUrl(): string {
 		if ( ! function_exists( 'wc_get_page_permalink' ) ) {
+			return '';
+		}
+
+		// Bail early when the rewrite context is not yet initialised to prevent
+		// get_page_permastruct() from being called on a null $wp_rewrite object.
+		global $wp_rewrite;
+		if ( null === $wp_rewrite ) {
 			return '';
 		}
 
