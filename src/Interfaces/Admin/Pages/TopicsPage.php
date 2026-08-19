@@ -256,16 +256,20 @@ class TopicsPage {
 		$node_type           = ! empty( $topic['is_final'] ) ? 'final' : 'branch';
 		$selected_next_ids   = ! empty( $topic['id'] ) ? $this->topic_transition_service->getSelectableNextTopicIds( (int) $topic['id'] ) : array();
 		$selected_parent_ids = ! empty( $topic['id'] ) ? $this->topic_transition_service->getSelectableParentTopicIds( (int) $topic['id'] ) : array();
-		$hierarchy_type      = ! empty( $selected_parent_ids ) ? 'follow_up' : 'top_level';
+		$hierarchy_type      = isset( $topic['hierarchy_type'] ) && 'follow_up' === (string) $topic['hierarchy_type'] ? 'follow_up' : 'top_level';
+		$candidate_topics    = $this->topic_service->listTopics(
+			array(
+				'per_page' => 250,
+			)
+		);
 		$available_next_step = array_filter(
-			$this->topic_service->listTopics(
-				array(
-					'per_page' => 250,
-				)
-			),
+			$candidate_topics,
 			static fn( array $candidate ): bool => (int) ( $candidate['id'] ?? 0 ) !== (int) ( $topic['id'] ?? 0 )
 		);
-		$available_parent_topics = $available_next_step;
+		$available_parent_topics = array_filter(
+			$candidate_topics,
+			static fn( array $candidate ): bool => (int) ( $candidate['id'] ?? 0 ) !== (int) ( $topic['id'] ?? 0 )
+		);
 		?>
 		<h1><?php echo esc_html( 'edit' === $action ? __( 'Edit Topic', 'wp-helpdesk' ) : __( 'Add Topic', 'wp-helpdesk' ) ); ?></h1>
 		<p><a class="button" href="<?php echo esc_url( $this->getListUrl() ); ?>"><?php esc_html_e( 'Back to Topics', 'wp-helpdesk' ); ?></a></p>

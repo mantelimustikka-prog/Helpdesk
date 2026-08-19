@@ -27,25 +27,6 @@ final class PublicTicketControllerTest extends TestCase {
 				);
 			}
 
-			public function testListTopicsReturnsOnlyTopLevelTopics(): void {
-				$topic_service = new class extends TopicService {
-					public function listTopLevelTopics(): array {
-						return array(
-							array( 'id' => 1, 'title' => 'Billing', 'description' => '', 'slug' => 'billing', 'is_final' => 0 ),
-							array( 'id' => 3, 'title' => 'Account', 'description' => 'Login', 'slug' => 'account', 'is_final' => 1 ),
-						);
-					}
-				};
-
-				$controller = new PublicTicketController( $topic_service, new TopicTransitionService(), new KnowledgeBaseService() );
-				$response   = $controller->listTopics( new WP_REST_Request() );
-
-				self::assertSame( 200, $response->status );
-				self::assertCount( 2, $response->data );
-				self::assertSame( 1, $response->data[0]['id'] );
-				self::assertSame( 'Billing', $response->data[0]['title'] );
-			}
-
 			public function getTopicsByIds( array $ids ): array {
 				$items = array();
 				foreach ( $ids as $id ) {
@@ -73,6 +54,25 @@ final class PublicTicketControllerTest extends TestCase {
 		self::assertSame( 200, $response->status );
 		self::assertSame( 3, $response->data[0]['to_topic_id'] );
 		self::assertSame( 1, $response->data[0]['to_topic']['is_final'] );
+	}
+
+	public function testListTopicsReturnsOnlyTopLevelTopics(): void {
+		$topic_service = new class extends TopicService {
+			public function listTopLevelTopics(): array {
+				return array(
+					array( 'id' => 1, 'title' => 'Billing', 'description' => '', 'slug' => 'billing', 'is_final' => 0 ),
+					array( 'id' => 3, 'title' => 'Account', 'description' => 'Login', 'slug' => 'account', 'is_final' => 1 ),
+				);
+			}
+		};
+
+		$controller = new PublicTicketController( $topic_service, new TopicTransitionService(), new KnowledgeBaseService() );
+		$response   = $controller->listTopics( new WP_REST_Request() );
+
+		self::assertSame( 200, $response->status );
+		self::assertCount( 2, $response->data );
+		self::assertSame( 1, $response->data[0]['id'] );
+		self::assertSame( 'Billing', $response->data[0]['title'] );
 	}
 
 	public function testSuggestKnowledgeBaseDelegatesToProvider(): void {
@@ -252,6 +252,15 @@ final class PublicTicketControllerTest extends TestCase {
 
 			public function getTopic( int $id ): ?array {
 				return array( 'id' => $id, 'is_active' => 1 );
+			}
+
+			public function getTopicsByIds( array $ids ): array {
+				$items = array();
+				foreach ( $ids as $id ) {
+					$items[ (int) $id ] = array( 'id' => (int) $id, 'is_active' => 1 );
+				}
+
+				return $items;
 			}
 		};
 

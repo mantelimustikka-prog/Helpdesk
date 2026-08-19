@@ -287,7 +287,7 @@ class AdminTopicsController {
 
 		$topic['next_topic_ids'] = $this->topic_transition_service->getSelectableNextTopicIds( $topic_id );
 		$topic['parent_topic_ids'] = $this->topic_transition_service->getSelectableParentTopicIds( $topic_id );
-		$topic['hierarchy_type'] = ! empty( $topic['parent_topic_ids'] ) ? 'follow_up' : 'top_level';
+		$topic['hierarchy_type'] = isset( $topic['hierarchy_type'] ) && 'follow_up' === (string) $topic['hierarchy_type'] ? 'follow_up' : 'top_level';
 
 		return $topic;
 	}

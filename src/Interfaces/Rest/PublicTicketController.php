@@ -662,8 +662,11 @@ class PublicTicketController {
 			return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
 
+		$topics_by_id = $this->topic_service->getTopicsByIds( $topic_path );
+		$valid_next_ids_by_topic = array();
+
 		foreach ( $topic_path as $index => $path_topic_id ) {
-			$topic = $this->topic_service->getTopic( (int) $path_topic_id );
+			$topic = $topics_by_id[ (int) $path_topic_id ] ?? null;
 			if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
 				return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 			}
@@ -673,12 +676,14 @@ class PublicTicketController {
 			}
 
 			$from_topic_id = (int) $topic_path[ $index - 1 ];
-			$allowed_next_ids = array_map(
-				static fn( array $transition ): int => (int) ( $transition['to_topic_id'] ?? 0 ),
-				$this->topic_transition_service->listValidFrom( $from_topic_id, true )
-			);
+			if ( ! isset( $valid_next_ids_by_topic[ $from_topic_id ] ) ) {
+				$valid_next_ids_by_topic[ $from_topic_id ] = array_map(
+					static fn( array $transition ): int => (int) ( $transition['to_topic_id'] ?? 0 ),
+					$this->topic_transition_service->listValidFrom( $from_topic_id, true )
+				);
+			}
 
-			if ( ! in_array( (int) $path_topic_id, $allowed_next_ids, true ) ) {
+			if ( ! in_array( (int) $path_topic_id, $valid_next_ids_by_topic[ $from_topic_id ], true ) ) {
 				return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 			}
 		}
