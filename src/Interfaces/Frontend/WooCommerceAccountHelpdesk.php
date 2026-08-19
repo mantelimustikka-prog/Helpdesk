@@ -486,9 +486,8 @@ class WooCommerceAccountHelpdesk {
 
 		$message = $this->message_service->getMessage( $message_id );
 		do_action( 'hd_ticket_replied', $ticket, $message ?: array( 'id' => $message_id, 'body' => $body ) );
-		wp_safe_redirect( $this->buildAccountUrl( 'request/' . rawurlencode( $ticket_no ) ) );
 
-		return true;
+		return $this->redirectTo( $this->buildAccountUrl( 'request/' . $ticket_no ) );
 	}
 
 	/**
@@ -609,7 +608,24 @@ class WooCommerceAccountHelpdesk {
 		$value = trim( $subpath, '/' );
 
 		if ( function_exists( 'wc_get_endpoint_url' ) && function_exists( 'wc_get_page_permalink' ) ) {
-			return wc_get_endpoint_url( self::ENDPOINT, $value, wc_get_page_permalink( 'myaccount' ) );
+			$account_page = wc_get_page_permalink( 'myaccount' );
+			$base         = wc_get_endpoint_url( self::ENDPOINT, '', $account_page );
+
+			if ( '' === $value ) {
+				return $base;
+			}
+
+			if ( 0 === strpos( $value, 'request/' ) ) {
+				$ticket_no = rawurlencode( substr( $value, strlen( 'request/' ) ) );
+
+				if ( false !== strpos( $account_page, '?' ) ) {
+					return $this->buildNonPrettyAccountUrl( 'request/' . rawurldecode( $ticket_no ) );
+				}
+
+				return trailingslashit( $base ) . 'request/' . $ticket_no . '/';
+			}
+
+			return wc_get_endpoint_url( self::ENDPOINT, $value, $account_page );
 		}
 
 		if ( function_exists( 'wc_get_account_endpoint_url' ) && '' === $value ) {
@@ -620,7 +636,15 @@ class WooCommerceAccountHelpdesk {
 			? wc_get_account_endpoint_url( self::ENDPOINT )
 			: home_url( '/my-account/helpdesk/' );
 
-		return '' === $value ? $base : trailingslashit( $base ) . $value . '/';
+		if ( '' === $value ) {
+			return $base;
+		}
+
+		if ( false !== strpos( $base, '?' ) ) {
+			return $this->buildNonPrettyAccountUrl( $value );
+		}
+
+		return trailingslashit( $base ) . $value . '/';
 	}
 
 	/**
@@ -642,7 +666,38 @@ class WooCommerceAccountHelpdesk {
 		$path  = (string) parse_url( $url, PHP_URL_PATH );
 		$query = (string) parse_url( $url, PHP_URL_QUERY );
 
-		return '' !== $query ? $path . '?' . $query : $path;
+		$display = '' !== $query ? $path . '?' . $query : $path;
+
+		return rawurldecode( $display );
+	}
+
+	/**
+	 * Build a non-pretty account URL fallback.
+	 *
+	 * @param string $value Endpoint value.
+	 * @return string
+	 */
+	protected function buildNonPrettyAccountUrl( string $value ): string {
+		$account_page = function_exists( 'wc_get_page_permalink' ) ? wc_get_page_permalink( 'myaccount' ) : home_url( '/my-account/' );
+		$separator    = false !== strpos( $account_page, '?' ) ? '&' : '?';
+
+		return $account_page . $separator . self::ENDPOINT . '=' . rawurlencode( $value );
+	}
+
+	/**
+	 * Redirect to the given URL.
+	 *
+	 * @param string $url Redirect target.
+	 * @return bool
+	 */
+	protected function redirectTo( string $url ): bool {
+		wp_safe_redirect( $url );
+
+		if ( defined( 'WP_HELPDESK_TESTING' ) && WP_HELPDESK_TESTING ) {
+			return true;
+		}
+
+		exit;
 	}
 
 	/**

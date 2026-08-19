@@ -33,6 +33,7 @@ defined( 'DB_NAME' ) || define( 'DB_NAME', 'wp_test' );
 defined( 'HD_BASENAME' ) || define( 'HD_BASENAME', 'helpdesk/helpdesk.php' );
 defined( 'EP_ROOT' ) || define( 'EP_ROOT', 64 );
 defined( 'EP_PAGES' ) || define( 'EP_PAGES', 4096 );
+defined( 'WP_HELPDESK_TESTING' ) || define( 'WP_HELPDESK_TESTING', true );
 
 if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 	function wp_helpdesk_test_reset_state(): void {
@@ -609,7 +610,7 @@ if ( ! function_exists( 'wc_get_page_permalink' ) ) {
 
 if ( ! function_exists( 'wc_get_account_endpoint_url' ) ) {
 	function wc_get_account_endpoint_url( string $endpoint ): string {
-		return trailingslashit( wc_get_page_permalink( 'myaccount' ) ) . trim( $endpoint, '/' ) . '/';
+		return rtrim( wc_get_page_permalink( 'myaccount' ), '/' ) . '/' . trim( $endpoint, '/' ) . '/';
 	}
 }
 
