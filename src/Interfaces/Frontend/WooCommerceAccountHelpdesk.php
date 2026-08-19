@@ -485,7 +485,18 @@ class WooCommerceAccountHelpdesk {
 		}
 
 		$message = $this->message_service->getMessage( $message_id );
-		do_action( 'hd_ticket_replied', $ticket, $message ?: array( 'id' => $message_id, 'body' => $body ) );
+		do_action(
+			'hd_ticket_replied',
+			$ticket,
+			$message ?: array(
+				'id'             => $message_id,
+				'ticket_id'      => (int) $ticket['id'],
+				'author_user_id' => get_current_user_id(),
+				'author_type'    => 'member',
+				'body'           => $body,
+				'is_internal'    => 0,
+			)
+		);
 
 		return $this->redirectTo( $this->buildAccountUrl( 'request/' . $ticket_no ) );
 	}
@@ -609,7 +620,9 @@ class WooCommerceAccountHelpdesk {
 
 		if ( function_exists( 'wc_get_endpoint_url' ) && function_exists( 'wc_get_page_permalink' ) ) {
 			$account_page = wc_get_page_permalink( 'myaccount' );
-			$base         = wc_get_endpoint_url( self::ENDPOINT, '', $account_page );
+			$base         = function_exists( 'wc_get_account_endpoint_url' )
+				? wc_get_account_endpoint_url( self::ENDPOINT )
+				: rtrim( $account_page, '/' ) . '/' . self::ENDPOINT . '/';
 
 			if ( '' === $value ) {
 				return $base;
