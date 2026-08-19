@@ -429,6 +429,87 @@ class TopicRepository {
 	}
 
 	/**
+	 * List active root topics (type = 'root') for a network.
+	 *
+	 * Falls back to the legacy top-level query for topics that pre-date the
+	 * type column (i.e. topics whose type column is still the default 'root').
+	 *
+	 * @param int $network_id Network id.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function listActiveRootTopics( int $network_id ): array {
+		global $wpdb;
+
+		$table = Schema::table( Constants::TABLE_TOPICS );
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT t.*
+				 FROM {$table} t
+				 WHERE t.network_id = %d
+				   AND t.is_active = 1
+				   AND t.type = 'root'
+				 ORDER BY t.sort_order ASC, t.id ASC",
+				$network_id
+			),
+			ARRAY_A
+		);
+
+		return $rows ?: array();
+	}
+
+	/**
+	 * List active child topics for a given parent topic id.
+	 *
+	 * @param int $parent_id  Parent topic id.
+	 * @param int $network_id Network id.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function listChildrenOf( int $parent_id, int $network_id ): array {
+		global $wpdb;
+
+		$table = Schema::table( Constants::TABLE_TOPICS );
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT t.*
+				 FROM {$table} t
+				 WHERE t.network_id = %d
+				   AND t.parent_id = %d
+				   AND t.is_active = 1
+				 ORDER BY t.sort_order ASC, t.id ASC",
+				$network_id,
+				$parent_id
+			),
+			ARRAY_A
+		);
+
+		return $rows ?: array();
+	}
+
+	/**
+	 * Check whether a topic has any active children (by parent_id).
+	 *
+	 * @param int $topic_id   Topic id.
+	 * @param int $network_id Network id.
+	 * @return bool
+	 */
+	public function hasActiveChildren( int $topic_id, int $network_id ): bool {
+		global $wpdb;
+
+		$table = Schema::table( Constants::TABLE_TOPICS );
+
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$table} WHERE network_id = %d AND parent_id = %d AND is_active = 1",
+				$network_id,
+				$topic_id
+			)
+		) > 0;
+	}
+
+	/**
 	 * Build the common WHERE clause for topic list/count queries.
 	 *
 	 * @param int                  $network_id Network id.
@@ -451,6 +532,11 @@ class TopicRepository {
 		if ( isset( $args['is_active'] ) && '' !== (string) $args['is_active'] ) {
 			$where    .= ' AND t.is_active = %d';
 			$params[]  = (int) $args['is_active'];
+		}
+
+		if ( isset( $args['type'] ) && '' !== (string) $args['type'] ) {
+			$where    .= ' AND t.type = %s';
+			$params[]  = sanitize_key( (string) $args['type'] );
 		}
 
 		return array(

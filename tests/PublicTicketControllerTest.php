@@ -290,10 +290,79 @@ final class PublicTicketControllerTest extends TestCase {
 				'subject'         => 'Need help',
 				'message'         => 'Details',
 				'user_id'         => null,
+				'order_relation'  => 'not_order_related',
 			)
 		);
 
 		self::assertInstanceOf( WP_Error::class, $response );
 		self::assertSame( 'hd_invalid_topic_path', $response->get_error_code() );
 	}
+
+	public function testListChildrenReturnsChildTopics(): void {
+		$topic_service = new class extends TopicService {
+			public function listChildrenOf( int $parent_id ): array {
+				return array(
+					array( 'id' => 5, 'name' => 'Shipping', 'type' => 'followup', 'parent_id' => $parent_id ),
+					array( 'id' => 6, 'name' => 'Returns', 'type' => 'followup', 'parent_id' => $parent_id ),
+				);
+			}
+
+			public function getTopic( int $id ): ?array {
+				return array( 'id' => $id, 'name' => 'Order Issues', 'type' => 'root', 'parent_id' => null );
+			}
+
+			public function isLeafTopic( int $topic_id ): bool {
+				return true;
+			}
+		};
+
+		$controller = new PublicTicketController( $topic_service, new TopicTransitionService(), new KnowledgeBaseService() );
+		$request    = new WP_REST_Request();
+		$request['id'] = 2;
+
+		$response = $controller->listChildren( $request );
+
+		self::assertSame( 200, $response->status );
+		self::assertCount( 2, $response->data );
+		self::assertSame( 5, $response->data[0]['id'] );
+		self::assertSame( 'Shipping', $response->data[0]['title'] );
+	}
+
+	public function testListChildrenReturns404ForMissingTopic(): void {
+		$topic_service = new class extends TopicService {
+			public function getTopic( int $id ): ?array {
+				return null;
+			}
+		};
+
+		$controller = new PublicTicketController( $topic_service, new TopicTransitionService(), new KnowledgeBaseService() );
+		$request    = new WP_REST_Request();
+		$request['id'] = 999;
+
+		$response = $controller->listChildren( $request );
+
+		self::assertSame( 404, $response->status );
+	}
+
+	public function testSubmitMemberTicketRejectsEmptyOrderRelation(): void {
+		wp_helpdesk_test_reset_state();
+		$GLOBALS['wp_current_user'] = (object) array(
+			'ID'           => 5,
+			'user_email'   => 'test@example.com',
+			'display_name' => 'Test User',
+		);
+
+		$controller = new PublicTicketController( new TopicService(), new TopicTransitionService(), new KnowledgeBaseService() );
+		$request    = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid-rest-nonce' );
+		$request->set_param( 'topic_id', 1 );
+		$request->set_param( 'subject', 'Order help' );
+		$request->set_param( 'message', 'I need help' );
+		$request->set_param( 'order_relation', '' );
+
+		$response = $controller->submitMemberTicket( $request );
+
+		self::assertInstanceOf( WP_Error::class, $response );
+	}
+
 }

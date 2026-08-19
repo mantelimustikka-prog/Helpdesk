@@ -124,6 +124,11 @@ final class TopicServiceTest extends TestCase {
 
 	public function testListTopLevelTopicsUsesRepositoryTopLevelQuery(): void {
 		$repository = new class extends TopicRepository {
+			public function listActiveRootTopics( int $network_id ): array {
+				// Return empty to trigger legacy fallback.
+				return array();
+			}
+
 			public function listActiveTopLevel( int $network_id ): array {
 				return array(
 					array( 'id' => 1, 'title' => 'Billing', 'slug' => 'billing', 'is_final' => 0 ),
@@ -215,6 +220,121 @@ final class TopicServiceTest extends TestCase {
 		self::assertSame( 2, $tree[0]['children'][0]['id'] );
 		self::assertTrue( $tree[0]['children'][0]['matches_search'] );
 	}
+
+	public function testValidateTypeConstraintsRootCannotHaveParent(): void {
+		$repository = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return array( 'id' => $id, 'title' => 'General', 'slug' => 'general' );
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		$error_code = $service->validateTypeConstraints( 'root', 5, 0 );
+		self::assertSame( 'root-cannot-have-parent', $error_code );
+	}
+
+	public function testValidateTypeConstraintsFollowupRequiresParent(): void {
+		$service = new TopicService();
+		$this->injectRepository( $service, new TopicRepository() );
+
+		$error_code = $service->validateTypeConstraints( 'followup', null, 0 );
+		self::assertSame( 'followup-missing-parent', $error_code );
+	}
+
+	public function testValidateTypeConstraintsRootWithNoParentIsValid(): void {
+		$service = new TopicService();
+		$this->injectRepository( $service, new TopicRepository() );
+
+		$error_code = $service->validateTypeConstraints( 'root', null, 0 );
+		self::assertNull( $error_code );
+	}
+
+	public function testValidateTypeConstraintsFollowupWithParentIsValid(): void {
+		$repository = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return array( 'id' => $id, 'title' => 'Parent', 'slug' => 'parent', 'parent_id' => null );
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		$error_code = $service->validateTypeConstraints( 'followup', 10, 0 );
+		self::assertNull( $error_code );
+	}
+
+	public function testWouldCreateCycleDetectsDirectSelfReference(): void {
+		$service = new TopicService();
+		$this->injectRepository( $service, new TopicRepository() );
+
+		self::assertTrue( $service->wouldCreateCycle( 5, 5 ) );
+	}
+
+	public function testWouldCreateCycleDetectsChainedCircularReference(): void {
+		$repository = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				// Topic 2 has parent 1, topic 3 has parent 2.
+				$map = array(
+					1 => array( 'id' => 1, 'title' => 'T1', 'slug' => 't1', 'parent_id' => null ),
+					2 => array( 'id' => 2, 'title' => 'T2', 'slug' => 't2', 'parent_id' => 1 ),
+					3 => array( 'id' => 3, 'title' => 'T3', 'slug' => 't3', 'parent_id' => 2 ),
+				);
+				return $map[ $id ] ?? null;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		// Making topic 1's parent = topic 3 would create a cycle (1 -> 3 -> 2 -> 1).
+		self::assertTrue( $service->wouldCreateCycle( 1, 3 ) );
+	}
+
+	public function testWouldCreateCycleReturnsFalseForLegitimateParent(): void {
+		$repository = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				$map = array(
+					10 => array( 'id' => 10, 'title' => 'Root', 'slug' => 'root', 'parent_id' => null ),
+				);
+				return $map[ $id ] ?? null;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		// Setting topic 20's parent = 10 is fine (no cycle).
+		self::assertFalse( $service->wouldCreateCycle( 20, 10 ) );
+	}
+
+	public function testIsLeafTopicReturnsTrueWhenNoActiveChildren(): void {
+		$repository = new class extends TopicRepository {
+			public function hasActiveChildren( int $parent_id, int $network_id ): bool {
+				return false;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		self::assertTrue( $service->isLeafTopic( 42 ) );
+	}
+
+	public function testIsLeafTopicReturnsFalseWhenChildrenExist(): void {
+		$repository = new class extends TopicRepository {
+			public function hasActiveChildren( int $parent_id, int $network_id ): bool {
+				return true;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		self::assertFalse( $service->isLeafTopic( 42 ) );
+	}
+
 
 	private function injectRepository( TopicService $service, TopicRepository $repository ): void {
 		$repository_property = new ReflectionProperty( TopicService::class, 'repository' );

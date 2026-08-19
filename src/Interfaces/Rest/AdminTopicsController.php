@@ -83,16 +83,11 @@ class AdminTopicsController {
 	 * @return WP_REST_Response
 	 */
 	public function createTopic( WP_REST_Request $request ): WP_REST_Response {
-		$payload        = $this->extractPayload( $request );
-		$next_topic_ids = $this->extractNextTopicIds( $request );
-		$parent_topic_ids = $this->extractParentTopicIds( $request );
-		$error_code     = $this->topic_transition_service->validateBranchConfiguration( 0, ! empty( $payload['is_final'] ), $next_topic_ids );
+		$payload   = $this->extractPayload( $request );
+		$type      = (string) ( $payload['type'] ?? 'root' );
+		$parent_id = isset( $payload['parent_id'] ) && (int) $payload['parent_id'] > 0 ? (int) $payload['parent_id'] : null;
 
-		if ( null !== $error_code ) {
-			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
-		}
-
-		$error_code = $this->topic_transition_service->validateHierarchyConfiguration( 0, (string) ( $payload['hierarchy_type'] ?? 'top_level' ), $parent_topic_ids );
+		$error_code = $this->topic_service->validateTypeConstraints( $type, $parent_id, 0 );
 		if ( null !== $error_code ) {
 			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
 		}
@@ -100,14 +95,6 @@ class AdminTopicsController {
 		$topic_id = $this->topic_service->createTopic( $payload );
 		if ( $topic_id <= 0 ) {
 			return new WP_REST_Response( array( 'message' => 'Failed to create topic.' ), 400 );
-		}
-
-		if ( ! $this->topic_transition_service->syncAdminParentTopics( $topic_id, 'follow_up' === (string) ( $payload['hierarchy_type'] ?? 'top_level' ) ? $parent_topic_ids : array() ) ) {
-			return new WP_REST_Response( array( 'message' => 'Failed to save parent topics.' ), 400 );
-		}
-
-		if ( ! $this->topic_transition_service->syncAdminNextTopics( $topic_id, ! empty( $payload['is_final'] ) ? array() : $next_topic_ids ) ) {
-			return new WP_REST_Response( array( 'message' => 'Failed to save follow-up topics.' ), 400 );
 		}
 
 		$topic = $this->buildTopicResponse( $topic_id );
@@ -137,17 +124,12 @@ class AdminTopicsController {
 	 * @return WP_REST_Response
 	 */
 	public function updateTopic( WP_REST_Request $request ): WP_REST_Response {
-		$topic_id       = (int) $request['id'];
-		$payload        = $this->extractPayload( $request );
-		$next_topic_ids = $this->extractNextTopicIds( $request );
-		$parent_topic_ids = $this->extractParentTopicIds( $request );
-		$error_code     = $this->topic_transition_service->validateBranchConfiguration( $topic_id, ! empty( $payload['is_final'] ), $next_topic_ids );
+		$topic_id  = (int) $request['id'];
+		$payload   = $this->extractPayload( $request );
+		$type      = (string) ( $payload['type'] ?? 'root' );
+		$parent_id = isset( $payload['parent_id'] ) && (int) $payload['parent_id'] > 0 ? (int) $payload['parent_id'] : null;
 
-		if ( null !== $error_code ) {
-			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
-		}
-
-		$error_code = $this->topic_transition_service->validateHierarchyConfiguration( $topic_id, (string) ( $payload['hierarchy_type'] ?? 'top_level' ), $parent_topic_ids );
+		$error_code = $this->topic_service->validateTypeConstraints( $type, $parent_id, $topic_id );
 		if ( null !== $error_code ) {
 			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
 		}
@@ -155,14 +137,6 @@ class AdminTopicsController {
 		$updated = $this->topic_service->updateTopic( $topic_id, $payload );
 		if ( ! $updated ) {
 			return new WP_REST_Response( array( 'message' => 'Unable to update topic.' ), 400 );
-		}
-
-		if ( ! $this->topic_transition_service->syncAdminParentTopics( $topic_id, 'follow_up' === (string) ( $payload['hierarchy_type'] ?? 'top_level' ) ? $parent_topic_ids : array() ) ) {
-			return new WP_REST_Response( array( 'message' => 'Failed to save parent topics.' ), 400 );
-		}
-
-		if ( ! $this->topic_transition_service->syncAdminNextTopics( $topic_id, ! empty( $payload['is_final'] ) ? array() : $next_topic_ids ) ) {
-			return new WP_REST_Response( array( 'message' => 'Failed to save follow-up topics.' ), 400 );
 		}
 
 		$topic = $this->buildTopicResponse( $topic_id );
@@ -251,7 +225,7 @@ class AdminTopicsController {
 	protected function extractPayload( WP_REST_Request $request ): array {
 		$payload = array();
 
-		foreach ( array( 'name', 'slug', 'description', 'sort_order', 'is_active', 'is_final', 'node_type', 'hierarchy_type' ) as $field ) {
+		foreach ( array( 'name', 'description', 'sort_order', 'is_active', 'type', 'parent_id' ) as $field ) {
 			if ( null !== $request->get_param( $field ) ) {
 				$payload[ $field ] = $request->get_param( $field );
 			}
@@ -304,10 +278,6 @@ class AdminTopicsController {
 			return null;
 		}
 
-		$topic['next_topic_ids'] = $this->topic_transition_service->getSelectableNextTopicIds( $topic_id );
-		$topic['parent_topic_ids'] = $this->topic_transition_service->getSelectableParentTopicIds( $topic_id );
-		$topic['hierarchy_type'] = isset( $topic['hierarchy_type'] ) && 'follow_up' === (string) $topic['hierarchy_type'] ? 'follow_up' : 'top_level';
-
 		return $topic;
 	}
 
@@ -319,14 +289,18 @@ class AdminTopicsController {
 	 */
 	protected function messageForErrorCode( string $error_code ): string {
 		$messages = array(
+			'root-cannot-have-parent'  => 'Root topics cannot have a parent topic.',
+			'followup-missing-parent'  => 'Follow-up topics must have a parent topic.',
+			'invalid-parent-topic'     => 'The selected parent topic is invalid.',
+			'circular-parent-topic'    => 'The selected parent would create a circular hierarchy.',
+			'invalid-topic-type'       => 'Invalid topic type.',
+			// Legacy codes for backward compat.
 			'branch-missing-transition' => 'Branch topics must include at least one valid follow-up topic.',
 			'invalid-transition'        => 'One or more selected follow-up topics are invalid.',
 			'follow-up-missing-parent'  => 'Follow-up topics must include at least one valid parent topic.',
-			'invalid-parent-topic'      => 'One or more selected parent topics are invalid.',
-			'circular-parent-topic'     => 'Selected parent topics would create a circular hierarchy.',
 			'top-level-has-parent'      => 'Top-level topics cannot have selected parent topics.',
 		);
 
-		return $messages[ $error_code ] ?? 'Unable to save topic graph.';
+		return $messages[ $error_code ] ?? 'Unable to save topic.';
 	}
 }
