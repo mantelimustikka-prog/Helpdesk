@@ -262,7 +262,7 @@ class PublicTicketController {
 	}
 
 	/**
-	 * GET /topics/{id}/user-orders – return order numbers available for the current user.
+	 * GET /user-orders – return order numbers available for the current user.
 	 *
 	 * Returns an empty array for guests (not authenticated).
 	 *

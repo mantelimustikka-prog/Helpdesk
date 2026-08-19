@@ -586,7 +586,9 @@
 			data[ el.name ] = el.value;
 		} );
 
-		// Include select fields (e.g. order_relation).
+		// Include named select fields only (e.g. order_relation).
+		// Branch/child selects rendered by _renderChildSelect have no name attribute
+		// and are intentionally excluded by the [name] attribute selector.
 		this.container.querySelectorAll( 'select[name]' ).forEach( function ( el ) {
 			// Skip the topic_id select (managed separately) and branch selects.
 			if ( el.name === 'topic_id' ) {
