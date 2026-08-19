@@ -31,6 +31,9 @@ defined( 'HD_URL' ) || define( 'HD_URL', 'https://example.test/wp-content/plugin
 defined( 'ARRAY_A' ) || define( 'ARRAY_A', 'ARRAY_A' );
 defined( 'DB_NAME' ) || define( 'DB_NAME', 'wp_test' );
 defined( 'HD_BASENAME' ) || define( 'HD_BASENAME', 'helpdesk/helpdesk.php' );
+defined( 'EP_ROOT' ) || define( 'EP_ROOT', 64 );
+defined( 'EP_PAGES' ) || define( 'EP_PAGES', 4096 );
+defined( 'WP_HELPDESK_TESTING' ) || define( 'WP_HELPDESK_TESTING', true );
 
 if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 	function wp_helpdesk_test_reset_state(): void {
@@ -57,6 +60,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_safe_redirect_to'] = null;
 		$GLOBALS['wp_filters'] = array();
 		$GLOBALS['wp_query_vars'] = array();
+		$GLOBALS['wp_rewrite_endpoints'] = array();
 		$GLOBALS['wp_logged_in'] = true;
 		$GLOBALS['wp_current_user'] = (object) array(
 			'ID'           => 7,
@@ -69,6 +73,9 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_user_meta'] = array();
 		$GLOBALS['wp_remote_post_response'] = array( 'response' => array( 'code' => 200 ) );
 		$GLOBALS['wp_posts_index'] = array();
+		$GLOBALS['wc_page_permalinks'] = array(
+			'myaccount' => 'https://example.test/my-account/',
+		);
 		$_GET = array();
 		$_POST = array();
 		$_SERVER = array(
@@ -563,6 +570,15 @@ if ( ! function_exists( 'add_filter' ) ) {
 	}
 }
 
+if ( ! function_exists( 'add_rewrite_endpoint' ) ) {
+	function add_rewrite_endpoint( string $name, int $places ): void {
+		$GLOBALS['wp_rewrite_endpoints'][] = array(
+			'name'   => $name,
+			'places' => $places,
+		);
+	}
+}
+
 if ( ! function_exists( 'apply_filters' ) ) {
 	function apply_filters( string $hook, $value ) {
 		foreach ( $GLOBALS['wp_filters'][ $hook ] ?? array() as $callback ) {
@@ -583,6 +599,31 @@ if ( ! function_exists( 'do_action' ) ) {
 if ( ! function_exists( 'get_query_var' ) ) {
 	function get_query_var( string $key, $default = '' ) {
 		return $GLOBALS['wp_query_vars'][ $key ] ?? $default;
+	}
+}
+
+if ( ! function_exists( 'wc_get_page_permalink' ) ) {
+	function wc_get_page_permalink( string $page ): string {
+		return $GLOBALS['wc_page_permalinks'][ $page ] ?? '';
+	}
+}
+
+if ( ! function_exists( 'wc_get_account_endpoint_url' ) ) {
+	function wc_get_account_endpoint_url( string $endpoint ): string {
+		return rtrim( wc_get_page_permalink( 'myaccount' ), '/' ) . '/' . trim( $endpoint, '/' ) . '/';
+	}
+}
+
+if ( ! function_exists( 'wc_get_endpoint_url' ) ) {
+	function wc_get_endpoint_url( string $endpoint, string $value = '', string $permalink = '' ): string {
+		$base = '' !== $permalink ? $permalink : wc_get_page_permalink( 'myaccount' );
+		$url  = trailingslashit( $base ) . trim( $endpoint, '/' ) . '/';
+
+		if ( '' !== trim( $value, '/' ) ) {
+			$url .= trim( $value, '/' ) . '/';
+		}
+
+		return $url;
 	}
 }
 

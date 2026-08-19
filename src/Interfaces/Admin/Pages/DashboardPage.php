@@ -5,11 +5,18 @@
 
 namespace WPHelpdesk\Interfaces\Admin\Pages;
 
+use WPHelpdesk\Interfaces\Frontend\WooCommerceAccountHelpdesk;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
 
 class DashboardPage {
+	protected WooCommerceAccountHelpdesk $woocommerce_account_helpdesk;
+
+	public function __construct( ?WooCommerceAccountHelpdesk $woocommerce_account_helpdesk = null ) {
+		$this->woocommerce_account_helpdesk = $woocommerce_account_helpdesk ?: new WooCommerceAccountHelpdesk();
+	}
+
 	/**
 	 * Render the dashboard page with live ticket stats.
 	 *
@@ -75,9 +82,40 @@ class DashboardPage {
 						<li><a href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings' ) ); ?>"><?php esc_html_e( 'Configure settings', 'wp-helpdesk' ); ?></a></li>
 					</ul>
 				</div>
+
+				<div class="hd-card">
+					<h2><?php esc_html_e( 'Front-end Interfaces', 'wp-helpdesk' ); ?></h2>
+					<table class="widefat striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Area', 'wp-helpdesk' ); ?></th>
+								<th><?php esc_html_e( 'Page', 'wp-helpdesk' ); ?></th>
+								<th><?php esc_html_e( 'Path', 'wp-helpdesk' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $this->getFrontendInterfaces() as $interface ) : ?>
+								<tr>
+									<td><?php echo esc_html( $interface['group'] ); ?></td>
+									<td><a href="<?php echo esc_url( $interface['url'] ); ?>" target="_blank" rel="noreferrer"><?php echo esc_html( $interface['label'] ); ?></a></td>
+									<td><code><?php echo esc_html( $interface['path'] ); ?></code></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Resolve supported front-end interface links.
+	 *
+	 * @return array<int, array{group:string,label:string,url:string,path:string}>
+	 */
+	private function getFrontendInterfaces(): array {
+		return $this->woocommerce_account_helpdesk->getInterfaceLinks();
 	}
 
 	/**

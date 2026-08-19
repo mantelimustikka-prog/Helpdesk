@@ -66,3 +66,20 @@ The intended product direction remains:
 - Knowledge base assisted submission
 - Incremental ticket numbering
 - Agent replies, status changes, and attachments
+
+## Front-end entry points
+
+The plugin currently exposes these customer-facing routes:
+
+- `/helpdesk/` – Helpdesk landing page
+- `/helpdesk/new/` – guest request form
+- `/helpdesk/member/new/` – logged-in member request form
+- WooCommerce My Account endpoint `helpdesk` with subviews:
+  - `/my-account/helpdesk/`
+  - `/my-account/helpdesk/new/`
+  - `/my-account/helpdesk/requests/`
+  - `/my-account/helpdesk/request/{ticket-no}/`
+
+When the WooCommerce endpoint is added to an existing site, the plugin bumps its
+rewrite version and flushes rewrites once on the next boot (or immediately on
+activation) so the new account URLs resolve correctly.
