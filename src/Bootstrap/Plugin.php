@@ -77,7 +77,13 @@ class Plugin {
 		add_action( 'rest_api_init', array( $this->routes, 'register_rest_routes' ) );
 
 		$this->frontend_router->register();
-		$this->woocommerce_account_helpdesk->register();
+		// Defer WooCommerce My Account integration until `init` (priority 1) so
+		// that WooCommerce is guaranteed to have finished its own plugins_loaded
+		// callback before we call class_exists('WooCommerce') and
+		// wc_get_page_permalink().  Calling register() synchronously at
+		// plugins_loaded causes a silent bail-out when our plugin loads before
+		// WooCommerce in the plugin load order.
+		add_action( 'init', array( $this->woocommerce_account_helpdesk, 'register' ), 1 );
 
 		// Ticket lifecycle hooks (notifications + push).
 		add_action( 'hd_ticket_replied', array( $this, 'handleTicketReplied' ), 10, 2 );

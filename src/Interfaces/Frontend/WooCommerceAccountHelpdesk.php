@@ -36,10 +36,24 @@ class WooCommerceAccountHelpdesk {
 			return;
 		}
 
-		add_action( 'init', array( $this, 'addEndpoint' ) );
+		// When register() is called at init priority 1 (the normal production
+		// path), init is already in progress so we register the endpoint directly
+		// rather than scheduling another init callback.  Scheduling via add_action
+		// is kept as the fallback for any remaining callers that invoke register()
+		// before init fires (e.g. unit tests or legacy call sites).
+		if ( function_exists( 'doing_action' ) && doing_action( 'init' ) ) {
+			$this->addEndpoint();
+		} else {
+			add_action( 'init', array( $this, 'addEndpoint' ) );
+		}
+
 		add_filter( 'query_vars', array( $this, 'addQueryVars' ) );
 		add_filter( 'woocommerce_account_menu_items', array( $this, 'addMenuItem' ), 40 );
-		// Safety-net: re-insert after any third-party filter that may have replaced the menu array.
+		// Safety-net: re-insert after any third-party filter that may have replaced
+		// the menu array.  A competing theme/plugin that reconstructs the menu from
+		// scratch at, say, priority 50 would wipe out our priority-40 insertion;
+		// the priority-9999 callback guarantees Helpdesk is still present in the
+		// final array handed to the template.
 		add_filter( 'woocommerce_account_menu_items', array( $this, 'addMenuItem' ), 9999 );
 		add_action( 'woocommerce_account_' . self::ENDPOINT . '_endpoint', array( $this, 'render' ) );
 	}
