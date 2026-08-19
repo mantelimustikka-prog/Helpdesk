@@ -141,6 +141,23 @@ class GuestTicketForm extends HelpdeskPage {
 					>
 				</div>
 				<div class="hd-field">
+					<label for="hd-order-relation" class="hd-label">
+						<?php esc_html_e( 'Order relation', 'wp-helpdesk' ); ?>
+						<span class="hd-required" aria-hidden="true">*</span>
+					</label>
+					<select
+						id="hd-order-relation"
+						name="order_relation"
+						class="hd-select hd-order-relation-select"
+						required
+						aria-required="true"
+					>
+						<option value=""><?php esc_html_e( 'Select option', 'wp-helpdesk' ); ?></option>
+						<option value="not_order_related"><?php esc_html_e( 'Not order related', 'wp-helpdesk' ); ?></option>
+					</select>
+					<p class="hd-field-hint"><?php esc_html_e( 'Select the order this request relates to, or choose "Not order related".', 'wp-helpdesk' ); ?></p>
+				</div>
+				<div class="hd-field">
 					<label for="hd-subject" class="hd-label">
 						<?php esc_html_e( 'Subject', 'wp-helpdesk' ); ?>
 						<span class="hd-required" aria-hidden="true">*</span>

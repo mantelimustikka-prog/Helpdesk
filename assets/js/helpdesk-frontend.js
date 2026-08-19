@@ -190,6 +190,10 @@
 		if ( topicSelect ) {
 			topicSelect.value = '';
 		}
+		var orderSelect = this.container.querySelector( 'select[name="order_relation"]' );
+		if ( orderSelect ) {
+			orderSelect.value = '';
+		}
 		var branchContainer = this.container.querySelector( '[data-role="topic-branch"]' );
 		if ( branchContainer ) {
 			branchContainer.innerHTML = '';
@@ -261,6 +265,35 @@
 		} ).catch( function () {
 			// Ignore topic load failure.
 		} );
+
+		// Load user orders for the order_relation dropdown (member form only).
+		if ( this.formType === 'member' ) {
+			this._loadUserOrders();
+		}
+	};
+
+	/**
+	 * Load user lifetime orders and populate all order_relation select elements.
+	 */
+	FormController.prototype._loadUserOrders = function () {
+		var self = this;
+
+		apiGet( 'user-orders' ).then( function ( orders ) {
+			if ( ! Array.isArray( orders ) ) {
+				return;
+			}
+
+			self.container.querySelectorAll( 'select[name="order_relation"]' ).forEach( function ( sel ) {
+				orders.forEach( function ( orderNo ) {
+					var opt = document.createElement( 'option' );
+					opt.value = String( orderNo );
+					opt.textContent = String( orderNo );
+					sel.appendChild( opt );
+				} );
+			} );
+		} ).catch( function () {
+			// Ignore failure – user can still pick "Not order related".
+		} );
 	};
 
 	FormController.prototype._onTopicChange = function ( select, level ) {
@@ -308,8 +341,8 @@
 			hintEl.textContent = opt && opt.dataset.description ? opt.dataset.description : '';
 		}
 
-		apiGet( 'topics/' + encodeURIComponent( val ) + '/transitions' ).then( function ( transitions ) {
-			if ( ! Array.isArray( transitions ) || transitions.length === 0 ) {
+		apiGet( 'topics/' + encodeURIComponent( val ) + '/children' ).then( function ( children ) {
+			if ( ! Array.isArray( children ) || children.length === 0 ) {
 				self.canContinueFromTopic = true;
 				if ( nextBtn ) {
 					nextBtn.disabled = false;
@@ -319,11 +352,11 @@
 				return;
 			}
 
-			var transitionSelect = self._renderTransitionSelect( transitions, level + 1 );
+			var childSelect = self._renderChildSelect( children, level + 1 );
 
 			if ( self.pendingState && Array.isArray( self.pendingState.topicPath ) && self.pendingState.topicPath[ level + 1 ] ) {
-				transitionSelect.value = String( self.pendingState.topicPath[ level + 1 ] );
-				self._onTopicChange( transitionSelect, level + 1 );
+				childSelect.value = String( self.pendingState.topicPath[ level + 1 ] );
+				self._onTopicChange( childSelect, level + 1 );
 			}
 
 			self._saveState();
@@ -397,6 +430,49 @@
 
 		container.appendChild( title );
 		container.appendChild( list );
+	};
+
+	FormController.prototype._renderChildSelect = function ( children, level ) {
+		var self = this;
+		var branchContainer = this.container.querySelector( '[data-role="topic-branch"]' );
+		var field = document.createElement( 'div' );
+		var label = document.createElement( 'label' );
+		var select = document.createElement( 'select' );
+		var placeholder = document.createElement( 'option' );
+
+		field.className = 'hd-field';
+		label.className = 'hd-label';
+		label.textContent = i18n.followupTopicLabel || 'Follow-up topic';
+		label.setAttribute( 'for', 'hd-child-' + this.formType + '-' + level );
+
+		select.className = 'hd-select';
+		select.required = true;
+		select.setAttribute( 'aria-required', 'true' );
+		select.id = 'hd-child-' + this.formType + '-' + level;
+
+		placeholder.value = '';
+		placeholder.textContent = i18n.selectPlaceholder || 'Select …';
+		select.appendChild( placeholder );
+
+		children.forEach( function ( child ) {
+			var option = document.createElement( 'option' );
+			option.value = String( child.id );
+			option.textContent = child.title || ( 'Topic #' + child.id );
+			option.dataset.description = child.description || '';
+			select.appendChild( option );
+		} );
+
+		select.addEventListener( 'change', function () {
+			self._onTopicChange( select, level );
+		} );
+
+		field.appendChild( label );
+		field.appendChild( select );
+		if ( branchContainer ) {
+			branchContainer.appendChild( field );
+		}
+
+		return select;
 	};
 
 	FormController.prototype._renderTransitionSelect = function ( transitions, level ) {
@@ -510,6 +586,15 @@
 			data[ el.name ] = el.value;
 		} );
 
+		// Include select fields (e.g. order_relation).
+		this.container.querySelectorAll( 'select[name]' ).forEach( function ( el ) {
+			// Skip the topic_id select (managed separately) and branch selects.
+			if ( el.name === 'topic_id' ) {
+				return;
+			}
+			data[ el.name ] = el.value;
+		} );
+
 		return data;
 	};
 
@@ -528,6 +613,9 @@
 		}
 		if ( ! data.requester_phone || data.requester_phone.trim() === '' ) {
 			errors.push( 'Please enter your phone number.' );
+		}
+		if ( ! data.order_relation || data.order_relation.trim() === '' ) {
+			errors.push( i18n.errorSelectOrderRelation || 'Please select an order relation.' );
 		}
 		if ( ! data.subject || data.subject.trim() === '' ) {
 			errors.push( 'Please enter a subject.' );
@@ -660,6 +748,16 @@
 			}
 		} );
 
+		// Restore non-topic select fields (e.g. order_relation).
+		this.container.querySelectorAll( 'select[name]' ).forEach( function ( sel ) {
+			if ( sel.name === 'topic_id' ) {
+				return;
+			}
+			if ( Object.prototype.hasOwnProperty.call( data, sel.name ) ) {
+				sel.value = data[ sel.name ];
+			}
+		} );
+
 		var topicPath = Array.isArray( this.pendingState.topicPath ) ? this.pendingState.topicPath : [];
 		var topicSelect = this.container.querySelector( 'select[name="topic_id"]' );
 		if ( topicSelect && topicPath.length > 0 ) {
@@ -732,6 +830,11 @@
 		var topicSelect = this.container.querySelector( 'select[name="topic_id"]' );
 		if ( topicSelect ) {
 			topicSelect.value = '';
+		}
+
+		var orderSelect = this.container.querySelector( 'select[name="order_relation"]' );
+		if ( orderSelect ) {
+			orderSelect.value = '';
 		}
 
 		var branchContainer = this.container.querySelector( '[data-role="topic-branch"]' );

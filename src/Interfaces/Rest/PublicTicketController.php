@@ -62,6 +62,16 @@ class PublicTicketController {
 
 		register_rest_route(
 			$namespace,
+			'/topics/(?P<id>\d+)/children',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'listChildren' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$namespace,
 			'/tickets/guest',
 			array(
 				'methods'             => 'POST',
@@ -98,6 +108,16 @@ class PublicTicketController {
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'restartFormSession' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/user-orders',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'listUserOrders' ),
 				'permission_callback' => '__return_true',
 			)
 		);
@@ -206,7 +226,61 @@ class PublicTicketController {
 	}
 
 	/**
-	 * GET /kb/search – search KB content using topic-path context.
+	 * GET /topics/{id}/children - return active child topics (parent_id model).
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 * @return WP_REST_Response
+	 */
+	public function listChildren( WP_REST_Request $request ): WP_REST_Response {
+		$topic_id = (int) $request['id'];
+		$topic    = $this->topic_service->getTopic( $topic_id );
+		if ( ! $topic ) {
+			return new WP_REST_Response( array( 'message' => 'Topic not found.' ), 404 );
+		}
+
+		$children = $this->topic_service->listChildrenOf( $topic_id );
+
+		$payload = array_map(
+			static fn( array $topic ): array => array(
+				'id'          => (int) ( $topic['id'] ?? 0 ),
+				'slug'        => (string) ( $topic['slug'] ?? '' ),
+				'title'       => (string) ( $topic['name'] ?? $topic['title'] ?? '' ),
+				'description' => (string) ( $topic['description'] ?? '' ),
+				'is_final'    => (int) ! empty( $topic['is_final'] ),
+				'has_children' => false, // Will be enriched below.
+			),
+			$children
+		);
+
+		// Enrich each child with a has_children flag.
+		foreach ( $payload as &$child ) {
+			$child['has_children'] = ! $this->topic_service->isLeafTopic( (int) $child['id'] );
+		}
+		unset( $child );
+
+		return new WP_REST_Response( $payload, 200 );
+	}
+
+	/**
+	 * GET /topics/{id}/user-orders – return order numbers available for the current user.
+	 *
+	 * Returns an empty array for guests (not authenticated).
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 * @return WP_REST_Response
+	 */
+	public function listUserOrders( WP_REST_Request $request ): WP_REST_Response {
+		if ( ! is_user_logged_in() ) {
+			return new WP_REST_Response( array(), 200 );
+		}
+
+		$orders = $this->getUserLifetimeOrders( get_current_user_id() );
+
+		return new WP_REST_Response( $orders, 200 );
+	}
+
+	/**
+	 * GET /kb – search knowledge base articles.
 	 *
 	 * @param WP_REST_Request $request REST request.
 	 * @return WP_REST_Response
@@ -288,6 +362,8 @@ class PublicTicketController {
 			return new WP_Error( 'hd_invalid_phone', __( 'Please provide a phone number.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
 
+		$order_relation = sanitize_text_field( (string) $request->get_param( 'order_relation' ) );
+
 		return $this->createTicket(
 			array(
 				'topic_id'        => $topic_id,
@@ -300,12 +376,16 @@ class PublicTicketController {
 				'form_type'       => 'guest',
 				'topic_path'      => $this->normaliseTopicPath( $request->get_param( 'topic_path' ), $topic_id ),
 				'session_token'   => sanitize_text_field( (string) $request->get_param( 'form_session_token' ) ),
+				'order_relation'  => $order_relation,
 			)
 		);
 	}
 
 	/**
 	 * POST /tickets/member – create a ticket for a logged-in user.
+	 *
+	 * Identity fields (name, email, phone) are sourced exclusively from the user
+	 * account – any values submitted by the client are ignored server-side.
 	 *
 	 * @param WP_REST_Request $request REST request.
 	 * @return WP_REST_Response|WP_Error
@@ -320,24 +400,29 @@ class PublicTicketController {
 			return new WP_Error( 'hd_invalid_nonce', __( 'Invalid or missing nonce.', 'wp-helpdesk' ), array( 'status' => 403 ) );
 		}
 
-		$user     = wp_get_current_user();
+		$user    = wp_get_current_user();
 		$topic_id = (int) $request->get_param( 'topic_id' );
 		$subject  = sanitize_text_field( (string) $request->get_param( 'subject' ) );
 		$message  = sanitize_textarea_field( (string) $request->get_param( 'message' ) );
-		$phone    = sanitize_text_field( (string) $request->get_param( 'requester_phone' ) );
-		$name     = $user->display_name ?: trim( $user->first_name . ' ' . $user->last_name );
+
+		// Identity is locked to the authenticated user – client-submitted values are discarded.
+		$name = $user->display_name ?: trim( $user->first_name . ' ' . $user->last_name );
 		if ( '' === $name ) {
 			$name = $user->user_login;
 		}
-		$email    = $user->user_email;
-		if ( '' === trim( $phone ) ) {
-			$phone = (string) get_user_meta( $user->ID, 'phone', true );
-		}
+		$email = $user->user_email;
+		$phone = (string) get_user_meta( $user->ID, 'phone', true );
 		if ( '' === trim( $phone ) ) {
 			$phone = (string) get_user_meta( $user->ID, 'billing_phone', true );
 		}
 		if ( '' === trim( $phone ) ) {
 			return new WP_Error( 'hd_invalid_phone', __( 'Please provide a phone number.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		}
+
+		$order_relation = sanitize_text_field( (string) $request->get_param( 'order_relation' ) );
+		$order_validation = $this->validateOrderRelation( $order_relation, $user->ID );
+		if ( is_wp_error( $order_validation ) ) {
+			return $order_validation;
 		}
 
 		return $this->createTicket(
@@ -352,6 +437,7 @@ class PublicTicketController {
 				'form_type'       => 'member',
 				'topic_path'      => $this->normaliseTopicPath( $request->get_param( 'topic_path' ), $topic_id ),
 				'session_token'   => sanitize_text_field( (string) $request->get_param( 'form_session_token' ) ),
+				'order_relation'  => $order_relation,
 			)
 		);
 	}
@@ -369,6 +455,12 @@ class PublicTicketController {
 
 		if ( ( $require_topic && empty( $data['topic_id'] ) ) || empty( $data['subject'] ) || empty( $data['message'] ) || empty( $data['requester_phone'] ) ) {
 			return new WP_Error( 'hd_missing_fields', __( 'Please fill in all required fields.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		}
+
+		// Validate order_relation is present and non-empty.
+		$order_relation = isset( $data['order_relation'] ) ? sanitize_text_field( (string) $data['order_relation'] ) : '';
+		if ( '' === $order_relation ) {
+			return new WP_Error( 'hd_missing_order_relation', __( 'Please select an order relation.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
 
 		$topic_path = $this->normaliseTopicPath( $data['topic_path'] ?? array(), (int) ( $data['topic_id'] ?? 0 ) );
@@ -397,11 +489,12 @@ class PublicTicketController {
 				'user_id'         => $data['user_id'],
 				'subject'         => $data['subject'],
 				'topic_path_json' => wp_json_encode( $topic_path ),
+				'order_relation'  => $order_relation,
 				'status'          => 'new',
 				'created_at'      => current_time( 'mysql' ),
 				'updated_at'      => current_time( 'mysql' ),
 			),
-			array( '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s' )
+			array( '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( ! $inserted ) {
@@ -451,12 +544,13 @@ class PublicTicketController {
 	 */
 	protected function guestTicketArgs(): array {
 		return array(
-			'topic_id'       => array( 'required' => false, 'type' => 'integer', 'minimum' => 0 ),
-			'requester_name' => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
-			'requester_email'=> array( 'required' => true, 'type' => 'string', 'format' => 'email' ),
-			'requester_phone'=> array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 50 ),
-			'subject'        => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
-			'message'        => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),
+			'topic_id'        => array( 'required' => false, 'type' => 'integer', 'minimum' => 0 ),
+			'requester_name'  => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
+			'requester_email' => array( 'required' => true, 'type' => 'string', 'format' => 'email' ),
+			'requester_phone' => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 50 ),
+			'subject'         => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
+			'message'         => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),
+			'order_relation'  => array( 'required' => false, 'type' => 'string' ),
 		);
 	}
 
@@ -467,10 +561,10 @@ class PublicTicketController {
 	 */
 	protected function memberTicketArgs(): array {
 		return array(
-			'topic_id' => array( 'required' => false, 'type' => 'integer', 'minimum' => 0 ),
-			'requester_phone'=> array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 50 ),
-			'subject'  => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
-			'message'  => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),
+			'topic_id'       => array( 'required' => false, 'type' => 'integer', 'minimum' => 0 ),
+			'subject'        => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
+			'message'        => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),
+			'order_relation' => array( 'required' => false, 'type' => 'string' ),
 		);
 	}
 
@@ -600,6 +694,91 @@ class PublicTicketController {
 		}
 
 		return new WP_REST_Response( array( 'ok' => true, 'reset_counter' => $new_counter ), 200 );
+	}
+
+	/**
+	 * Validate an order_relation value.
+	 *
+	 * Acceptable values:
+	 *  - 'not_order_related'
+	 *  - a WooCommerce order number belonging to the current user
+	 *
+	 * For guests (user_id = null), any non-empty string is accepted since we cannot
+	 * verify ownership without an account.
+	 *
+	 * @param string   $order_relation The submitted value.
+	 * @param int|null $user_id        Authenticated user id, or null for guests.
+	 * @return true|WP_Error
+	 */
+	protected function validateOrderRelation( string $order_relation, ?int $user_id ) {
+		if ( '' === $order_relation ) {
+			return new WP_Error( 'hd_missing_order_relation', __( 'Please select an order relation.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		}
+
+		if ( 'not_order_related' === $order_relation ) {
+			return true;
+		}
+
+		// For authenticated users validate ownership.
+		if ( null !== $user_id && $user_id > 0 ) {
+			$user_orders = $this->getUserLifetimeOrders( $user_id );
+			if ( ! in_array( $order_relation, $user_orders, true ) ) {
+				return new WP_Error( 'hd_invalid_order_relation', __( 'The selected order does not belong to your account.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Return all lifetime WooCommerce order numbers for a user as strings.
+	 *
+	 * Falls back to an empty array when WooCommerce is not active.
+	 *
+	 * @param int $user_id WordPress user id.
+	 * @return array<int, string>
+	 */
+	protected function getUserLifetimeOrders( int $user_id ): array {
+		if ( ! function_exists( 'wc_get_orders' ) ) {
+			return array();
+		}
+
+		$orders = wc_get_orders(
+			array(
+				'customer_id' => $user_id,
+				'limit'       => -1,
+				'return'      => 'ids',
+			)
+		);
+
+		if ( ! is_array( $orders ) ) {
+			return array();
+		}
+
+		return array_values(
+			array_filter(
+				array_map(
+					static function ( $order_id ): string {
+						$order_id = (int) $order_id;
+						if ( $order_id <= 0 ) {
+							return '';
+						}
+
+						// Use the order number (may be different from ID if plugins override it).
+						if ( function_exists( 'wc_get_order' ) ) {
+							$order = wc_get_order( $order_id );
+							if ( $order ) {
+								return (string) $order->get_order_number();
+							}
+						}
+
+						return (string) $order_id;
+					},
+					$orders
+				),
+				static fn( string $v ): bool => '' !== $v
+			)
+		);
 	}
 
 	/**

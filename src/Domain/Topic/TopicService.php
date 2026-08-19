@@ -52,10 +52,18 @@ class TopicService {
 	/**
 	 * List active top-level topics for step 1 selection.
 	 *
+	 * Returns root topics (type = 'root') ordered by sort_order.
+	 *
 	 * @return array<int, array<string, mixed>>
 	 */
 	public function listTopLevelTopics(): array {
-		$rows = $this->repository->listActiveTopLevel( $this->network_id );
+		$rows = $this->repository->listActiveRootTopics( $this->network_id );
+
+		if ( empty( $rows ) ) {
+			// Fall back to legacy top-level query for sites that have not yet migrated.
+			$rows = $this->repository->listActiveTopLevel( $this->network_id );
+		}
+
 		$transition_counts = $this->repository->getActiveTransitionCounts(
 			array_map(
 				static fn( array $row ): int => (int) ( $row['id'] ?? 0 ),
@@ -68,6 +76,103 @@ class TopicService {
 			fn( array $row ): array => $this->normalizeRow( $row, $transition_counts[ (int) ( $row['id'] ?? 0 ) ] ?? 0, 0 ),
 			$rows
 		);
+	}
+
+	/**
+	 * List active child topics for a given parent topic.
+	 *
+	 * @param int $parent_id Parent topic id.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function listChildrenOf( int $parent_id ): array {
+		$rows = $this->repository->listChildrenOf( $parent_id, $this->network_id );
+
+		return array_map(
+			fn( array $row ): array => $this->normalizeRow( $row ),
+			$rows
+		);
+	}
+
+	/**
+	 * Determine whether a topic is a leaf (has no active children).
+	 *
+	 * @param int $topic_id Topic id.
+	 * @return bool
+	 */
+	public function isLeafTopic( int $topic_id ): bool {
+		return ! $this->repository->hasActiveChildren( $topic_id, $this->network_id );
+	}
+
+	/**
+	 * Validate type/parent constraints for creating or updating a topic.
+	 *
+	 * Returns an error code string on failure, null on success.
+	 *
+	 * @param string   $type      'root' or 'followup'.
+	 * @param int|null $parent_id Parent topic id (null means none supplied).
+	 * @param int      $topic_id  0 for creates; existing id for updates.
+	 * @return string|null Error code or null.
+	 */
+	public function validateTypeConstraints( string $type, ?int $parent_id, int $topic_id = 0 ): ?string {
+		if ( 'root' === $type ) {
+			if ( null !== $parent_id && $parent_id > 0 ) {
+				return 'root-cannot-have-parent';
+			}
+
+			return null;
+		}
+
+		if ( 'followup' === $type ) {
+			if ( null === $parent_id || $parent_id <= 0 ) {
+				return 'followup-missing-parent';
+			}
+
+			$parent = $this->repository->find( $parent_id, $this->network_id );
+			if ( ! $parent ) {
+				return 'invalid-parent-topic';
+			}
+
+			// Prevent circular chains.
+			if ( $topic_id > 0 && $this->wouldCreateCycle( $topic_id, $parent_id ) ) {
+				return 'circular-parent-topic';
+			}
+
+			return null;
+		}
+
+		return 'invalid-topic-type';
+	}
+
+	/**
+	 * Determine whether setting a topic's parent_id would create a cycle.
+	 *
+	 * @param int $topic_id  Topic being updated.
+	 * @param int $parent_id Proposed parent id.
+	 * @return bool
+	 */
+	public function wouldCreateCycle( int $topic_id, int $parent_id ): bool {
+		if ( $topic_id === $parent_id ) {
+			return true;
+		}
+
+		$visited   = array();
+		$current   = $parent_id;
+
+		while ( $current > 0 ) {
+			if ( isset( $visited[ $current ] ) ) {
+				return true;
+			}
+
+			if ( $current === $topic_id ) {
+				return true;
+			}
+
+			$visited[ $current ] = true;
+			$row                 = $this->repository->find( $current, $this->network_id );
+			$current             = $row ? (int) ( $row['parent_id'] ?? 0 ) : 0;
+		}
+
+		return false;
 	}
 
 	/**
@@ -191,6 +296,8 @@ class TopicService {
 				'network_id'  => $this->network_id,
 				'title'       => $name,
 				'slug'        => $slug,
+				'type'        => in_array( (string) ( $data['type'] ?? '' ), array( 'root', 'followup' ), true ) ? (string) $data['type'] : 'root',
+				'parent_id'   => isset( $data['parent_id'] ) && (int) $data['parent_id'] > 0 ? (int) $data['parent_id'] : null,
 				'description' => isset( $data['description'] ) ? sanitize_textarea_field( (string) $data['description'] ) : '',
 				'is_final'    => $this->resolveIsFinalFlag( $data ) ? 1 : 0,
 				'is_active'   => isset( $data['is_active'] ) ? (int) (bool) $data['is_active'] : 1,
@@ -250,6 +357,16 @@ class TopicService {
 
 		if ( array_key_exists( 'is_final', $data ) || array_key_exists( 'node_type', $data ) ) {
 			$update['is_final'] = $this->resolveIsFinalFlag( $data, ! empty( $existing['is_final'] ) ) ? 1 : 0;
+		}
+
+		if ( isset( $data['type'] ) && in_array( (string) $data['type'], array( 'root', 'followup' ), true ) ) {
+			$update['type'] = (string) $data['type'];
+		}
+
+		if ( array_key_exists( 'parent_id', $data ) ) {
+			$update['parent_id'] = isset( $data['parent_id'] ) && (int) $data['parent_id'] > 0
+				? (int) $data['parent_id']
+				: null;
 		}
 
 		return $this->repository->update( $id, $update, $this->network_id );
@@ -407,11 +524,18 @@ class TopicService {
 	 */
 	protected function normalizeRow( array $row, int $transition_count = 0, int $incoming_transition_count = 0 ): array {
 		$row['name'] = isset( $row['title'] ) ? (string) $row['title'] : '';
-		$row['node_type'] = ! empty( $row['is_final'] ) ? 'final' : 'branch';
-		$row['hierarchy_type'] = $incoming_transition_count > 0 ? 'follow_up' : 'top_level';
+
+		// Derive type from the dedicated column; fall back to transition-based heuristic for legacy rows.
+		if ( ! isset( $row['type'] ) || '' === (string) $row['type'] ) {
+			$row['type'] = $incoming_transition_count > 0 ? 'followup' : 'root';
+		}
+
+		$row['node_type']      = ! empty( $row['is_final'] ) ? 'final' : 'branch';
+		$row['hierarchy_type'] = 'followup' === (string) $row['type'] ? 'follow_up' : 'top_level';
 		$row['graph_is_valid'] = ! empty( $row['is_final'] )
 			? true
 			: $transition_count >= 1;
+		$row['parent_id']      = isset( $row['parent_id'] ) && (int) $row['parent_id'] > 0 ? (int) $row['parent_id'] : null;
 
 		return $row;
 	}
