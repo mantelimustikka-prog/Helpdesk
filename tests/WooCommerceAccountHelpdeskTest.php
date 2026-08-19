@@ -106,6 +106,42 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertArrayNotHasKey( 'woocommerce_account_menu_items', $GLOBALS['wp_filters'] );
 	}
 
+	/**
+	 * Conflict-tolerance regression: a third-party filter running between our
+	 * priority-40 and priority-9999 registrations that reconstructs the menu
+	 * without the Helpdesk key must still end up with Helpdesk present because
+	 * the late-priority safety-net callback re-inserts it.
+	 */
+	public function testMenuSurvivesCompetingFilterAtHigherPriority(): void {
+		$this->integration->register();
+
+		// Sanity-check: both our callbacks were registered.
+		self::assertCount( 2, $GLOBALS['wp_filters']['woocommerce_account_menu_items'] );
+
+		// Inject a competing callback that runs between our two registrations and
+		// replaces the full menu with a whitelist that omits the Helpdesk item —
+		// mimicking a theme/plugin that hard-codes the menu items it wants.
+		$filters    = $GLOBALS['wp_filters']['woocommerce_account_menu_items'];
+		$known_items = array(
+			'dashboard'       => 'Dashboard',
+			'orders'          => 'Orders',
+			'customer-logout' => 'Log out',
+		);
+		$competing  = static function () use ( $known_items ): array {
+			return $known_items;
+		};
+		$GLOBALS['wp_filters']['woocommerce_account_menu_items'] = array_merge(
+			array_slice( $filters, 0, 1 ), // our priority-40 callback
+			array( $competing ),           // simulated priority-50 third-party filter
+			array_slice( $filters, 1 )     // our priority-9999 safety-net callback
+		);
+
+		$result = apply_filters( 'woocommerce_account_menu_items', $known_items );
+
+		self::assertArrayHasKey( 'helpdesk', $result );
+		self::assertSame( 'Helpdesk', $result['helpdesk'] );
+	}
+
 	public function testRenderOverviewShowsEmptyStateCta(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = '';
 

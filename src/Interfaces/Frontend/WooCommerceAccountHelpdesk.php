@@ -39,6 +39,8 @@ class WooCommerceAccountHelpdesk {
 		add_action( 'init', array( $this, 'addEndpoint' ) );
 		add_filter( 'query_vars', array( $this, 'addQueryVars' ) );
 		add_filter( 'woocommerce_account_menu_items', array( $this, 'addMenuItem' ), 40 );
+		// Safety-net: re-insert after any third-party filter that may have replaced the menu array.
+		add_filter( 'woocommerce_account_menu_items', array( $this, 'addMenuItem' ), 9999 );
 		add_action( 'woocommerce_account_' . self::ENDPOINT . '_endpoint', array( $this, 'render' ) );
 	}
 
