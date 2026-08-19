@@ -328,6 +328,107 @@ class TopicRepository {
 	}
 
 	/**
+	 * List active top-level topics (topics without active incoming transitions).
+	 *
+	 * @param int $network_id Network id.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function listActiveTopLevel( int $network_id ): array {
+		global $wpdb;
+
+		$topics_table      = Schema::table( Constants::TABLE_TOPICS );
+		$transitions_table = Schema::table( Constants::TABLE_TOPIC_TRANSITIONS );
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT t.*
+				 FROM {$topics_table} t
+				 WHERE t.network_id = %d
+				   AND t.is_active = 1
+				   AND NOT EXISTS (
+						SELECT 1
+						FROM {$transitions_table} tr
+						WHERE tr.network_id = t.network_id
+						  AND tr.to_topic_id = t.id
+						  AND tr.is_active = 1
+				   )
+				 ORDER BY t.sort_order ASC, t.id ASC",
+				$network_id
+			),
+			ARRAY_A
+		);
+
+		return $rows ?: array();
+	}
+
+	/**
+	 * Count active incoming transitions to a topic.
+	 *
+	 * @param int $topic_id    Topic id.
+	 * @param int $network_id  Network id.
+	 * @return int
+	 */
+	public function countActiveIncomingTransitionsToTopic( int $topic_id, int $network_id ): int {
+		global $wpdb;
+
+		$table = Schema::table( Constants::TABLE_TOPIC_TRANSITIONS );
+
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*)
+				 FROM {$table}
+				 WHERE to_topic_id = %d
+				   AND network_id = %d
+				   AND is_active = 1",
+				$topic_id,
+				$network_id
+			)
+		);
+	}
+
+	/**
+	 * Get active incoming transition counts for multiple topics.
+	 *
+	 * @param array<int, int> $topic_ids   Topic ids.
+	 * @param int             $network_id  Network id.
+	 * @return array<int, int>
+	 */
+	public function getActiveIncomingTransitionCounts( array $topic_ids, int $network_id ): array {
+		global $wpdb;
+
+		$topic_ids = array_values( array_filter( array_map( 'intval', $topic_ids ) ) );
+		if ( empty( $topic_ids ) ) {
+			return array();
+		}
+
+		$table        = Schema::table( Constants::TABLE_TOPIC_TRANSITIONS );
+		$placeholders = implode( ', ', array_fill( 0, count( $topic_ids ), '%d' ) );
+		$params       = array_merge( array( $network_id ), $topic_ids );
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT to_topic_id, COUNT(*) AS total
+				 FROM {$table}
+				 WHERE network_id = %d
+				   AND is_active = 1
+				   AND to_topic_id IN ({$placeholders})
+				 GROUP BY to_topic_id",
+				...$params
+			),
+			ARRAY_A
+		);
+
+		$counts = array();
+		foreach ( $rows ?: array() as $row ) {
+			$counts[ (int) $row['to_topic_id'] ] = (int) $row['total'];
+		}
+
+		return $counts;
+	}
+
+	/**
 	 * Build the common WHERE clause for topic list/count queries.
 	 *
 	 * @param int                  $network_id Network id.

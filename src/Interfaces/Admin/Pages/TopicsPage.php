@@ -255,12 +255,19 @@ class TopicsPage {
 
 		$node_type           = ! empty( $topic['is_final'] ) ? 'final' : 'branch';
 		$selected_next_ids   = ! empty( $topic['id'] ) ? $this->topic_transition_service->getSelectableNextTopicIds( (int) $topic['id'] ) : array();
+		$selected_parent_ids = ! empty( $topic['id'] ) ? $this->topic_transition_service->getSelectableParentTopicIds( (int) $topic['id'] ) : array();
+		$hierarchy_type      = isset( $topic['hierarchy_type'] ) && 'follow_up' === (string) $topic['hierarchy_type'] ? 'follow_up' : 'top_level';
+		$candidate_topics    = $this->topic_service->listTopics(
+			array(
+				'per_page' => 250,
+			)
+		);
 		$available_next_step = array_filter(
-			$this->topic_service->listTopics(
-				array(
-					'per_page' => 250,
-				)
-			),
+			$candidate_topics,
+			static fn( array $candidate ): bool => (int) ( $candidate['id'] ?? 0 ) !== (int) ( $topic['id'] ?? 0 )
+		);
+		$available_parent_topics = array_filter(
+			$candidate_topics,
 			static fn( array $candidate ): bool => (int) ( $candidate['id'] ?? 0 ) !== (int) ( $topic['id'] ?? 0 )
 		);
 		?>
@@ -307,6 +314,33 @@ class TopicsPage {
 					</td>
 				</tr>
 				<tr>
+					<th scope="row"><?php esc_html_e( 'Hierarchy placement', 'wp-helpdesk' ); ?></th>
+					<td>
+						<label style="display:block;margin-bottom:8px;">
+							<input type="radio" name="hierarchy_type" value="top_level" <?php checked( $hierarchy_type, 'top_level' ); ?>>
+							<?php esc_html_e( 'Top-level topic (shown in first step)', 'wp-helpdesk' ); ?>
+						</label>
+						<label style="display:block;">
+							<input type="radio" name="hierarchy_type" value="follow_up" <?php checked( $hierarchy_type, 'follow_up' ); ?>>
+							<?php esc_html_e( 'Follow-up topic (reachable from selected parent topics)', 'wp-helpdesk' ); ?>
+						</label>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="hd-topic-parent-topics"><?php esc_html_e( 'Parent topics', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<select id="hd-topic-parent-topics" name="parent_topic_ids[]" class="regular-text" multiple size="6">
+							<?php foreach ( $available_parent_topics as $candidate_topic ) : ?>
+								<?php $candidate_id = (int) $candidate_topic['id']; ?>
+								<option value="<?php echo esc_attr( (string) $candidate_id ); ?>" <?php selected( in_array( $candidate_id, $selected_parent_ids, true ) ); ?>>
+									<?php echo esc_html( (string) $candidate_topic['name'] ); ?>
+								</option>
+							<?php endforeach; ?>
+						</select>
+						<p class="description"><?php esc_html_e( 'Used when the topic is a follow-up topic. Select one or more valid parent topics.', 'wp-helpdesk' ); ?></p>
+					</td>
+				</tr>
+				<tr>
 					<th scope="row"><label for="hd-topic-next-topics"><?php esc_html_e( 'Follow-up topics', 'wp-helpdesk' ); ?></label></th>
 					<td>
 						<select id="hd-topic-next-topics" name="next_topic_ids[]" class="regular-text" multiple size="6">
@@ -349,6 +383,7 @@ class TopicsPage {
 	protected function handleCreate(): void {
 		$payload        = $this->getTopicPayloadFromPost();
 		$next_topic_ids = $this->getNextTopicIdsFromPost();
+		$parent_topic_ids = $this->getParentTopicIdsFromPost();
 		$error_code     = $this->topic_transition_service->validateBranchConfiguration( 0, ! empty( $payload['is_final'] ), $next_topic_ids );
 
 		if ( null !== $error_code ) {
@@ -356,7 +391,21 @@ class TopicsPage {
 			return;
 		}
 
+		$error_code = $this->topic_transition_service->validateHierarchyConfiguration( 0, (string) ( $payload['hierarchy_type'] ?? 'top_level' ), $parent_topic_ids );
+		if ( null !== $error_code ) {
+			$this->redirectToForm( 'new', $error_code );
+			return;
+		}
+
 		$topic_id = $this->topic_service->createTopic( $payload );
+		if (
+			$topic_id > 0
+			&& ! $this->topic_transition_service->syncAdminParentTopics( $topic_id, 'follow_up' === (string) ( $payload['hierarchy_type'] ?? 'top_level' ) ? $parent_topic_ids : array() )
+		) {
+			$this->redirectToForm( 'edit', 'error', $topic_id );
+			return;
+		}
+
 		if ( $topic_id > 0 && ! $this->topic_transition_service->syncAdminNextTopics( $topic_id, ! empty( $payload['is_final'] ) ? array() : $next_topic_ids ) ) {
 			$this->redirectToForm( 'edit', 'error', $topic_id );
 			return;
@@ -379,6 +428,7 @@ class TopicsPage {
 
 		$payload        = $this->getTopicPayloadFromPost();
 		$next_topic_ids = $this->getNextTopicIdsFromPost();
+		$parent_topic_ids = $this->getParentTopicIdsFromPost();
 		$error_code     = $this->topic_transition_service->validateBranchConfiguration( $topic_id, ! empty( $payload['is_final'] ), $next_topic_ids );
 
 		if ( null !== $error_code ) {
@@ -386,7 +436,20 @@ class TopicsPage {
 			return;
 		}
 
+		$error_code = $this->topic_transition_service->validateHierarchyConfiguration( $topic_id, (string) ( $payload['hierarchy_type'] ?? 'top_level' ), $parent_topic_ids );
+		if ( null !== $error_code ) {
+			$this->redirectToForm( 'edit', $error_code, $topic_id );
+			return;
+		}
+
 		$updated = $this->topic_service->updateTopic( $topic_id, $payload );
+		if (
+			$updated
+			&& ! $this->topic_transition_service->syncAdminParentTopics( $topic_id, 'follow_up' === (string) ( $payload['hierarchy_type'] ?? 'top_level' ) ? $parent_topic_ids : array() )
+		) {
+			$this->redirectToForm( 'edit', 'error', $topic_id );
+			return;
+		}
 		if ( $updated && ! $this->topic_transition_service->syncAdminNextTopics( $topic_id, ! empty( $payload['is_final'] ) ? array() : $next_topic_ids ) ) {
 			$this->redirectToForm( 'edit', 'error', $topic_id );
 			return;
@@ -480,6 +543,7 @@ class TopicsPage {
 			'description' => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
 			'is_final'    => 'final' === $node_type ? 1 : 0,
 			'node_type'   => $node_type,
+			'hierarchy_type' => isset( $_POST['hierarchy_type'] ) && 'follow_up' === sanitize_key( wp_unslash( $_POST['hierarchy_type'] ) ) ? 'follow_up' : 'top_level',
 			'is_active'   => isset( $_POST['is_active'] ) ? 1 : 0,
 			'sort_order'  => isset( $_POST['sort_order'] ) ? (int) wp_unslash( $_POST['sort_order'] ) : 0,
 		);
@@ -496,6 +560,19 @@ class TopicsPage {
 		$next_topic_ids = array_values( array_unique( array_filter( array_map( 'intval', $next_topic_ids ) ) ) );
 
 		return $next_topic_ids;
+	}
+
+	/**
+	 * Parse selected parent topic ids from POST.
+	 *
+	 * @return array<int, int>
+	 */
+	protected function getParentTopicIdsFromPost(): array {
+		$parent_topic_ids = isset( $_POST['parent_topic_ids'] ) && is_array( $_POST['parent_topic_ids'] ) ? wp_unslash( $_POST['parent_topic_ids'] ) : array();
+
+		$parent_topic_ids = array_values( array_unique( array_filter( array_map( 'intval', $parent_topic_ids ) ) ) );
+
+		return $parent_topic_ids;
 	}
 
 	/**
@@ -520,6 +597,9 @@ class TopicsPage {
 			'not-found'    => array( 'error', __( 'Topic not found.', 'wp-helpdesk' ) ),
 			'branch-missing-transition' => array( 'error', __( 'Branch topics must include at least one valid follow-up topic.', 'wp-helpdesk' ) ),
 			'invalid-transition' => array( 'error', __( 'One or more selected follow-up topics are invalid.', 'wp-helpdesk' ) ),
+			'follow-up-missing-parent' => array( 'error', __( 'Follow-up topics must include at least one valid parent topic.', 'wp-helpdesk' ) ),
+			'invalid-parent-topic' => array( 'error', __( 'One or more selected parent topics are invalid.', 'wp-helpdesk' ) ),
+			'top-level-has-parent' => array( 'error', __( 'Top-level topics cannot have incoming parent transitions.', 'wp-helpdesk' ) ),
 			'error'        => array( 'error', __( 'Unable to save the topic.', 'wp-helpdesk' ) ),
 		);
 

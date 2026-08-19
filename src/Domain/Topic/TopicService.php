@@ -31,9 +31,41 @@ class TopicService {
 			),
 			$this->network_id
 		);
+		$incoming_transition_counts = $this->repository->getActiveIncomingTransitionCounts(
+			array_map(
+				static fn( array $row ): int => (int) ( $row['id'] ?? 0 ),
+				$rows
+			),
+			$this->network_id
+		);
 
 		return array_map(
-			fn( array $row ): array => $this->normalizeRow( $row, $transition_counts[ (int) ( $row['id'] ?? 0 ) ] ?? 0 ),
+			fn( array $row ): array => $this->normalizeRow(
+				$row,
+				$transition_counts[ (int) ( $row['id'] ?? 0 ) ] ?? 0,
+				$incoming_transition_counts[ (int) ( $row['id'] ?? 0 ) ] ?? 0
+			),
+			$rows
+		);
+	}
+
+	/**
+	 * List active top-level topics for step 1 selection.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function listTopLevelTopics(): array {
+		$rows = $this->repository->listActiveTopLevel( $this->network_id );
+		$transition_counts = $this->repository->getActiveTransitionCounts(
+			array_map(
+				static fn( array $row ): int => (int) ( $row['id'] ?? 0 ),
+				$rows
+			),
+			$this->network_id
+		);
+
+		return array_map(
+			fn( array $row ): array => $this->normalizeRow( $row, $transition_counts[ (int) ( $row['id'] ?? 0 ) ] ?? 0, 0 ),
 			$rows
 		);
 	}
@@ -84,7 +116,13 @@ class TopicService {
 	public function getTopic( int $id ): ?array {
 		$row = $this->repository->find( $id, $this->network_id );
 
-		return $row ? $this->normalizeRow( $row, $this->repository->countActiveTransitionsFromTopic( $id, $this->network_id ) ) : null;
+		return $row
+			? $this->normalizeRow(
+				$row,
+				$this->repository->countActiveTransitionsFromTopic( $id, $this->network_id ),
+				$this->repository->countActiveIncomingTransitionsToTopic( $id, $this->network_id )
+			)
+			: null;
 	}
 
 	/**
@@ -97,6 +135,7 @@ class TopicService {
 		$ids   = array_values( array_filter( array_map( 'intval', $ids ) ) );
 		$rows  = $this->repository->findMany( $ids, $this->network_id );
 		$count = $this->repository->getActiveTransitionCounts( $ids, $this->network_id );
+		$incoming_count = $this->repository->getActiveIncomingTransitionCounts( $ids, $this->network_id );
 		$items = array();
 
 		foreach ( $rows as $row ) {
@@ -105,7 +144,7 @@ class TopicService {
 				continue;
 			}
 
-			$items[ $topic_id ] = $this->normalizeRow( $row, $count[ $topic_id ] ?? 0 );
+			$items[ $topic_id ] = $this->normalizeRow( $row, $count[ $topic_id ] ?? 0, $incoming_count[ $topic_id ] ?? 0 );
 		}
 
 		return $items;
@@ -250,6 +289,21 @@ class TopicService {
 	}
 
 	/**
+	 * Determine whether a topic is currently top-level.
+	 *
+	 * @param int $id Topic id.
+	 * @return bool
+	 */
+	public function isTopLevelTopic( int $id ): bool {
+		$topic = $this->repository->find( $id, $this->network_id );
+		if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
+			return false;
+		}
+
+		return 0 === $this->repository->countActiveIncomingTransitionsToTopic( $id, $this->network_id );
+	}
+
+	/**
 	 * Ensure a slug is unique within the network.
 	 *
 	 * @param string $base_slug  Base slug.
@@ -279,9 +333,10 @@ class TopicService {
 	 * @param array<string, mixed> $row Topic row.
 	 * @return array<string, mixed>
 	 */
-	protected function normalizeRow( array $row, int $transition_count = 0 ): array {
+	protected function normalizeRow( array $row, int $transition_count = 0, int $incoming_transition_count = 0 ): array {
 		$row['name'] = isset( $row['title'] ) ? (string) $row['title'] : '';
 		$row['node_type'] = ! empty( $row['is_final'] ) ? 'final' : 'branch';
+		$row['hierarchy_type'] = $incoming_transition_count > 0 ? 'follow_up' : 'top_level';
 		$row['graph_is_valid'] = ! empty( $row['is_final'] )
 			? true
 			: $transition_count >= 1;

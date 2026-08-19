@@ -104,6 +104,10 @@ final class TopicServiceTest extends TestCase {
 			public function getActiveTransitionCounts( array $topic_ids, int $network_id ): array {
 				return array( 3 => 2 );
 			}
+
+			public function getActiveIncomingTransitionCounts( array $topic_ids, int $network_id ): array {
+				return array();
+			}
 		};
 
 		$service = new TopicService();
@@ -115,6 +119,30 @@ final class TopicServiceTest extends TestCase {
 		self::assertSame( 'account-access', $topics[0]['slug'] );
 		self::assertSame( 'branch', $topics[0]['node_type'] );
 		self::assertTrue( $topics[0]['graph_is_valid'] );
+		self::assertSame( 'top_level', $topics[0]['hierarchy_type'] );
+	}
+
+	public function testListTopLevelTopicsUsesRepositoryTopLevelQuery(): void {
+		$repository = new class extends TopicRepository {
+			public function listActiveTopLevel( int $network_id ): array {
+				return array(
+					array( 'id' => 1, 'title' => 'Billing', 'slug' => 'billing', 'is_final' => 0 ),
+				);
+			}
+
+			public function getActiveTransitionCounts( array $topic_ids, int $network_id ): array {
+				return array( 1 => 1 );
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		$topics = $service->listTopLevelTopics();
+
+		self::assertCount( 1, $topics );
+		self::assertSame( 1, $topics[0]['id'] );
+		self::assertSame( 'top_level', $topics[0]['hierarchy_type'] );
 	}
 
 	public function testBranchTopicValidationRequiresAtLeastOneActiveTransition(): void {
