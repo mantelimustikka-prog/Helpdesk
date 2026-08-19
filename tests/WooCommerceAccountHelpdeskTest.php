@@ -142,6 +142,93 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertSame( 'Helpdesk', $result['helpdesk'] );
 	}
 
+	/**
+	 * Idempotency: calling addMenuItem when 'helpdesk' is already in the array
+	 * must not insert a second copy (no duplicates).
+	 */
+	public function testAddMenuItemIsIdempotentNoDuplicates(): void {
+		$items = array(
+			'dashboard'       => 'Dashboard',
+			'helpdesk'        => 'Helpdesk',
+			'customer-logout' => 'Log out',
+		);
+
+		$once  = $this->integration->addMenuItem( $items );
+		$twice = $this->integration->addMenuItem( $once );
+
+		self::assertSame( 1, array_count_values( array_keys( $twice ) )['helpdesk'] );
+		self::assertSame( array_keys( $once ), array_keys( $twice ) );
+	}
+
+	/**
+	 * Conflict-tolerance: a competing filter that iterates known keys and
+	 * unsets anything it does not recognise (another common pattern used by
+	 * themes) must still produce a final array that contains Helpdesk because
+	 * the priority-9999 safety-net re-inserts it.
+	 */
+	public function testMenuSurvivesCompetingFilterThatUnsetsUnknownKeys(): void {
+		$this->integration->register();
+
+		$whitelist  = array( 'dashboard', 'orders', 'customer-logout' );
+		$competing  = static function ( array $items ) use ( $whitelist ): array {
+			return array_intersect_key( $items, array_flip( $whitelist ) );
+		};
+
+		// Insert the aggressive filter between our priority-40 and priority-9999 hooks.
+		$filters = $GLOBALS['wp_filters']['woocommerce_account_menu_items'];
+		$GLOBALS['wp_filters']['woocommerce_account_menu_items'] = array_merge(
+			array_slice( $filters, 0, 1 ),
+			array( $competing ),
+			array_slice( $filters, 1 )
+		);
+
+		$base_items = array(
+			'dashboard'       => 'Dashboard',
+			'orders'          => 'Orders',
+			'customer-logout' => 'Log out',
+		);
+
+		$result = apply_filters( 'woocommerce_account_menu_items', $base_items );
+
+		self::assertArrayHasKey( 'helpdesk', $result );
+		self::assertSame( 'Helpdesk', $result['helpdesk'] );
+		// No duplicates.
+		self::assertSame( 1, array_count_values( array_keys( $result ) )['helpdesk'] );
+	}
+
+	/**
+	 * Boot-order regression: when register() runs during the init action
+	 * (doing_action returns true) the endpoint must be registered directly
+	 * rather than deferred via an additional add_action('init') call.
+	 */
+	public function testRegisterCallsAddEndpointDirectlyWhenDoingInit(): void {
+		$integration = new WooCommerceDoingInitDouble( $this->ticket_repository, $this->message_service );
+
+		$init_callbacks_before = count( $GLOBALS['wp_filters']['init'] ?? array() );
+
+		$integration->register();
+
+		// addEndpoint() should have been called directly — confirm rewrite endpoint is present.
+		self::assertNotEmpty( $GLOBALS['wp_rewrite_endpoints'] );
+		self::assertSame( 'helpdesk', $GLOBALS['wp_rewrite_endpoints'][0]['name'] );
+		// The number of init callbacks must not have grown (no extra add_action('init') scheduled).
+		self::assertCount( $init_callbacks_before, $GLOBALS['wp_filters']['init'] ?? array() );
+	}
+
+	/**
+	 * Boot-order regression: when register() runs before init the endpoint
+	 * must be deferred via add_action('init') as usual.
+	 */
+	public function testRegisterSchedulesAddEndpointWhenNotDoingInit(): void {
+		// Default test environment: doing_action('init') returns false.
+		$this->integration->register();
+
+		// init callback must have been scheduled (not immediately called).
+		self::assertArrayHasKey( 'init', $GLOBALS['wp_filters'] );
+		// Rewrite endpoint should NOT have been registered yet.
+		self::assertEmpty( $GLOBALS['wp_rewrite_endpoints'] );
+	}
+
 	public function testRenderOverviewShowsEmptyStateCta(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = '';
 
@@ -334,5 +421,22 @@ final class WooCommerceUnavailableAccountHelpdeskDouble extends WooCommerceAccou
 final class WooCommerceClassAbsentDouble extends WooCommerceAccountHelpdesk {
 	protected function isWooCommerceAvailable(): bool {
 		return false;
+	}
+}
+
+/**
+ * Simulates the environment where register() is invoked while the 'init'
+ * action is currently firing (doing_action('init') === true).
+ */
+final class WooCommerceDoingInitDouble extends WooCommerceAccountHelpdesk {
+	protected function isWooCommerceAvailable(): bool {
+		return true;
+	}
+
+	public function register(): void {
+		// Override the global doing_action stub for the duration of this call.
+		$GLOBALS['wp_doing_action']['init'] = true;
+		parent::register();
+		$GLOBALS['wp_doing_action']['init'] = false;
 	}
 }

@@ -59,6 +59,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_localized_scripts'] = array();
 		$GLOBALS['wp_safe_redirect_to'] = null;
 		$GLOBALS['wp_filters'] = array();
+		$GLOBALS['wp_doing_action'] = array();
 		$GLOBALS['wp_query_vars'] = array();
 		$GLOBALS['wp_rewrite_endpoints'] = array();
 		$GLOBALS['wp_logged_in'] = true;
@@ -565,6 +566,12 @@ if ( ! function_exists( 'update_user_meta' ) ) {
 if ( ! function_exists( 'add_action' ) ) {
 	function add_action( string $hook, callable $callback, int $priority = 10, int $accepted_args = 1 ): void {
 		$GLOBALS['wp_filters'][ $hook ][] = $callback;
+	}
+}
+
+if ( ! function_exists( 'doing_action' ) ) {
+	function doing_action( string $hook ): bool {
+		return ! empty( $GLOBALS['wp_doing_action'][ $hook ] );
 	}
 }
 
