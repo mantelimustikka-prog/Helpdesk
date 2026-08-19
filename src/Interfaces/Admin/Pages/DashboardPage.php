@@ -11,6 +11,12 @@ use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
 
 class DashboardPage {
+	protected WooCommerceAccountHelpdesk $woocommerce_account_helpdesk;
+
+	public function __construct( ?WooCommerceAccountHelpdesk $woocommerce_account_helpdesk = null ) {
+		$this->woocommerce_account_helpdesk = $woocommerce_account_helpdesk ?: new WooCommerceAccountHelpdesk();
+	}
+
 	/**
 	 * Render the dashboard page with live ticket stats.
 	 *
@@ -109,7 +115,7 @@ class DashboardPage {
 	 * @return array<int, array{group:string,label:string,url:string,path:string}>
 	 */
 	private function getFrontendInterfaces(): array {
-		return ( new WooCommerceAccountHelpdesk() )->getInterfaceLinks();
+		return $this->woocommerce_account_helpdesk->getInterfaceLinks();
 	}
 
 	/**

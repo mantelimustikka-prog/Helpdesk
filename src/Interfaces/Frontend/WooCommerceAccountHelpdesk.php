@@ -616,13 +616,13 @@ class WooCommerceAccountHelpdesk {
 			}
 
 			if ( 0 === strpos( $value, 'request/' ) ) {
-				$ticket_no = rawurlencode( substr( $value, strlen( 'request/' ) ) );
+				$ticket_no = substr( $value, strlen( 'request/' ) );
 
 				if ( false !== strpos( $account_page, '?' ) ) {
-					return $this->buildNonPrettyAccountUrl( 'request/' . rawurldecode( $ticket_no ) );
+					return $this->buildNonPrettyAccountUrl( 'request/' . $ticket_no );
 				}
 
-				return trailingslashit( $base ) . 'request/' . $ticket_no . '/';
+				return trailingslashit( $base ) . 'request/' . rawurlencode( $ticket_no ) . '/';
 			}
 
 			return wc_get_endpoint_url( self::ENDPOINT, $value, $account_page );
