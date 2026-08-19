@@ -43,6 +43,25 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertContains( 'helpdesk', $vars );
 	}
 
+	public function testRegisterAddsWooCommerceHooksWhenAccountPageIsAvailable(): void {
+		$this->integration->register();
+
+		self::assertArrayHasKey( 'init', $GLOBALS['wp_filters'] );
+		self::assertArrayHasKey( 'query_vars', $GLOBALS['wp_filters'] );
+		self::assertArrayHasKey( 'woocommerce_account_menu_items', $GLOBALS['wp_filters'] );
+		self::assertArrayHasKey( 'woocommerce_account_helpdesk_endpoint', $GLOBALS['wp_filters'] );
+	}
+
+	public function testRegisterDoesNothingWhenWooCommerceAccountPageIsUnavailable(): void {
+		$integration = new WooCommerceUnavailableAccountHelpdeskDouble( $this->ticket_repository, $this->message_service );
+
+		$integration->register();
+
+		self::assertArrayNotHasKey( 'init', $GLOBALS['wp_filters'] );
+		self::assertArrayNotHasKey( 'query_vars', $GLOBALS['wp_filters'] );
+		self::assertArrayNotHasKey( 'woocommerce_account_menu_items', $GLOBALS['wp_filters'] );
+	}
+
 	public function testRenderOverviewShowsEmptyStateCta(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = '';
 
@@ -222,5 +241,11 @@ final class MessageServiceDouble extends MessageService {
 			'author_type' => 'member',
 			'body'        => $this->posted_body,
 		);
+	}
+}
+
+final class WooCommerceUnavailableAccountHelpdeskDouble extends WooCommerceAccountHelpdesk {
+	protected function getAccountPageUrl(): string {
+		return '';
 	}
 }

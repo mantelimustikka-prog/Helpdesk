@@ -617,9 +617,9 @@ class WooCommerceAccountHelpdesk {
 	 */
 	protected function buildAccountUrl( string $subpath = '' ): string {
 		$value = trim( $subpath, '/' );
+		$account_page = $this->getAccountPageUrl();
 
-		if ( function_exists( 'wc_get_endpoint_url' ) && function_exists( 'wc_get_page_permalink' ) ) {
-			$account_page = wc_get_page_permalink( 'myaccount' );
+		if ( '' !== $account_page && function_exists( 'wc_get_endpoint_url' ) ) {
 			$base         = function_exists( 'wc_get_account_endpoint_url' )
 				? wc_get_account_endpoint_url( self::ENDPOINT )
 				: rtrim( $account_page, '/' ) . '/' . self::ENDPOINT . '/';
@@ -666,7 +666,22 @@ class WooCommerceAccountHelpdesk {
 	 * @return bool
 	 */
 	protected function isWooCommerceAvailable(): bool {
-		return function_exists( 'wc_get_page_permalink' ) && '' !== (string) wc_get_page_permalink( 'myaccount' );
+		return '' !== $this->getAccountPageUrl();
+	}
+
+	/**
+	 * Resolve the WooCommerce My Account page permalink when it is available.
+	 *
+	 * @return string
+	 */
+	protected function getAccountPageUrl(): string {
+		if ( ! function_exists( 'wc_get_page_permalink' ) ) {
+			return '';
+		}
+
+		$url = wc_get_page_permalink( 'myaccount' );
+
+		return is_string( $url ) ? trim( $url ) : '';
 	}
 
 	/**
@@ -691,7 +706,10 @@ class WooCommerceAccountHelpdesk {
 	 * @return string
 	 */
 	protected function buildNonPrettyAccountUrl( string $value ): string {
-		$account_page = function_exists( 'wc_get_page_permalink' ) ? wc_get_page_permalink( 'myaccount' ) : home_url( '/my-account/' );
+		$account_page = $this->getAccountPageUrl();
+		if ( '' === $account_page ) {
+			$account_page = home_url( '/my-account/' );
+		}
 		$separator    = false !== strpos( $account_page, '?' ) ? '&' : '?';
 
 		return $account_page . $separator . self::ENDPOINT . '=' . rawurlencode( $value );
