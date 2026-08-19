@@ -303,6 +303,12 @@ if ( ! function_exists( 'esc_url' ) ) {
 	}
 }
 
+if ( ! function_exists( 'esc_js' ) ) {
+	function esc_js( string $value ): string {
+		return addslashes( $value );
+	}
+}
+
 if ( ! function_exists( 'esc_url_raw' ) ) {
 	function esc_url_raw( string $value ): string {
 		return filter_var( trim( $value ), FILTER_VALIDATE_URL ) ? trim( $value ) : '';
@@ -535,6 +541,13 @@ if ( ! function_exists( 'get_current_user_id' ) ) {
 if ( ! function_exists( 'get_user_meta' ) ) {
 	function get_user_meta( int $user_id, string $key, bool $single = true ) {
 		return $GLOBALS['wp_user_meta'][ $user_id ][ $key ] ?? '';
+	}
+}
+
+if ( ! function_exists( 'update_user_meta' ) ) {
+	function update_user_meta( int $user_id, string $key, $value ): bool {
+		$GLOBALS['wp_user_meta'][ $user_id ][ $key ] = $value;
+		return true;
 	}
 }
 

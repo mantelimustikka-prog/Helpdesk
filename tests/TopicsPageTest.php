@@ -125,10 +125,142 @@ final class TopicsPageTest extends TestCase {
 		self::assertSame( array(), $transition_service->synced );
 		self::assertStringContainsString( 'msg=created', (string) $page->redirect_target );
 	}
+
+	public function testRenderListViewDefaultsToTreeModeAndShowsHierarchyActions(): void {
+		$topic_service = new class extends TopicService {
+			public function countTopics( array $args = array() ): int {
+				return 3;
+			}
+
+			public function listTopics( array $args = array() ): array {
+				return array(
+					array( 'id' => 1, 'name' => 'Billing', 'title' => 'Billing', 'slug' => 'billing', 'is_active' => 1, 'sort_order' => 0, 'updated_at' => '2026-08-18 21:14:13' ),
+					array( 'id' => 2, 'name' => 'Invoices', 'title' => 'Invoices', 'slug' => 'invoices', 'is_active' => 1, 'sort_order' => 1, 'updated_at' => '2026-08-18 21:14:13' ),
+					array( 'id' => 3, 'name' => 'Refunds', 'title' => 'Refunds', 'slug' => 'refunds', 'is_active' => 0, 'sort_order' => 2, 'updated_at' => '2026-08-18 21:14:13' ),
+				);
+			}
+
+			public function buildTopicTree( array $topics, array $parent_ids_by_topic = array(), string $search = '' ): array {
+				return array(
+					array(
+						'id' => 1,
+						'name' => 'Billing',
+						'slug' => 'billing',
+						'is_active' => 1,
+						'sort_order' => 0,
+						'updated_at' => '2026-08-18 21:14:13',
+						'depth' => 1,
+						'child_count' => 2,
+						'matches_search' => true,
+						'children' => array(
+							array(
+								'id' => 2,
+								'name' => 'Invoices',
+								'slug' => 'invoices',
+								'is_active' => 1,
+								'sort_order' => 1,
+								'updated_at' => '2026-08-18 21:14:13',
+								'depth' => 2,
+								'child_count' => 0,
+								'matches_search' => true,
+								'children' => array(),
+							),
+							array(
+								'id' => 3,
+								'name' => 'Refunds',
+								'slug' => 'refunds',
+								'is_active' => 0,
+								'sort_order' => 2,
+								'updated_at' => '2026-08-18 21:14:13',
+								'depth' => 2,
+								'child_count' => 0,
+								'matches_search' => false,
+								'children' => array(),
+							),
+						),
+					),
+				);
+			}
+		};
+
+		$transition_service = new class extends TopicTransitionService {
+			public function getAdminParentTopicIdsMap(): array {
+				return array(
+					2 => array( 1 ),
+					3 => array( 1 ),
+				);
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, $transition_service );
+
+		ob_start();
+		$page->renderList();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Tree view', $output );
+		self::assertStringContainsString( 'Expand all', $output );
+		self::assertStringContainsString( 'data-hd-tree-toggle', $output );
+		self::assertStringContainsString( 'Add Child', $output );
+		self::assertStringContainsString( 'Delete', $output );
+		self::assertStringContainsString( 'Topics hierarchy', $output );
+		self::assertStringContainsString( 'Depth 2', $output );
+		self::assertStringContainsString( 'Inactive', $output );
+	}
+
+	public function testRenderListViewUsesStoredFlatViewPreference(): void {
+		$GLOBALS['wp_user_meta'][7]['hd_topics_view_mode'] = 'flat';
+
+		$topic_service = new class extends TopicService {
+			public function countTopics( array $args = array() ): int {
+				return 1;
+			}
+
+			public function listTopics( array $args = array() ): array {
+				return array(
+					array( 'id' => 1, 'name' => 'Billing', 'slug' => 'billing', 'is_active' => 1, 'sort_order' => 0, 'updated_at' => '2026-08-18 21:14:13' ),
+				);
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		ob_start();
+		$page->renderList();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( '<table class="widefat striped">', $output );
+		self::assertStringNotContainsString( 'Topics hierarchy', $output );
+	}
+
+	public function testRenderFormPreselectsParentTopicWhenAddingChild(): void {
+		$topic_service = new class extends TopicService {
+			public function listTopics( array $args = array() ): array {
+				return array(
+					array( 'id' => 4, 'name' => 'Billing', 'title' => 'Billing', 'is_active' => 1 ),
+					array( 'id' => 5, 'name' => 'Invoices', 'title' => 'Invoices', 'is_active' => 1 ),
+				);
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+		$_GET['parent_topic_id'] = 4;
+
+		ob_start();
+		$page->renderForm( 'new' );
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'value="follow_up" checked="checked"', $output );
+		self::assertStringContainsString( 'option value="4" selected="selected"', $output );
+	}
 }
 
 final class TopicsPageTestDouble extends TopicsPage {
 	public ?string $redirect_target = null;
+
+	public function renderList(): void {
+		$this->renderListView();
+	}
 
 	public function renderForm( string $action ): void {
 		$this->renderFormView( $action );

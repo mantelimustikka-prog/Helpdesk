@@ -166,6 +166,56 @@ final class TopicServiceTest extends TestCase {
 		self::assertFalse( $service->isBranchTopicValid( 8 ) );
 	}
 
+	public function testBuildTopicTreeCreatesOrderedHierarchyWithDepthAndChildCounts(): void {
+		$service = new TopicService();
+
+		$tree = $service->buildTopicTree(
+			array(
+				array( 'id' => 10, 'name' => 'Root', 'slug' => 'root', 'sort_order' => 1, 'is_active' => 1 ),
+				array( 'id' => 11, 'name' => 'Child A', 'slug' => 'child-a', 'sort_order' => 2, 'is_active' => 1 ),
+				array( 'id' => 12, 'name' => 'Child B', 'slug' => 'child-b', 'sort_order' => 3, 'is_active' => 1 ),
+				array( 'id' => 13, 'name' => 'Grandchild', 'slug' => 'grandchild', 'sort_order' => 4, 'is_active' => 1 ),
+			),
+			array(
+				11 => array( 10 ),
+				12 => array( 10 ),
+				13 => array( 11 ),
+			)
+		);
+
+		self::assertCount( 1, $tree );
+		self::assertSame( 10, $tree[0]['id'] );
+		self::assertSame( 2, $tree[0]['child_count'] );
+		self::assertSame( 1, $tree[0]['depth'] );
+		self::assertSame( array( 11, 12 ), array_column( $tree[0]['children'], 'id' ) );
+		self::assertSame( 2, $tree[0]['children'][0]['depth'] );
+		self::assertSame( array( 10 ), $tree[0]['children'][0]['parent_topic_ids'] );
+		self::assertSame( 3, $tree[0]['children'][0]['children'][0]['depth'] );
+	}
+
+	public function testBuildTopicTreeKeepsAncestorContextForSearchMatches(): void {
+		$service = new TopicService();
+
+		$tree = $service->buildTopicTree(
+			array(
+				array( 'id' => 1, 'name' => 'Billing', 'slug' => 'billing', 'sort_order' => 0, 'is_active' => 1 ),
+				array( 'id' => 2, 'name' => 'Invoices', 'slug' => 'invoices', 'sort_order' => 1, 'is_active' => 1 ),
+				array( 'id' => 3, 'name' => 'Shipping', 'slug' => 'shipping', 'sort_order' => 2, 'is_active' => 1 ),
+			),
+			array(
+				2 => array( 1 ),
+			),
+			'invoice'
+		);
+
+		self::assertCount( 1, $tree );
+		self::assertSame( 1, $tree[0]['id'] );
+		self::assertFalse( $tree[0]['matches_search'] );
+		self::assertCount( 1, $tree[0]['children'] );
+		self::assertSame( 2, $tree[0]['children'][0]['id'] );
+		self::assertTrue( $tree[0]['children'][0]['matches_search'] );
+	}
+
 	private function injectRepository( TopicService $service, TopicRepository $repository ): void {
 		$repository_property = new ReflectionProperty( TopicService::class, 'repository' );
 		$repository_property->setAccessible( true );

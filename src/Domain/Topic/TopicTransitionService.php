@@ -345,7 +345,7 @@ class TopicTransitionService {
 			return 'follow-up-missing-parent';
 		}
 
-		if ( 'top_level' === $hierarchy_type && $topic_id > 0 && count( $this->listValidParentsForTopic( $topic_id, true ) ) > 0 ) {
+		if ( 'top_level' === $hierarchy_type && ! empty( $parent_topic_ids ) ) {
 			return 'top-level-has-parent';
 		}
 
@@ -356,7 +356,56 @@ class TopicTransitionService {
 			}
 		}
 
+		if ( $topic_id > 0 && ! empty( $parent_topic_ids ) && $this->wouldCreateHierarchyCycle( $topic_id, $parent_topic_ids ) ) {
+			return 'circular-parent-topic';
+		}
+
 		return null;
+	}
+
+	/**
+	 * Return a topic id => parent topic ids map for admin-managed hierarchy links.
+	 *
+	 * @return array<int, array<int, int>>
+	 */
+	public function getAdminParentTopicIdsMap(): array {
+		$page       = 1;
+		$per_page   = 250;
+		$parent_map = array();
+
+		do {
+			$transitions = $this->repository->list(
+				$this->network_id,
+				array(
+					'page'      => $page,
+					'per_page'  => $per_page,
+					'is_active' => 1,
+				)
+			);
+
+			foreach ( $transitions as $transition ) {
+				if ( ! $this->isAdminManagedTransition( $transition ) ) {
+					continue;
+				}
+
+				$from_topic_id = (int) ( $transition['from_topic_id'] ?? 0 );
+				$to_topic_id   = (int) ( $transition['to_topic_id'] ?? 0 );
+
+				if ( $from_topic_id <= 0 || $to_topic_id <= 0 || $from_topic_id === $to_topic_id ) {
+					continue;
+				}
+
+				if ( ! isset( $parent_map[ $to_topic_id ] ) ) {
+					$parent_map[ $to_topic_id ] = array();
+				}
+
+				$parent_map[ $to_topic_id ][ $from_topic_id ] = $from_topic_id;
+			}
+
+			++$page;
+		} while ( count( $transitions ) === $per_page );
+
+		return $parent_map;
 	}
 
 	/**
@@ -675,6 +724,69 @@ class TopicTransitionService {
 		$allowed = [ 'always', 'field_equals' ];
 
 		return in_array( $type, $allowed, true ) ? $type : 'always';
+	}
+
+	/**
+	 * Determine whether selecting the provided parents would create a cycle.
+	 *
+	 * @param int               $topic_id Topic id.
+	 * @param array<int, mixed> $parent_topic_ids Candidate parent ids.
+	 * @return bool
+	 */
+	private function wouldCreateHierarchyCycle( int $topic_id, array $parent_topic_ids ): bool {
+		$parent_map         = $this->getAdminParentTopicIdsMap();
+		$children_by_parent = array();
+
+		foreach ( $parent_map as $child_topic_id => $existing_parent_ids ) {
+			foreach ( $existing_parent_ids as $parent_topic_id ) {
+				if ( ! isset( $children_by_parent[ $parent_topic_id ] ) ) {
+					$children_by_parent[ $parent_topic_id ] = array();
+				}
+
+				$children_by_parent[ $parent_topic_id ][ (int) $child_topic_id ] = (int) $child_topic_id;
+			}
+		}
+
+		foreach ( $parent_topic_ids as $parent_topic_id ) {
+			if ( $this->topicCanReach( $topic_id, (int) $parent_topic_id, $children_by_parent, array() ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Determine whether a hierarchy path exists between two topics.
+	 *
+	 * @param int                    $from_topic_id Start topic id.
+	 * @param int                    $target_topic_id Target topic id.
+	 * @param array<int, array<int>> $children_by_parent Parent => child ids map.
+	 * @param array<int, int>        $visited Visited topic ids.
+	 * @return bool
+	 */
+	private function topicCanReach( int $from_topic_id, int $target_topic_id, array $children_by_parent, array $visited ): bool {
+		if ( $from_topic_id <= 0 ) {
+			return false;
+		}
+
+		if ( $from_topic_id === $target_topic_id ) {
+			return true;
+		}
+
+		if ( isset( $visited[ $from_topic_id ] ) ) {
+			return false;
+		}
+
+		$visited[ $from_topic_id ] = $from_topic_id;
+
+		foreach ( $children_by_parent[ $from_topic_id ] ?? array() as $child_topic_id ) {
+			if ( $this->topicCanReach( (int) $child_topic_id, $target_topic_id, $children_by_parent, $visited ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

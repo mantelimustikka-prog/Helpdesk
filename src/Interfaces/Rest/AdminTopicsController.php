@@ -26,27 +26,46 @@ class AdminTopicsController {
 	 * @return WP_REST_Response
 	 */
 	public function listTopics( WP_REST_Request $request ): WP_REST_Response {
-		$page     = max( 1, (int) $request->get_param( 'page' ) );
-		$per_page = max( 1, min( 100, (int) ( $request->get_param( 'per_page' ) ?: 20 ) ) );
-		$search   = sanitize_text_field( (string) $request->get_param( 'search' ) );
-		$args     = array(
+		$page      = max( 1, (int) $request->get_param( 'page' ) );
+		$per_page  = max( 1, min( 100, (int) ( $request->get_param( 'per_page' ) ?: 20 ) ) );
+		$search    = sanitize_text_field( (string) $request->get_param( 'search' ) );
+		$view_mode = 'tree' === sanitize_key( (string) $request->get_param( 'view' ) ) ? 'tree' : 'flat';
+		$args      = array(
 			'page'     => $page,
 			'per_page' => $per_page,
 		);
-
-		if ( '' !== $search ) {
-			$args['search'] = $search;
-		}
 
 		if ( null !== $request->get_param( 'is_active' ) && '' !== (string) $request->get_param( 'is_active' ) ) {
 			$args['is_active'] = (int) (bool) $request->get_param( 'is_active' );
 		}
 
-		$total = $this->topic_service->countTopics( $args );
-		$items = $this->topic_service->listTopics( $args );
+		if ( 'tree' === $view_mode ) {
+			$total = $this->topic_service->countTopics( $args );
+			$items = $this->topic_service->buildTopicTree(
+				$this->topic_service->listTopics(
+					array_merge(
+						$args,
+						array(
+							'page'     => 1,
+							'per_page' => max( 1, $total ),
+						)
+					)
+				),
+				$this->topic_transition_service->getAdminParentTopicIdsMap(),
+				$search
+			);
+		} else {
+			if ( '' !== $search ) {
+				$args['search'] = $search;
+			}
+
+			$total = $this->topic_service->countTopics( $args );
+			$items = $this->topic_service->listTopics( $args );
+		}
 
 		return new WP_REST_Response(
 			array(
+				'view'        => $view_mode,
 				'items'       => $items,
 				'page'        => $page,
 				'per_page'    => $per_page,
@@ -304,7 +323,8 @@ class AdminTopicsController {
 			'invalid-transition'        => 'One or more selected follow-up topics are invalid.',
 			'follow-up-missing-parent'  => 'Follow-up topics must include at least one valid parent topic.',
 			'invalid-parent-topic'      => 'One or more selected parent topics are invalid.',
-			'top-level-has-parent'      => 'Top-level topics cannot have incoming parent transitions.',
+			'circular-parent-topic'     => 'Selected parent topics would create a circular hierarchy.',
+			'top-level-has-parent'      => 'Top-level topics cannot have selected parent topics.',
 		);
 
 		return $messages[ $error_code ] ?? 'Unable to save topic graph.';

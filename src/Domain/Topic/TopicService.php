@@ -304,6 +304,78 @@ class TopicService {
 	}
 
 	/**
+	 * Build a hierarchy tree from normalized topics and parent links.
+	 *
+	 * @param array<int, array<string, mixed>> $topics Normalized topics.
+	 * @param array<int, array<int, int>>      $parent_ids_by_topic Topic id => parent ids map.
+	 * @param string                           $search Optional search query.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function buildTopicTree( array $topics, array $parent_ids_by_topic = array(), string $search = '' ): array {
+		$topics_by_id        = array();
+		$ordered_topic_ids   = array();
+		$children_by_parent  = array();
+		$parent_ids_by_topic = array_map(
+			static fn( array $parent_ids ): array => array_values( array_unique( array_filter( array_map( 'intval', $parent_ids ) ) ) ),
+			$parent_ids_by_topic
+		);
+
+		foreach ( $topics as $topic ) {
+			$topic_id = (int) ( $topic['id'] ?? 0 );
+			if ( $topic_id <= 0 ) {
+				continue;
+			}
+
+			$topics_by_id[ $topic_id ] = $topic;
+			$ordered_topic_ids[]       = $topic_id;
+		}
+
+		foreach ( $ordered_topic_ids as $topic_id ) {
+			foreach ( $parent_ids_by_topic[ $topic_id ] ?? array() as $parent_topic_id ) {
+				if ( ! isset( $topics_by_id[ $parent_topic_id ] ) ) {
+					continue;
+				}
+
+				if ( ! isset( $children_by_parent[ $parent_topic_id ] ) ) {
+					$children_by_parent[ $parent_topic_id ] = array();
+				}
+
+				$children_by_parent[ $parent_topic_id ][ $topic_id ] = $topic_id;
+			}
+		}
+
+		$root_ids = array();
+		foreach ( $ordered_topic_ids as $topic_id ) {
+			$known_parent_ids = array_values(
+				array_filter(
+					$parent_ids_by_topic[ $topic_id ] ?? array(),
+					fn( int $parent_topic_id ): bool => isset( $topics_by_id[ $parent_topic_id ] )
+				)
+			);
+
+			if ( empty( $known_parent_ids ) ) {
+				$root_ids[] = $topic_id;
+			}
+		}
+
+		if ( empty( $root_ids ) ) {
+			$root_ids = $ordered_topic_ids;
+		}
+
+		$search = strtolower( trim( $search ) );
+		$tree   = array();
+
+		foreach ( $root_ids as $root_id ) {
+			$node = $this->buildTopicTreeNode( $root_id, $topics_by_id, $children_by_parent, $parent_ids_by_topic, 1, array(), $search );
+			if ( null !== $node ) {
+				$tree[] = $node;
+			}
+		}
+
+		return $tree;
+	}
+
+	/**
 	 * Ensure a slug is unique within the network.
 	 *
 	 * @param string $base_slug  Base slug.
@@ -361,5 +433,60 @@ class TopicService {
 		}
 
 		return $default;
+	}
+
+	/**
+	 * Recursively build a topic tree node.
+	 *
+	 * @param int                              $topic_id Topic id.
+	 * @param array<int, array<string, mixed>> $topics_by_id Indexed normalized topics.
+	 * @param array<int, array<int, int>>      $children_by_parent Parent => child ids map.
+	 * @param array<int, array<int, int>>      $parent_ids_by_topic Topic => parent ids map.
+	 * @param int                              $depth Current depth level.
+	 * @param array<int, int>                  $ancestor_ids Ancestor ids in the current branch.
+	 * @param string                           $search Lower-cased search query.
+	 * @return array<string, mixed>|null
+	 */
+	private function buildTopicTreeNode( int $topic_id, array $topics_by_id, array $children_by_parent, array $parent_ids_by_topic, int $depth, array $ancestor_ids, string $search ): ?array {
+		if ( isset( $ancestor_ids[ $topic_id ] ) || ! isset( $topics_by_id[ $topic_id ] ) ) {
+			return null;
+		}
+
+		$topic        = $topics_by_id[ $topic_id ];
+		$ancestor_ids[ $topic_id ] = $topic_id;
+		$children     = array();
+
+		foreach ( $children_by_parent[ $topic_id ] ?? array() as $child_topic_id ) {
+			$child_node = $this->buildTopicTreeNode( $child_topic_id, $topics_by_id, $children_by_parent, $parent_ids_by_topic, $depth + 1, $ancestor_ids, $search );
+			if ( null !== $child_node ) {
+				$children[] = $child_node;
+			}
+		}
+
+		$haystack = strtolower(
+			implode(
+				' ',
+				array_filter(
+					array(
+						(string) ( $topic['name'] ?? '' ),
+						(string) ( $topic['title'] ?? '' ),
+						(string) ( $topic['slug'] ?? '' ),
+					)
+				)
+			)
+		);
+		$matches_search = '' !== $search && false !== strpos( $haystack, $search );
+
+		if ( '' !== $search && ! $matches_search && empty( $children ) ) {
+			return null;
+		}
+
+		$topic['depth']            = $depth;
+		$topic['children']         = $children;
+		$topic['child_count']      = count( $children_by_parent[ $topic_id ] ?? array() );
+		$topic['parent_topic_ids'] = $parent_ids_by_topic[ $topic_id ] ?? array();
+		$topic['matches_search']   = $matches_search;
+
+		return $topic;
 	}
 }

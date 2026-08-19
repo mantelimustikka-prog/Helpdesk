@@ -95,18 +95,38 @@ class TopicsPage {
 	 * @return void
 	 */
 	protected function renderListView(): void {
-		$search   = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
-		$page     = isset( $_GET['paged'] ) ? max( 1, (int) $_GET['paged'] ) : 1;
-		$per_page = 20;
-		$args     = array(
-			'search'   => $search,
-			'page'     => $page,
-			'per_page' => $per_page,
-		);
-		$topics   = $this->topic_service->listTopics( $args );
-		$total    = $this->topic_service->countTopics( $args );
-		$pages    = max( 1, (int) ceil( $total / $per_page ) );
-		$list_url = $this->getListUrl();
+		$search     = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+		$view_mode  = $this->getCurrentViewMode();
+		$is_tree    = 'tree' === $view_mode;
+		$page       = isset( $_GET['paged'] ) ? max( 1, (int) $_GET['paged'] ) : 1;
+		$per_page   = 20;
+		$list_url   = $this->getListUrl();
+		$topics     = array();
+		$total      = 0;
+		$pages      = 1;
+		$tree       = array();
+		$tree_total = 0;
+
+		if ( $is_tree ) {
+			$total  = $this->topic_service->countTopics();
+			$topics = $this->topic_service->listTopics(
+				array(
+					'page'     => 1,
+					'per_page' => max( 1, $total ),
+				)
+			);
+			$tree       = $this->buildTopicTree( $topics, $search );
+			$tree_total = $this->countTreeNodes( $tree );
+		} else {
+			$args   = array(
+				'search'   => $search,
+				'page'     => $page,
+				'per_page' => $per_page,
+			);
+			$topics  = $this->topic_service->listTopics( $args );
+			$total   = $this->topic_service->countTopics( $args );
+			$pages   = max( 1, (int) ceil( $total / $per_page ) );
+		}
 		?>
 		<h1 class="wp-heading-inline"><?php esc_html_e( 'Topics', 'wp-helpdesk' ); ?></h1>
 		<a href="<?php echo esc_url( $this->getListUrl( array( 'action' => 'new' ) ) ); ?>" class="page-title-action"><?php esc_html_e( 'Add New', 'wp-helpdesk' ); ?></a>
@@ -114,12 +134,22 @@ class TopicsPage {
 
 		<form method="get" style="margin:16px 0;">
 			<input type="hidden" name="page" value="wp-helpdesk-topics">
+			<input type="hidden" name="view" value="<?php echo esc_attr( $view_mode ); ?>">
 			<p class="search-box">
 				<label class="screen-reader-text" for="topic-search-input"><?php esc_html_e( 'Search topics', 'wp-helpdesk' ); ?></label>
 				<input type="search" id="topic-search-input" name="s" value="<?php echo esc_attr( $search ); ?>">
 				<?php submit_button( __( 'Search Topics', 'wp-helpdesk' ), '', '', false, array( 'id' => 'search-submit' ) ); ?>
 			</p>
 		</form>
+
+		<div class="hd-topic-view-controls" style="margin:0 0 16px;">
+			<a class="button <?php echo esc_attr( $is_tree ? 'button-primary' : '' ); ?>" href="<?php echo esc_url( $this->getListUrl( array( 'view' => 'tree', 's' => $search ) ) ); ?>"><?php esc_html_e( 'Tree view', 'wp-helpdesk' ); ?></a>
+			<a class="button <?php echo esc_attr( ! $is_tree ? 'button-primary' : '' ); ?>" href="<?php echo esc_url( $this->getListUrl( array( 'view' => 'flat', 's' => $search ) ) ); ?>"><?php esc_html_e( 'Flat view', 'wp-helpdesk' ); ?></a>
+			<?php if ( $is_tree ) : ?>
+				<button type="button" class="button" data-hd-tree-expand-all="1"><?php esc_html_e( 'Expand all', 'wp-helpdesk' ); ?></button>
+				<button type="button" class="button" data-hd-tree-collapse-all="1"><?php esc_html_e( 'Collapse all', 'wp-helpdesk' ); ?></button>
+			<?php endif; ?>
+		</div>
 
 		<form method="post">
 			<?php wp_nonce_field( 'hd_topic_action', 'hd_topic_nonce' ); ?>
@@ -137,68 +167,58 @@ class TopicsPage {
 				</div>
 				<div class="tablenav-pages">
 					<span class="displaying-num">
-						<?php echo esc_html( sprintf( _n( '%d item', '%d items', $total, 'wp-helpdesk' ), $total ) ); ?>
+						<?php echo esc_html( sprintf( _n( '%d item', '%d items', $is_tree ? $tree_total : $total, 'wp-helpdesk' ), $is_tree ? $tree_total : $total ) ); ?>
 					</span>
 				</div>
 			</div>
 
-			<table class="widefat striped">
-				<thead>
-					<tr>
-						<td class="manage-column column-cb check-column"><input type="checkbox" aria-label="<?php esc_attr_e( 'Select all topics', 'wp-helpdesk' ); ?>"></td>
-						<th scope="col"><?php esc_html_e( 'Name', 'wp-helpdesk' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Slug', 'wp-helpdesk' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Active', 'wp-helpdesk' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Order', 'wp-helpdesk' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Updated', 'wp-helpdesk' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Actions', 'wp-helpdesk' ); ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php if ( empty( $topics ) ) : ?>
+			<?php if ( $is_tree ) : ?>
+				<?php $this->renderTreeTable( $tree ); ?>
+			<?php else : ?>
+				<table class="widefat striped">
+					<thead>
 						<tr>
-							<td colspan="7"><?php esc_html_e( 'No topics found.', 'wp-helpdesk' ); ?></td>
+							<td class="manage-column column-cb check-column"><input type="checkbox" aria-label="<?php esc_attr_e( 'Select all topics', 'wp-helpdesk' ); ?>"></td>
+							<th scope="col"><?php esc_html_e( 'Name', 'wp-helpdesk' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Slug', 'wp-helpdesk' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Active', 'wp-helpdesk' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Order', 'wp-helpdesk' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Updated', 'wp-helpdesk' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Actions', 'wp-helpdesk' ); ?></th>
 						</tr>
-					<?php else : ?>
-						<?php foreach ( $topics as $topic ) : ?>
+					</thead>
+					<tbody>
+						<?php if ( empty( $topics ) ) : ?>
 							<tr>
-								<th scope="row" class="check-column">
-									<input type="checkbox" name="topic_ids[]" value="<?php echo esc_attr( (string) $topic['id'] ); ?>">
-								</th>
-								<td>
-									<strong>
-										<a href="<?php echo esc_url( $this->getListUrl( array( 'action' => 'edit', 'id' => (int) $topic['id'] ) ) ); ?>">
-											<?php echo esc_html( (string) $topic['name'] ); ?>
-										</a>
-									</strong>
-								</td>
-								<td><?php echo esc_html( (string) $topic['slug'] ); ?></td>
-								<td><?php echo esc_html( ! empty( $topic['is_active'] ) ? __( 'Yes', 'wp-helpdesk' ) : __( 'No', 'wp-helpdesk' ) ); ?></td>
-								<td><?php echo esc_html( (string) (int) $topic['sort_order'] ); ?></td>
-								<td><?php echo esc_html( (string) $topic['updated_at'] ); ?></td>
-								<td>
-									<a class="button button-small" href="<?php echo esc_url( $this->getListUrl( array( 'action' => 'edit', 'id' => (int) $topic['id'] ) ) ); ?>"><?php esc_html_e( 'Edit', 'wp-helpdesk' ); ?></a>
-									<form method="post" style="display:inline-block;margin-left:4px;">
-										<?php wp_nonce_field( 'hd_topic_action', 'hd_topic_nonce' ); ?>
-										<input type="hidden" name="hd_topic_action" value="<?php echo esc_attr( ! empty( $topic['is_active'] ) ? 'deactivate' : 'activate' ); ?>">
-										<input type="hidden" name="hd_topic_id" value="<?php echo esc_attr( (string) $topic['id'] ); ?>">
-										<button type="submit" class="button button-small"><?php echo esc_html( ! empty( $topic['is_active'] ) ? __( 'Deactivate', 'wp-helpdesk' ) : __( 'Activate', 'wp-helpdesk' ) ); ?></button>
-									</form>
-									<form method="post" style="display:inline-block;margin-left:4px;">
-										<?php wp_nonce_field( 'hd_topic_action', 'hd_topic_nonce' ); ?>
-										<input type="hidden" name="hd_topic_action" value="delete">
-										<input type="hidden" name="hd_topic_id" value="<?php echo esc_attr( (string) $topic['id'] ); ?>">
-										<button type="submit" class="button button-small" onclick="return confirm('<?php echo esc_js( __( 'Delete this topic?', 'wp-helpdesk' ) ); ?>');"><?php esc_html_e( 'Delete', 'wp-helpdesk' ); ?></button>
-									</form>
-								</td>
+								<td colspan="7"><?php esc_html_e( 'No topics found.', 'wp-helpdesk' ); ?></td>
 							</tr>
-						<?php endforeach; ?>
-					<?php endif; ?>
-				</tbody>
-			</table>
+						<?php else : ?>
+							<?php foreach ( $topics as $topic ) : ?>
+								<tr>
+									<th scope="row" class="check-column">
+										<input type="checkbox" name="topic_ids[]" value="<?php echo esc_attr( (string) $topic['id'] ); ?>">
+									</th>
+									<td>
+										<strong>
+											<a href="<?php echo esc_url( $this->getListUrl( array( 'action' => 'edit', 'id' => (int) $topic['id'] ) ) ); ?>">
+												<?php echo esc_html( (string) $topic['name'] ); ?>
+											</a>
+										</strong>
+									</td>
+									<td><?php echo esc_html( (string) $topic['slug'] ); ?></td>
+									<td><?php echo esc_html( ! empty( $topic['is_active'] ) ? __( 'Yes', 'wp-helpdesk' ) : __( 'No', 'wp-helpdesk' ) ); ?></td>
+									<td><?php echo esc_html( (string) (int) $topic['sort_order'] ); ?></td>
+									<td><?php echo esc_html( (string) $topic['updated_at'] ); ?></td>
+									<td><?php $this->renderTopicRowActions( $topic ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						<?php endif; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
 		</form>
 
-		<?php if ( $pages > 1 ) : ?>
+		<?php if ( ! $is_tree && $pages > 1 ) : ?>
 			<div class="tablenav bottom">
 				<div class="tablenav-pages">
 					<?php
@@ -206,6 +226,10 @@ class TopicsPage {
 						paginate_links(
 							array(
 								'base'      => esc_url_raw( add_query_arg( 'paged', '%#%', $list_url ) ),
+								'add_args'  => array(
+									'view' => $view_mode,
+									's'    => $search,
+								),
 								'format'    => '',
 								'current'   => $page,
 								'total'     => $pages,
@@ -257,6 +281,12 @@ class TopicsPage {
 		$selected_next_ids   = ! empty( $topic['id'] ) ? $this->topic_transition_service->getSelectableNextTopicIds( (int) $topic['id'] ) : array();
 		$selected_parent_ids = ! empty( $topic['id'] ) ? $this->topic_transition_service->getSelectableParentTopicIds( (int) $topic['id'] ) : array();
 		$hierarchy_type      = isset( $topic['hierarchy_type'] ) && 'follow_up' === (string) $topic['hierarchy_type'] ? 'follow_up' : 'top_level';
+		if ( empty( $topic['id'] ) && isset( $_GET['parent_topic_id'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$selected_parent_ids = array_values( array_unique( array_filter( array( (int) $_GET['parent_topic_id'] ) ) ) );
+			if ( ! empty( $selected_parent_ids ) ) {
+				$hierarchy_type = 'follow_up';
+			}
+		}
 		$candidate_topics    = $this->topic_service->listTopics(
 			array(
 				'per_page' => 250,
@@ -373,6 +403,286 @@ class TopicsPage {
 			<?php submit_button( 'edit' === $action ? __( 'Update Topic', 'wp-helpdesk' ) : __( 'Create Topic', 'wp-helpdesk' ) ); ?>
 		</form>
 		<?php
+	}
+
+	/**
+	 * Render the hierarchical tree/table hybrid.
+	 *
+	 * @param array<int, array<string, mixed>> $tree Hierarchy tree.
+	 * @return void
+	 */
+	protected function renderTreeTable( array $tree ): void {
+		?>
+		<style>
+			.hd-topic-tree { border:1px solid #ccd0d4; background:#fff; }
+			.hd-topic-tree__header,
+			.hd-topic-tree__row { display:grid; grid-template-columns: 36px minmax(320px, 2fr) minmax(120px, .8fr) minmax(80px, .5fr) minmax(140px, .8fr) minmax(260px, 1.2fr); gap:12px; align-items:center; padding:10px 12px; }
+			.hd-topic-tree__header { border-bottom:1px solid #ccd0d4; font-weight:600; background:#f6f7f7; }
+			.hd-topic-tree__row { border-top:1px solid #f0f0f1; }
+			.hd-topic-tree__group { margin-left:0; }
+			.hd-topic-tree__item.is-context > .hd-topic-tree__row { background:#fcfcfc; }
+			.hd-topic-tree__item.is-match > .hd-topic-tree__row { background:#f0f6fc; }
+			.hd-topic-tree__node { display:flex; align-items:center; gap:8px; min-width:0; }
+			.hd-topic-tree__toggle { width:24px; height:24px; padding:0; line-height:1; }
+			.hd-topic-tree__toggle-placeholder { width:24px; flex:0 0 24px; }
+			.hd-topic-tree__connector { white-space:pre; font-family:monospace; color:#8c8f94; }
+			.hd-topic-tree__meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; color:#50575e; }
+			.hd-topic-tree__badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#f0f0f1; font-size:12px; }
+			.hd-topic-tree__badge.is-inactive { background:#fbeaea; color:#8a2424; }
+			.hd-topic-tree__actions form { display:inline-block; margin:0 0 0 4px; }
+			.hd-topic-tree__empty { padding:16px 12px; }
+		</style>
+		<div class="hd-topic-tree" data-hd-topic-tree="1" role="tree" aria-label="<?php esc_attr_e( 'Topics hierarchy', 'wp-helpdesk' ); ?>">
+			<div class="hd-topic-tree__header">
+				<div></div>
+				<div><?php esc_html_e( 'Name', 'wp-helpdesk' ); ?></div>
+				<div><?php esc_html_e( 'Slug', 'wp-helpdesk' ); ?></div>
+				<div><?php esc_html_e( 'Active', 'wp-helpdesk' ); ?></div>
+				<div><?php esc_html_e( 'Updated', 'wp-helpdesk' ); ?></div>
+				<div><?php esc_html_e( 'Actions', 'wp-helpdesk' ); ?></div>
+			</div>
+			<?php if ( empty( $tree ) ) : ?>
+				<div class="hd-topic-tree__empty"><?php esc_html_e( 'No topics found.', 'wp-helpdesk' ); ?></div>
+			<?php else : ?>
+				<?php $this->renderTreeNodes( $tree ); ?>
+			<?php endif; ?>
+		</div>
+		<script>
+			(function () {
+				const tree = document.querySelector('[data-hd-topic-tree]');
+				if (!tree) {
+					return;
+				}
+
+				const storageKey = 'hd_topics_tree_state';
+				const readState = () => {
+					try {
+						return JSON.parse(window.localStorage.getItem(storageKey) || '{}');
+					} catch (error) {
+						return {};
+					}
+				};
+				const writeState = (state) => window.localStorage.setItem(storageKey, JSON.stringify(state));
+				const applyItemState = (item, expanded) => {
+					const button = item.querySelector('[data-hd-tree-toggle]');
+					const group = item.querySelector('[data-hd-tree-group]');
+					if (!button || !group) {
+						return;
+					}
+
+					button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+					button.textContent = expanded ? '−' : '+';
+					group.hidden = !expanded;
+				};
+
+				const state = readState();
+				tree.querySelectorAll('[data-hd-tree-item]').forEach((item) => {
+					const itemId = item.getAttribute('data-hd-tree-item');
+					if (Object.prototype.hasOwnProperty.call(state, itemId)) {
+						applyItemState(item, !!state[itemId]);
+					}
+				});
+
+				tree.addEventListener('click', (event) => {
+					const button = event.target.closest('[data-hd-tree-toggle]');
+					if (!button) {
+						return;
+					}
+
+					const item = button.closest('[data-hd-tree-item]');
+					const itemId = item ? item.getAttribute('data-hd-tree-item') : '';
+					if (!item || !itemId) {
+						return;
+					}
+
+					const expanded = button.getAttribute('aria-expanded') !== 'true';
+					applyItemState(item, expanded);
+					state[itemId] = expanded;
+					writeState(state);
+				});
+
+				const expandAllButton = document.querySelector('[data-hd-tree-expand-all]');
+				if (expandAllButton) {
+					expandAllButton.addEventListener('click', () => {
+						tree.querySelectorAll('[data-hd-tree-item]').forEach((item) => {
+							const itemId = item.getAttribute('data-hd-tree-item');
+							applyItemState(item, true);
+							if (itemId) {
+								state[itemId] = true;
+							}
+						});
+						writeState(state);
+					});
+				}
+
+				const collapseAllButton = document.querySelector('[data-hd-tree-collapse-all]');
+				if (collapseAllButton) {
+					collapseAllButton.addEventListener('click', () => {
+						tree.querySelectorAll('[data-hd-tree-item]').forEach((item) => {
+							const itemId = item.getAttribute('data-hd-tree-item');
+							applyItemState(item, false);
+							if (itemId) {
+								state[itemId] = false;
+							}
+						});
+						writeState(state);
+					});
+				}
+			}());
+		</script>
+		<?php
+	}
+
+	/**
+	 * Render tree nodes recursively.
+	 *
+	 * @param array<int, array<string, mixed>> $nodes Nodes.
+	 * @param array<int, bool>                 $ancestor_has_more Branch connector context.
+	 * @return void
+	 */
+	protected function renderTreeNodes( array $nodes, array $ancestor_has_more = array() ): void {
+		$total = count( $nodes );
+
+		foreach ( $nodes as $index => $node ) {
+			$has_children = ! empty( $node['children'] );
+			$is_last      = $index === $total - 1;
+			$item_classes = array( 'hd-topic-tree__item' );
+
+			if ( ! empty( $node['matches_search'] ) ) {
+				$item_classes[] = 'is-match';
+			} elseif ( ! empty( $node['children'] ) ) {
+				$item_classes[] = 'is-context';
+			}
+			?>
+			<div class="<?php echo esc_attr( implode( ' ', $item_classes ) ); ?>" data-hd-tree-item="<?php echo esc_attr( (string) (int) $node['id'] ); ?>" role="treeitem" aria-level="<?php echo esc_attr( (string) (int) $node['depth'] ); ?>" <?php echo $has_children ? 'aria-expanded="true"' : ''; ?>>
+				<div class="hd-topic-tree__row">
+					<div>
+						<input type="checkbox" name="topic_ids[]" value="<?php echo esc_attr( (string) $node['id'] ); ?>">
+					</div>
+					<div class="hd-topic-tree__node">
+						<?php if ( $has_children ) : ?>
+							<button type="button" class="button-link hd-topic-tree__toggle" data-hd-tree-toggle="1" aria-expanded="true" aria-controls="<?php echo esc_attr( 'hd-topic-tree-group-' . (int) $node['id'] ); ?>">−</button>
+						<?php else : ?>
+							<span class="hd-topic-tree__toggle-placeholder" aria-hidden="true"></span>
+						<?php endif; ?>
+						<span class="hd-topic-tree__connector" aria-hidden="true"><?php echo esc_html( $this->buildTreeConnector( $ancestor_has_more, $is_last ) ); ?></span>
+						<div>
+							<strong>
+								<a href="<?php echo esc_url( $this->getListUrl( array( 'action' => 'edit', 'id' => (int) $node['id'] ) ) ); ?>">
+									<?php echo esc_html( (string) $node['name'] ); ?>
+								</a>
+							</strong>
+							<div class="hd-topic-tree__meta">
+								<span class="hd-topic-tree__badge <?php echo esc_attr( empty( $node['is_active'] ) ? 'is-inactive' : '' ); ?>"><?php echo esc_html( ! empty( $node['is_active'] ) ? __( 'Active', 'wp-helpdesk' ) : __( 'Inactive', 'wp-helpdesk' ) ); ?></span>
+								<span class="hd-topic-tree__badge"><?php echo esc_html( sprintf( __( 'Depth %d', 'wp-helpdesk' ), (int) $node['depth'] ) ); ?></span>
+								<span class="hd-topic-tree__badge"><?php echo esc_html( sprintf( _n( '%d child', '%d children', (int) $node['child_count'], 'wp-helpdesk' ), (int) $node['child_count'] ) ); ?></span>
+								<span class="hd-topic-tree__badge"><?php echo esc_html( sprintf( __( 'Order %d', 'wp-helpdesk' ), (int) $node['sort_order'] ) ); ?></span>
+							</div>
+						</div>
+					</div>
+					<div><?php echo esc_html( (string) $node['slug'] ); ?></div>
+					<div><?php echo esc_html( ! empty( $node['is_active'] ) ? __( 'Yes', 'wp-helpdesk' ) : __( 'No', 'wp-helpdesk' ) ); ?></div>
+					<div><?php echo esc_html( (string) $node['updated_at'] ); ?></div>
+					<div class="hd-topic-tree__actions"><?php $this->renderTopicRowActions( $node ); ?></div>
+				</div>
+				<?php if ( $has_children ) : ?>
+					<div class="hd-topic-tree__group" id="<?php echo esc_attr( 'hd-topic-tree-group-' . (int) $node['id'] ); ?>" data-hd-tree-group="1" role="group">
+						<?php
+						$child_ancestor_has_more   = $ancestor_has_more;
+						$child_ancestor_has_more[] = ! $is_last;
+						$this->renderTreeNodes( $node['children'], $child_ancestor_has_more );
+						?>
+					</div>
+				<?php endif; ?>
+			</div>
+			<?php
+		}
+	}
+
+	/**
+	 * Render row-level topic actions.
+	 *
+	 * @param array<string, mixed> $topic Topic row.
+	 * @return void
+	 */
+	protected function renderTopicRowActions( array $topic ): void {
+		?>
+		<a class="button button-small" href="<?php echo esc_url( $this->getListUrl( array( 'action' => 'edit', 'id' => (int) $topic['id'] ) ) ); ?>"><?php esc_html_e( 'Edit', 'wp-helpdesk' ); ?></a>
+		<a class="button button-small" href="<?php echo esc_url( $this->getListUrl( array( 'action' => 'new', 'parent_topic_id' => (int) $topic['id'] ) ) ); ?>"><?php esc_html_e( 'Add Child', 'wp-helpdesk' ); ?></a>
+		<form method="post">
+			<?php wp_nonce_field( 'hd_topic_action', 'hd_topic_nonce' ); ?>
+			<input type="hidden" name="hd_topic_action" value="<?php echo esc_attr( ! empty( $topic['is_active'] ) ? 'deactivate' : 'activate' ); ?>">
+			<input type="hidden" name="hd_topic_id" value="<?php echo esc_attr( (string) $topic['id'] ); ?>">
+			<button type="submit" class="button button-small"><?php echo esc_html( ! empty( $topic['is_active'] ) ? __( 'Deactivate', 'wp-helpdesk' ) : __( 'Activate', 'wp-helpdesk' ) ); ?></button>
+		</form>
+		<form method="post">
+			<?php wp_nonce_field( 'hd_topic_action', 'hd_topic_nonce' ); ?>
+			<input type="hidden" name="hd_topic_action" value="delete">
+			<input type="hidden" name="hd_topic_id" value="<?php echo esc_attr( (string) $topic['id'] ); ?>">
+			<button type="submit" class="button button-small" onclick="return confirm('<?php echo esc_js( __( 'Delete this topic?', 'wp-helpdesk' ) ); ?>');"><?php esc_html_e( 'Delete', 'wp-helpdesk' ); ?></button>
+		</form>
+		<?php
+	}
+
+	/**
+	 * Build the current admin hierarchy tree.
+	 *
+	 * @param array<int, array<string, mixed>> $topics Topics.
+	 * @param string                           $search Search query.
+	 * @return array<int, array<string, mixed>>
+	 */
+	protected function buildTopicTree( array $topics, string $search = '' ): array {
+		return $this->topic_service->buildTopicTree( $topics, $this->topic_transition_service->getAdminParentTopicIdsMap(), $search );
+	}
+
+	/**
+	 * Count nodes recursively.
+	 *
+	 * @param array<int, array<string, mixed>> $nodes Nodes.
+	 * @return int
+	 */
+	protected function countTreeNodes( array $nodes ): int {
+		$total = 0;
+
+		foreach ( $nodes as $node ) {
+			$total += 1 + $this->countTreeNodes( $node['children'] ?? array() );
+		}
+
+		return $total;
+	}
+
+	/**
+	 * Resolve the current admin list view mode.
+	 *
+	 * @return string
+	 */
+	protected function getCurrentViewMode(): string {
+		$requested_view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+		if ( in_array( $requested_view, array( 'tree', 'flat' ), true ) ) {
+			update_user_meta( get_current_user_id(), 'hd_topics_view_mode', $requested_view );
+			return $requested_view;
+		}
+
+		$stored_view = sanitize_key( (string) get_user_meta( get_current_user_id(), 'hd_topics_view_mode', true ) );
+
+		return 'flat' === $stored_view ? 'flat' : 'tree';
+	}
+
+	/**
+	 * Build monospace branch connector text for a tree row.
+	 *
+	 * @param array<int, bool> $ancestor_has_more Ancestor continuation flags.
+	 * @param bool             $is_last Whether the current node is the last among its siblings.
+	 * @return string
+	 */
+	protected function buildTreeConnector( array $ancestor_has_more, bool $is_last ): string {
+		$connector = '';
+
+		foreach ( $ancestor_has_more as $has_more ) {
+			$connector .= $has_more ? '│  ' : '   ';
+		}
+
+		return $connector . ( $is_last ? '└─ ' : '├─ ' );
 	}
 
 	/**
@@ -599,7 +909,8 @@ class TopicsPage {
 			'invalid-transition' => array( 'error', __( 'One or more selected follow-up topics are invalid.', 'wp-helpdesk' ) ),
 			'follow-up-missing-parent' => array( 'error', __( 'Follow-up topics must include at least one valid parent topic.', 'wp-helpdesk' ) ),
 			'invalid-parent-topic' => array( 'error', __( 'One or more selected parent topics are invalid.', 'wp-helpdesk' ) ),
-			'top-level-has-parent' => array( 'error', __( 'Top-level topics cannot have incoming parent transitions.', 'wp-helpdesk' ) ),
+			'circular-parent-topic' => array( 'error', __( 'Selected parent topics would create a circular hierarchy.', 'wp-helpdesk' ) ),
+			'top-level-has-parent' => array( 'error', __( 'Top-level topics cannot have selected parent topics.', 'wp-helpdesk' ) ),
 			'error'        => array( 'error', __( 'Unable to save the topic.', 'wp-helpdesk' ) ),
 		);
 
