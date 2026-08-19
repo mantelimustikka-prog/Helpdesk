@@ -27,6 +27,25 @@ final class PublicTicketControllerTest extends TestCase {
 				);
 			}
 
+			public function testListTopicsReturnsOnlyTopLevelTopics(): void {
+				$topic_service = new class extends TopicService {
+					public function listTopLevelTopics(): array {
+						return array(
+							array( 'id' => 1, 'title' => 'Billing', 'description' => '', 'slug' => 'billing', 'is_final' => 0 ),
+							array( 'id' => 3, 'title' => 'Account', 'description' => 'Login', 'slug' => 'account', 'is_final' => 1 ),
+						);
+					}
+				};
+
+				$controller = new PublicTicketController( $topic_service, new TopicTransitionService(), new KnowledgeBaseService() );
+				$response   = $controller->listTopics( new WP_REST_Request() );
+
+				self::assertSame( 200, $response->status );
+				self::assertCount( 2, $response->data );
+				self::assertSame( 1, $response->data[0]['id'] );
+				self::assertSame( 'Billing', $response->data[0]['title'] );
+			}
+
 			public function getTopicsByIds( array $ids ): array {
 				$items = array();
 				foreach ( $ids as $id ) {
@@ -223,5 +242,49 @@ final class PublicTicketControllerTest extends TestCase {
 		self::assertSame( 409, $response->status );
 		self::assertFalse( $response->data['ok'] );
 		self::assertTrue( $response->data['stale'] );
+	}
+
+	public function testCreateTicketRejectsUnrelatedTopicPath(): void {
+		$topic_service = new class extends TopicService {
+			public function isTopLevelTopic( int $id ): bool {
+				return 1 === $id;
+			}
+
+			public function getTopic( int $id ): ?array {
+				return array( 'id' => $id, 'is_active' => 1 );
+			}
+		};
+
+		$transition_service = new class extends TopicTransitionService {
+			public function listValidFrom( int $from_topic_id, bool $active_only = true ): array {
+				if ( 1 === $from_topic_id ) {
+					return array( array( 'to_topic_id' => 2 ) );
+				}
+
+				return array();
+			}
+		};
+
+		$controller = new class( $topic_service, $transition_service, new KnowledgeBaseService() ) extends PublicTicketController {
+			public function createForTest( array $data ) {
+				return $this->createTicket( $data );
+			}
+		};
+
+		$response = $controller->createForTest(
+			array(
+				'topic_id'        => 3,
+				'topic_path'      => array( 1, 3 ),
+				'requester_name'  => 'Test User',
+				'requester_email' => 'test@example.test',
+				'requester_phone' => '123',
+				'subject'         => 'Need help',
+				'message'         => 'Details',
+				'user_id'         => null,
+			)
+		);
+
+		self::assertInstanceOf( WP_Error::class, $response );
+		self::assertSame( 'hd_invalid_topic_path', $response->get_error_code() );
 	}
 }

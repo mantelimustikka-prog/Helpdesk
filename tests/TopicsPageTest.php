@@ -39,7 +39,29 @@ final class TopicsPageTest extends TestCase {
 		self::assertStringContainsString( 'Flow behavior', $output );
 		self::assertStringContainsString( 'Final step', $output );
 		self::assertStringContainsString( 'Follow-up topics', $output );
+		self::assertStringContainsString( 'Parent topics', $output );
 		self::assertStringContainsString( 'multiple', $output );
+	}
+
+	public function testHandlePostRejectsFollowUpWithoutParentTopic(): void {
+		$page = new TopicsPageTestDouble(
+			new class extends TopicService {},
+			new class extends TopicTransitionService {}
+		);
+
+		$_GET['page'] = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'create',
+			'name'            => 'Billing follow-up',
+			'node_type'       => 'final',
+			'hierarchy_type'  => 'follow_up',
+		);
+
+		$page->handlePost();
+
+		self::assertStringContainsString( 'msg=follow-up-missing-parent', (string) $page->redirect_target );
 	}
 
 	public function testHandlePostRejectsBranchWithoutNextTopic(): void {
@@ -74,6 +96,10 @@ final class TopicsPageTest extends TestCase {
 
 		$transition_service = new class extends TopicTransitionService {
 			public array $synced = array();
+
+			public function syncAdminParentTopics( int $to_topic_id, array $parent_topic_ids ): bool {
+				return true;
+			}
 
 			public function syncAdminNextTopics( int $from_topic_id, array $next_topic_ids ): bool {
 				$this->synced = $next_topic_ids;

@@ -323,6 +323,43 @@ class TopicTransitionService {
 	}
 
 	/**
+	 * Validate hierarchy placement selected in admin.
+	 *
+	 * @param int               $topic_id Topic id (0 on create).
+	 * @param string            $hierarchy_type Selected hierarchy type.
+	 * @param array<int, mixed> $parent_topic_ids Selected parent topic ids.
+	 * @return string|null
+	 */
+	public function validateHierarchyConfiguration( int $topic_id, string $hierarchy_type, array $parent_topic_ids ): ?string {
+		$hierarchy_type = 'follow_up' === sanitize_key( $hierarchy_type ) ? 'follow_up' : 'top_level';
+
+		foreach ( $parent_topic_ids as $parent_topic_id ) {
+			if ( $topic_id > 0 && (int) $parent_topic_id === $topic_id ) {
+				return 'invalid-parent-topic';
+			}
+		}
+
+		$parent_topic_ids = $this->normalizeNextTopicIds( $parent_topic_ids, $topic_id );
+
+		if ( 'follow_up' === $hierarchy_type && empty( $parent_topic_ids ) ) {
+			return 'follow-up-missing-parent';
+		}
+
+		if ( 'top_level' === $hierarchy_type && $topic_id > 0 && count( $this->listValidParentsForTopic( $topic_id, true ) ) > 0 ) {
+			return 'top-level-has-parent';
+		}
+
+		foreach ( $parent_topic_ids as $parent_topic_id ) {
+			$parent = $this->topic_repository->find( (int) $parent_topic_id, $this->network_id );
+			if ( ! $parent || ( isset( $parent['is_active'] ) && empty( $parent['is_active'] ) ) ) {
+				return 'invalid-parent-topic';
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * Sync admin-managed follow-up transitions for a topic.
 	 *
 	 * @param int               $from_topic_id Source topic id.
@@ -410,6 +447,175 @@ class TopicTransitionService {
 
 		foreach ( $admin_transitions as $to_topic_id => $transition ) {
 			if ( in_array( $to_topic_id, $next_topic_ids, true ) ) {
+				continue;
+			}
+
+			$transition_id = (int) ( $transition['id'] ?? 0 );
+			if ( $transition_id > 0 && ! $this->repository->delete( $transition_id, $this->network_id ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Return unique valid parent-topic ids for admin editing.
+	 *
+	 * @param int $topic_id Target topic id.
+	 * @return array<int, int>
+	 */
+	public function getSelectableParentTopicIds( int $topic_id ): array {
+		$ids = array();
+		foreach ( $this->repository->listTo( $topic_id, $this->network_id, false ) as $transition ) {
+			if ( ! $this->isAdminManagedTransition( $transition ) ) {
+				continue;
+			}
+
+			$from_topic_id = (int) ( $transition['from_topic_id'] ?? 0 );
+			if ( $from_topic_id > 0 ) {
+				$ids[ $from_topic_id ] = $from_topic_id;
+			}
+		}
+
+		return array_values( $ids );
+	}
+
+	/**
+	 * Return incoming valid parent transitions for a topic.
+	 *
+	 * @param int  $topic_id Target topic id.
+	 * @param bool $active_only Whether to return only active transitions.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function listValidParentsForTopic( int $topic_id, bool $active_only = true ): array {
+		$topic = $this->topic_repository->find( $topic_id, $this->network_id );
+		if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
+			return array();
+		}
+
+		$transitions = $this->repository->listTo( $topic_id, $this->network_id, $active_only );
+		$from_ids    = array_values(
+			array_filter(
+				array_map(
+					static fn( array $transition ): int => (int) ( $transition['from_topic_id'] ?? 0 ),
+					$transitions
+				),
+				static fn( int $id ): bool => $id > 0 && $id !== $topic_id
+			)
+		);
+		$sources     = array();
+		foreach ( $this->topic_repository->findMany( $from_ids, $this->network_id ) as $source ) {
+			$source_id = (int) ( $source['id'] ?? 0 );
+			if ( $source_id > 0 ) {
+				$sources[ $source_id ] = $source;
+			}
+		}
+
+		$valid = array();
+		foreach ( $transitions as $transition ) {
+			$from_topic_id = (int) ( $transition['from_topic_id'] ?? 0 );
+			if ( $from_topic_id <= 0 || $from_topic_id === $topic_id ) {
+				continue;
+			}
+
+			$source = $sources[ $from_topic_id ] ?? null;
+			if ( ! $source || ( isset( $source['is_active'] ) && empty( $source['is_active'] ) ) ) {
+				continue;
+			}
+
+			$valid[] = $transition;
+		}
+
+		return $valid;
+	}
+
+	/**
+	 * Sync admin-managed parent transitions for a topic.
+	 *
+	 * @param int               $to_topic_id Target topic id.
+	 * @param array<int, mixed> $parent_topic_ids Selected parent topic ids.
+	 * @return bool
+	 */
+	public function syncAdminParentTopics( int $to_topic_id, array $parent_topic_ids ): bool {
+		$target = $this->topic_repository->find( $to_topic_id, $this->network_id );
+		if ( ! $target ) {
+			return false;
+		}
+
+		$parent_topic_ids = $this->normalizeNextTopicIds( $parent_topic_ids, $to_topic_id );
+		$parent_topics    = array();
+		foreach ( $this->topic_repository->findMany( $parent_topic_ids, $this->network_id ) as $topic ) {
+			$topic_id = (int) ( $topic['id'] ?? 0 );
+			if ( $topic_id > 0 ) {
+				$parent_topics[ $topic_id ] = $topic;
+			}
+		}
+
+		foreach ( $parent_topic_ids as $parent_topic_id ) {
+			$topic = $parent_topics[ $parent_topic_id ] ?? null;
+			if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
+				return false;
+			}
+		}
+
+		$existing_transitions = $this->repository->listTo( $to_topic_id, $this->network_id, false );
+		$admin_transitions    = array();
+		$custom_sources       = array();
+
+		foreach ( $existing_transitions as $transition ) {
+			$from_topic_id = (int) ( $transition['from_topic_id'] ?? 0 );
+			if ( $from_topic_id <= 0 ) {
+				continue;
+			}
+
+			if ( $this->isAdminManagedTransition( $transition ) ) {
+				$admin_transitions[ $from_topic_id ] = $transition;
+				continue;
+			}
+
+			if ( ! empty( $transition['is_active'] ) ) {
+				$custom_sources[ $from_topic_id ] = true;
+			}
+		}
+
+		$label = isset( $target['title'] ) ? (string) $target['title'] : 'Topic #' . $to_topic_id;
+		foreach ( $parent_topic_ids as $parent_topic_id ) {
+			if ( isset( $admin_transitions[ $parent_topic_id ] ) ) {
+				$transition    = $admin_transitions[ $parent_topic_id ];
+				$transition_id = (int) ( $transition['id'] ?? 0 );
+				if ( $transition_id > 0 && ( empty( $transition['is_active'] ) || (string) ( $transition['label'] ?? '' ) !== $label ) ) {
+					$this->updateTransition(
+						$transition_id,
+						array(
+							'label'     => $label,
+							'is_active' => 1,
+						)
+					);
+				}
+				continue;
+			}
+
+			if ( isset( $custom_sources[ $parent_topic_id ] ) ) {
+				continue;
+			}
+
+			if ( $this->createTransition(
+				array(
+					'from_topic_id'   => $parent_topic_id,
+					'to_topic_id'     => $to_topic_id,
+					'label'           => $label,
+					'condition_type'  => 'always',
+					'condition_value' => self::ADMIN_TRANSITION_MARKER,
+					'is_active'       => 1,
+				)
+			) <= 0 ) {
+				return false;
+			}
+		}
+
+		foreach ( $admin_transitions as $from_topic_id => $transition ) {
+			if ( in_array( $from_topic_id, $parent_topic_ids, true ) ) {
 				continue;
 			}
 

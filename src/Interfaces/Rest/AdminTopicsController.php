@@ -66,8 +66,14 @@ class AdminTopicsController {
 	public function createTopic( WP_REST_Request $request ): WP_REST_Response {
 		$payload        = $this->extractPayload( $request );
 		$next_topic_ids = $this->extractNextTopicIds( $request );
+		$parent_topic_ids = $this->extractParentTopicIds( $request );
 		$error_code     = $this->topic_transition_service->validateBranchConfiguration( 0, ! empty( $payload['is_final'] ), $next_topic_ids );
 
+		if ( null !== $error_code ) {
+			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
+		}
+
+		$error_code = $this->topic_transition_service->validateHierarchyConfiguration( 0, (string) ( $payload['hierarchy_type'] ?? 'top_level' ), $parent_topic_ids );
 		if ( null !== $error_code ) {
 			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
 		}
@@ -75,6 +81,10 @@ class AdminTopicsController {
 		$topic_id = $this->topic_service->createTopic( $payload );
 		if ( $topic_id <= 0 ) {
 			return new WP_REST_Response( array( 'message' => 'Failed to create topic.' ), 400 );
+		}
+
+		if ( ! $this->topic_transition_service->syncAdminParentTopics( $topic_id, 'follow_up' === (string) ( $payload['hierarchy_type'] ?? 'top_level' ) ? $parent_topic_ids : array() ) ) {
+			return new WP_REST_Response( array( 'message' => 'Failed to save parent topics.' ), 400 );
 		}
 
 		if ( ! $this->topic_transition_service->syncAdminNextTopics( $topic_id, ! empty( $payload['is_final'] ) ? array() : $next_topic_ids ) ) {
@@ -111,8 +121,14 @@ class AdminTopicsController {
 		$topic_id       = (int) $request['id'];
 		$payload        = $this->extractPayload( $request );
 		$next_topic_ids = $this->extractNextTopicIds( $request );
+		$parent_topic_ids = $this->extractParentTopicIds( $request );
 		$error_code     = $this->topic_transition_service->validateBranchConfiguration( $topic_id, ! empty( $payload['is_final'] ), $next_topic_ids );
 
+		if ( null !== $error_code ) {
+			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
+		}
+
+		$error_code = $this->topic_transition_service->validateHierarchyConfiguration( $topic_id, (string) ( $payload['hierarchy_type'] ?? 'top_level' ), $parent_topic_ids );
 		if ( null !== $error_code ) {
 			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
 		}
@@ -120,6 +136,10 @@ class AdminTopicsController {
 		$updated = $this->topic_service->updateTopic( $topic_id, $payload );
 		if ( ! $updated ) {
 			return new WP_REST_Response( array( 'message' => 'Unable to update topic.' ), 400 );
+		}
+
+		if ( ! $this->topic_transition_service->syncAdminParentTopics( $topic_id, 'follow_up' === (string) ( $payload['hierarchy_type'] ?? 'top_level' ) ? $parent_topic_ids : array() ) ) {
+			return new WP_REST_Response( array( 'message' => 'Failed to save parent topics.' ), 400 );
 		}
 
 		if ( ! $this->topic_transition_service->syncAdminNextTopics( $topic_id, ! empty( $payload['is_final'] ) ? array() : $next_topic_ids ) ) {
@@ -212,7 +232,7 @@ class AdminTopicsController {
 	protected function extractPayload( WP_REST_Request $request ): array {
 		$payload = array();
 
-		foreach ( array( 'name', 'slug', 'description', 'sort_order', 'is_active', 'is_final', 'node_type' ) as $field ) {
+		foreach ( array( 'name', 'slug', 'description', 'sort_order', 'is_active', 'is_final', 'node_type', 'hierarchy_type' ) as $field ) {
 			if ( null !== $request->get_param( $field ) ) {
 				$payload[ $field ] = $request->get_param( $field );
 			}
@@ -238,6 +258,22 @@ class AdminTopicsController {
 	}
 
 	/**
+	 * Extract selected parent topic ids.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return array<int, int>
+	 */
+	protected function extractParentTopicIds( WP_REST_Request $request ): array {
+		$parent_topic_ids = $request->get_param( 'parent_topic_ids' );
+
+		if ( ! is_array( $parent_topic_ids ) ) {
+			return array();
+		}
+
+		return array_values( array_unique( array_filter( array_map( 'intval', $parent_topic_ids ) ) ) );
+	}
+
+	/**
 	 * Build a normalized topic response payload.
 	 *
 	 * @param int $topic_id Topic id.
@@ -250,6 +286,8 @@ class AdminTopicsController {
 		}
 
 		$topic['next_topic_ids'] = $this->topic_transition_service->getSelectableNextTopicIds( $topic_id );
+		$topic['parent_topic_ids'] = $this->topic_transition_service->getSelectableParentTopicIds( $topic_id );
+		$topic['hierarchy_type'] = ! empty( $topic['parent_topic_ids'] ) ? 'follow_up' : 'top_level';
 
 		return $topic;
 	}
@@ -264,6 +302,9 @@ class AdminTopicsController {
 		$messages = array(
 			'branch-missing-transition' => 'Branch topics must include at least one valid follow-up topic.',
 			'invalid-transition'        => 'One or more selected follow-up topics are invalid.',
+			'follow-up-missing-parent'  => 'Follow-up topics must include at least one valid parent topic.',
+			'invalid-parent-topic'      => 'One or more selected parent topics are invalid.',
+			'top-level-has-parent'      => 'Top-level topics cannot have incoming parent transitions.',
 		);
 
 		return $messages[ $error_code ] ?? 'Unable to save topic graph.';

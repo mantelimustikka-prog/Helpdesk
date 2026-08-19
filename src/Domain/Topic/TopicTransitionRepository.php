@@ -42,6 +42,37 @@ class TopicTransitionRepository {
 	}
 
 	/**
+	 * List transitions to a given topic.
+	 *
+	 * @param int $to_topic_id   Target topic id.
+	 * @param int $network_id    Network id.
+	 * @param bool $active_only  Whether to return only active transitions.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function listTo( int $to_topic_id, int $network_id, bool $active_only = true ): array {
+		global $wpdb;
+
+		$table  = Schema::table( Constants::TABLE_TOPIC_TRANSITIONS );
+		$where  = 'WHERE to_topic_id = %d AND network_id = %d';
+		$params = [ $to_topic_id, $network_id ];
+
+		if ( $active_only ) {
+			$where .= ' AND is_active = 1';
+		}
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} {$where} ORDER BY sort_order ASC, id ASC",
+				...$params
+			),
+			ARRAY_A
+		);
+
+		return $rows ?: [];
+	}
+
+	/**
 	 * List all transitions for a network.
 	 *
 	 * @param int   $network_id  Network id.

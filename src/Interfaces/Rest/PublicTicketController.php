@@ -153,23 +153,18 @@ class PublicTicketController {
 	 * @return WP_REST_Response
 	 */
 	public function listTopics( WP_REST_Request $request ): WP_REST_Response {
-		global $wpdb;
-
-		$table      = Schema::table( Constants::TABLE_TOPICS );
-		$network_id = Helpers::getNetworkId();
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT id, slug, title, description, is_final FROM {$table}
-				 WHERE is_active = 1 AND network_id = %d
-				 ORDER BY sort_order ASC, title ASC",
-				$network_id
+		$topics = array_map(
+			static fn( array $topic ): array => array(
+				'id'          => (int) ( $topic['id'] ?? 0 ),
+				'slug'        => (string) ( $topic['slug'] ?? '' ),
+				'title'       => (string) ( $topic['name'] ?? $topic['title'] ?? '' ),
+				'description' => (string) ( $topic['description'] ?? '' ),
+				'is_final'    => (int) ! empty( $topic['is_final'] ),
 			),
-			ARRAY_A
+			$this->topic_service->listTopLevelTopics()
 		);
 
-		return new WP_REST_Response( $rows ?: array(), 200 );
+		return new WP_REST_Response( $topics, 200 );
 	}
 
 	/**
@@ -376,6 +371,14 @@ class PublicTicketController {
 			return new WP_Error( 'hd_missing_fields', __( 'Please fill in all required fields.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
 
+		$topic_path = $this->normaliseTopicPath( $data['topic_path'] ?? array(), (int) ( $data['topic_id'] ?? 0 ) );
+		if ( ! empty( $data['topic_id'] ) ) {
+			$topic_path_validation = $this->validateTopicPath( $topic_path, (int) $data['topic_id'] );
+			if ( is_wp_error( $topic_path_validation ) ) {
+				return $topic_path_validation;
+			}
+		}
+
 		$ticket_no  = Helpers::generateTicketNo();
 		$network_id = Helpers::getNetworkId();
 		$site_id    = Helpers::getCurrentSiteId();
@@ -393,7 +396,7 @@ class PublicTicketController {
 				'requester_phone' => $data['requester_phone'],
 				'user_id'         => $data['user_id'],
 				'subject'         => $data['subject'],
-				'topic_path_json' => wp_json_encode( $data['topic_path'] ?? array( (int) $data['topic_id'] ) ),
+				'topic_path_json' => wp_json_encode( $topic_path ),
 				'status'          => 'new',
 				'created_at'      => current_time( 'mysql' ),
 				'updated_at'      => current_time( 'mysql' ),
@@ -636,6 +639,51 @@ class PublicTicketController {
 		}
 
 		return $path;
+	}
+
+	/**
+	 * Validate that a topic path follows runtime hierarchy constraints.
+	 *
+	 * @param array<int, int> $topic_path Normalized topic path.
+	 * @param int             $topic_id Final topic id.
+	 * @return true|WP_Error
+	 */
+	protected function validateTopicPath( array $topic_path, int $topic_id ) {
+		if ( $topic_id <= 0 ) {
+			return true;
+		}
+
+		if ( empty( $topic_path ) || (int) end( $topic_path ) !== $topic_id ) {
+			return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		}
+
+		$first_topic_id = (int) $topic_path[0];
+		if ( ! $this->topic_service->isTopLevelTopic( $first_topic_id ) ) {
+			return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		}
+
+		foreach ( $topic_path as $index => $path_topic_id ) {
+			$topic = $this->topic_service->getTopic( (int) $path_topic_id );
+			if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
+				return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+			}
+
+			if ( 0 === $index ) {
+				continue;
+			}
+
+			$from_topic_id = (int) $topic_path[ $index - 1 ];
+			$allowed_next_ids = array_map(
+				static fn( array $transition ): int => (int) ( $transition['to_topic_id'] ?? 0 ),
+				$this->topic_transition_service->listValidFrom( $from_topic_id, true )
+			);
+
+			if ( ! in_array( (int) $path_topic_id, $allowed_next_ids, true ) ) {
+				return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+			}
+		}
+
+		return true;
 	}
 
 	/**

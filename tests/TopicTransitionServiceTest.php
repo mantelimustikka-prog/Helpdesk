@@ -247,6 +247,59 @@ final class TopicTransitionServiceTest extends TestCase {
 		self::assertFalse( $service->branchTopicHasValidTransitions( 1 ) );
 	}
 
+	public function testValidateHierarchyConfigurationRequiresParentForFollowUpTopics(): void {
+		$topic_repo = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return array( 'id' => $id, 'is_active' => 1 );
+			}
+		};
+
+		$transition_repo = new class extends TopicTransitionRepository {
+			public function listTo( int $to_topic_id, int $network_id, bool $active_only = true ): array {
+				return array();
+			}
+		};
+
+		$service = $this->makeService( $topic_repo, $transition_repo );
+
+		self::assertSame( 'follow-up-missing-parent', $service->validateHierarchyConfiguration( 5, 'follow_up', array() ) );
+		self::assertSame( 'invalid-parent-topic', $service->validateHierarchyConfiguration( 5, 'follow_up', array( 5 ) ) );
+	}
+
+	public function testValidateHierarchyConfigurationRejectsTopLevelWhenIncomingParentExists(): void {
+		$topic_repo = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return array( 'id' => $id, 'is_active' => 1 );
+			}
+
+			public function findMany( array $ids, int $network_id ): array {
+				return array_map(
+					static fn( int $id ): array => array( 'id' => $id, 'is_active' => 1 ),
+					$ids
+				);
+			}
+		};
+
+		$transition_repo = new class extends TopicTransitionRepository {
+			public function listTo( int $to_topic_id, int $network_id, bool $active_only = true ): array {
+				return array(
+					array(
+						'id'              => 9,
+						'from_topic_id'   => 2,
+						'to_topic_id'     => $to_topic_id,
+						'condition_type'  => 'always',
+						'condition_value' => \WPHelpdesk\Domain\Topic\TopicTransitionService::ADMIN_TRANSITION_MARKER,
+						'is_active'       => 1,
+					),
+				);
+			}
+		};
+
+		$service = $this->makeService( $topic_repo, $transition_repo );
+
+		self::assertSame( 'top-level-has-parent', $service->validateHierarchyConfiguration( 4, 'top_level', array() ) );
+	}
+
 	public function testFinalTopicAlwaysPassesValidation(): void {
 		$topic_repo = new class extends TopicRepository {
 			public function find( int $id, int $network_id ): ?array {
