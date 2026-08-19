@@ -17,6 +17,7 @@ use WPHelpdesk\Domain\SLA\SlaService;
 use WPHelpdesk\Infrastructure\Logger;
 use WPHelpdesk\Interfaces\Admin\NetworkMenu;
 use WPHelpdesk\Interfaces\Frontend\FrontendRouter;
+use WPHelpdesk\Interfaces\Frontend\WooCommerceAccountHelpdesk;
 use WPHelpdesk\Interfaces\Rest\Routes;
 
 class Plugin {
@@ -27,6 +28,7 @@ class Plugin {
 	protected AttachmentService $attachment_service;
 	protected Logger $logger;
 	protected FrontendRouter $frontend_router;
+	protected WooCommerceAccountHelpdesk $woocommerce_account_helpdesk;
 	protected SlaService $sla_service;
 	protected RoutingService $routing_service;
 	protected KnowledgeBaseService $kb_service;
@@ -41,6 +43,7 @@ class Plugin {
 		?AttachmentService $attachment_service = null,
 		?Logger $logger = null,
 		?FrontendRouter $frontend_router = null,
+		?WooCommerceAccountHelpdesk $woocommerce_account_helpdesk = null,
 		?SlaService $sla_service = null,
 		?RoutingService $routing_service = null,
 		?KnowledgeBaseService $kb_service = null,
@@ -54,6 +57,7 @@ class Plugin {
 		$this->attachment_service   = $attachment_service ?: new AttachmentService();
 		$this->logger               = $logger ?: new Logger();
 		$this->frontend_router      = $frontend_router ?: new FrontendRouter();
+		$this->woocommerce_account_helpdesk = $woocommerce_account_helpdesk ?: new WooCommerceAccountHelpdesk();
 		$this->sla_service          = $sla_service ?: new SlaService();
 		$this->routing_service      = $routing_service ?: new RoutingService();
 		$this->kb_service           = $kb_service ?: new KnowledgeBaseService();
@@ -73,6 +77,7 @@ class Plugin {
 		add_action( 'rest_api_init', array( $this->routes, 'register_rest_routes' ) );
 
 		$this->frontend_router->register();
+		$this->woocommerce_account_helpdesk->register();
 
 		// Ticket lifecycle hooks (notifications + push).
 		add_action( 'hd_ticket_replied', array( $this, 'handleTicketReplied' ), 10, 2 );

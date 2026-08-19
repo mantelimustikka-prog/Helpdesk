@@ -115,6 +115,45 @@ class TicketRepository {
 	}
 
 	/**
+	 * List tickets owned by a specific logged-in member.
+	 *
+	 * Falls back to requester_email for older member tickets that pre-date the
+	 * user_id linkage.
+	 *
+	 * @param int    $network_id Network id.
+	 * @param int    $user_id    Current user id.
+	 * @param string $email      Current user email.
+	 * @param array  $args       Optional: page, per_page.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function listForUser( int $network_id, int $user_id, string $email, array $args = array() ): array {
+		global $wpdb;
+
+		$table    = Schema::table( Constants::TABLE_TICKETS );
+		$per_page = isset( $args['per_page'] ) ? max( 1, (int) $args['per_page'] ) : 20;
+		$page     = isset( $args['page'] ) ? max( 1, (int) $args['page'] ) : 1;
+		$offset   = ( $page - 1 ) * $per_page;
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table}
+				 WHERE network_id = %d
+				   AND (user_id = %d OR ((user_id IS NULL OR user_id = 0) AND requester_email = %s))
+				 ORDER BY updated_at DESC
+				 LIMIT %d OFFSET %d",
+				$network_id,
+				$user_id,
+				sanitize_email( $email ),
+				$per_page,
+				$offset
+			),
+			ARRAY_A
+		);
+
+		return $rows ?: array();
+	}
+
+	/**
 	 * Insert a new ticket row.
 	 *
 	 * @param array<string, mixed> $data Column data.
