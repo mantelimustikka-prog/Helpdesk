@@ -76,7 +76,9 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wc_page_permalinks'] = array(
 			'myaccount' => 'https://example.test/my-account/',
 		);
-		// Simulate an initialised WP rewrite object so permalink calls are safe.
+		// Simulate an initialised WP rewrite object so getAccountPageUrl()'s null
+		// guard passes in normal test scenarios. The test doubles for wc_get_page_permalink
+		// never call methods on this object, so a plain stdClass sentinel is safe here.
 		$GLOBALS['wp_rewrite'] = new stdClass();
 		$_GET = array();
 		$_POST = array();
