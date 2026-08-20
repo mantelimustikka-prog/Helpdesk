@@ -418,6 +418,160 @@ final class TopicServiceTest extends TestCase {
 	}
 
 
+	// -------------------------------------------------------------------------
+	// Create-path: followup without parent
+	// -------------------------------------------------------------------------
+
+	public function testCreateFollowupTopicWithoutParentReturnsZero(): void {
+		$service = new TopicService();
+		$this->injectRepository( $service, new TopicRepository() );
+
+		$result = $service->createTopic(
+			array(
+				'name'      => 'Orphan',
+				'type'      => 'followup',
+				'parent_id' => null,
+			)
+		);
+
+		self::assertSame( 0, $result );
+	}
+
+	public function testCreateFollowupTopicWithEmptyStringParentReturnsZero(): void {
+		$service = new TopicService();
+		$this->injectRepository( $service, new TopicRepository() );
+
+		$result = $service->createTopic(
+			array(
+				'name'      => 'Orphan',
+				'type'      => 'followup',
+				'parent_id' => '',
+			)
+		);
+
+		self::assertSame( 0, $result );
+	}
+
+	public function testCreateFollowupTopicWithZeroParentReturnsZero(): void {
+		$service = new TopicService();
+		$this->injectRepository( $service, new TopicRepository() );
+
+		$result = $service->createTopic(
+			array(
+				'name'      => 'Orphan',
+				'type'      => 'followup',
+				'parent_id' => 0,
+			)
+		);
+
+		self::assertSame( 0, $result );
+	}
+
+	// -------------------------------------------------------------------------
+	// Update-path: root already root does not persist a parent_id
+	// -------------------------------------------------------------------------
+
+	public function testUpdateTopicRootAlreadyRootDoesNotPersistParent(): void {
+		$repository = new class extends TopicRepository {
+			public array $updated = array();
+
+			public function find( int $id, int $network_id ): ?array {
+				return array(
+					'id'        => $id,
+					'title'     => 'Root Topic',
+					'slug'      => 'root-topic',
+					'type'      => 'root',
+					'parent_id' => null,
+				);
+			}
+
+			public function update( int $id, array $data, int $network_id ): bool {
+				$this->updated = $data;
+				return true;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		// Re-save only changing the name; no parent_id submitted.
+		self::assertTrue( $service->updateTopic( 3, array( 'name' => 'Root Topic', 'type' => 'root' ) ) );
+		self::assertArrayHasKey( 'parent_id', $repository->updated );
+		self::assertNull( $repository->updated['parent_id'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// Update-path: followup with valid parent persists it
+	// -------------------------------------------------------------------------
+
+	public function testUpdateFollowupTopicWithValidParentPersistsParent(): void {
+		$repository = new class extends TopicRepository {
+			public array $updated = array();
+
+			public function find( int $id, int $network_id ): ?array {
+				$map = array(
+					4  => array( 'id' => 4, 'title' => 'Follow-up', 'slug' => 'follow-up', 'type' => 'followup', 'parent_id' => 1 ),
+					99 => array( 'id' => 99, 'title' => 'New Parent', 'slug' => 'new-parent', 'parent_id' => null ),
+				);
+				return $map[ $id ] ?? null;
+			}
+
+			public function update( int $id, array $data, int $network_id ): bool {
+				$this->updated = $data;
+				return true;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		self::assertTrue( $service->updateTopic( 4, array( 'type' => 'followup', 'parent_id' => 99 ) ) );
+		self::assertSame( 99, $repository->updated['parent_id'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// Update-path: followup with missing parent returns false
+	// -------------------------------------------------------------------------
+
+	public function testUpdateFollowupTopicWithMissingParentReturnsFalse(): void {
+		$repository = new class extends TopicRepository {
+			public function find( int $id, int $network_id ): ?array {
+				return array(
+					'id'        => $id,
+					'title'     => 'Follow-up',
+					'slug'      => 'follow-up',
+					'type'      => 'followup',
+					'parent_id' => 1,
+				);
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		self::assertFalse( $service->updateTopic( 4, array( 'type' => 'followup', 'parent_id' => null ) ) );
+	}
+
+	// -------------------------------------------------------------------------
+	// validateTypeConstraints: additional coverage
+	// -------------------------------------------------------------------------
+
+	public function testValidateTypeConstraintsFollowupZeroParentIsInvalid(): void {
+		$service = new TopicService();
+		$this->injectRepository( $service, new TopicRepository() );
+
+		$error_code = $service->validateTypeConstraints( 'followup', 0, 0 );
+		self::assertSame( 'followup-missing-parent', $error_code );
+	}
+
+	public function testValidateTypeConstraintsInvalidTypeReturnsCode(): void {
+		$service = new TopicService();
+		$this->injectRepository( $service, new TopicRepository() );
+
+		$error_code = $service->validateTypeConstraints( 'other', null, 0 );
+		self::assertSame( 'invalid-topic-type', $error_code );
+	}
+
 	private function injectRepository( TopicService $service, TopicRepository $repository ): void {
 		$repository_property = new ReflectionProperty( TopicService::class, 'repository' );
 		$repository_property->setAccessible( true );

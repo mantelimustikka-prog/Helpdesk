@@ -367,13 +367,10 @@ class TopicService {
 				return false;
 			}
 
-			if ( array_key_exists( 'type', $data ) ) {
-				$data['type'] = $normalized_hierarchy['type'];
-			}
-
-			if ( array_key_exists( 'parent_id', $data ) || ( array_key_exists( 'type', $data ) && 'root' === $normalized_hierarchy['type'] ) ) {
-				$data['parent_id'] = $normalized_hierarchy['parent_id'];
-			}
+			// Always propagate both normalized fields so that switching to root
+			// clears parent_id even when the caller did not explicitly include it.
+			$data['type']      = $normalized_hierarchy['type'];
+			$data['parent_id'] = $normalized_hierarchy['parent_id'];
 		}
 
 		$update = array(
