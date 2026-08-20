@@ -360,6 +360,62 @@ final class TopicsPageTest extends TestCase {
 		self::assertNull( $topic_service->updated_payload['parent_id'] );
 		self::assertStringContainsString( 'msg=updated', (string) $page->redirect_target );
 	}
+
+	public function testHandlePostUpdatingFollowupTopicPersistsParent(): void {
+		$topic_service = new class extends TopicService {
+			public array $updated_payload = array();
+
+			public function validateTypeConstraints( string $type, ?int $parent_id, int $topic_id = 0 ): ?string {
+				return null;
+			}
+
+			public function updateTopic( int $id, array $data ): bool {
+				$this->updated_payload = $data;
+				return true;
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		$_GET['page'] = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'update',
+			'hd_topic_id'     => 5,
+			'name'            => 'Invoices',
+			'topic_type'      => 'FOLLOWUP',
+			'parent_id'       => '3',
+		);
+
+		$page->handlePost();
+
+		self::assertSame( 'followup', $topic_service->updated_payload['type'] );
+		self::assertSame( 3, $topic_service->updated_payload['parent_id'] );
+		self::assertStringContainsString( 'msg=updated', (string) $page->redirect_target );
+	}
+
+	public function testHandlePostUpdatingFollowupTopicWithoutParentRedirectsWithError(): void {
+		$page = new TopicsPageTestDouble(
+			new class extends TopicService {},
+			new class extends TopicTransitionService {}
+		);
+
+		$_GET['page'] = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'update',
+			'hd_topic_id'     => 6,
+			'name'            => 'Orphan Follow-up',
+			'topic_type'      => 'FOLLOWUP',
+			'parent_id'       => '',
+		);
+
+		$page->handlePost();
+
+		self::assertStringContainsString( 'msg=followup-missing-parent', (string) $page->redirect_target );
+	}
 }
 
 final class TopicsPageTestDouble extends TopicsPage {
