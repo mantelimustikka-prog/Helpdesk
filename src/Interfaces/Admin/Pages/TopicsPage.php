@@ -672,11 +672,13 @@ class TopicsPage {
 	 * @return void
 	 */
 	protected function handleCreate(): void {
-		$payload   = $this->getTopicPayloadFromPost();
-		$type      = (string) ( $payload['type'] ?? 'root' );
-		$parent_id = isset( $payload['parent_id'] ) && (int) $payload['parent_id'] > 0 ? (int) $payload['parent_id'] : null;
+		$payload = $this->topic_service->normalizeTopicPayload( $this->getTopicPayloadFromPost() );
+		if ( isset( $payload['error_code'] ) ) {
+			$this->redirectToForm( 'new', (string) $payload['error_code'] );
+			return;
+		}
 
-		$error_code = $this->topic_service->validateTypeConstraints( $type, $parent_id, 0 );
+		$error_code = $this->topic_service->validateTypeConstraints( (string) $payload['type'], $payload['parent_id'], 0 );
 		if ( null !== $error_code ) {
 			$this->redirectToForm( 'new', $error_code );
 			return;
@@ -698,11 +700,13 @@ class TopicsPage {
 			return;
 		}
 
-		$payload   = $this->getTopicPayloadFromPost();
-		$type      = (string) ( $payload['type'] ?? 'root' );
-		$parent_id = isset( $payload['parent_id'] ) && (int) $payload['parent_id'] > 0 ? (int) $payload['parent_id'] : null;
+		$payload = $this->topic_service->normalizeTopicPayload( $this->getTopicPayloadFromPost() );
+		if ( isset( $payload['error_code'] ) ) {
+			$this->redirectToForm( 'edit', (string) $payload['error_code'], $topic_id );
+			return;
+		}
 
-		$error_code = $this->topic_service->validateTypeConstraints( $type, $parent_id, $topic_id );
+		$error_code = $this->topic_service->validateTypeConstraints( (string) $payload['type'], $payload['parent_id'], $topic_id );
 		if ( null !== $error_code ) {
 			$this->redirectToForm( 'edit', $error_code, $topic_id );
 			return;
@@ -789,14 +793,20 @@ class TopicsPage {
 	 * @return array<string, mixed>
 	 */
 	protected function getTopicPayloadFromPost(): array {
-		$topic_type = isset( $_POST['topic_type'] ) && 'followup' === sanitize_key( wp_unslash( $_POST['topic_type'] ) ) ? 'followup' : 'root';
-		$parent_id  = isset( $_POST['parent_id'] ) ? (int) wp_unslash( $_POST['parent_id'] ) : 0;
+		$topic_type = isset( $_POST['topic_type'] )
+			? strtolower( trim( sanitize_text_field( wp_unslash( $_POST['topic_type'] ) ) ) )
+			: 'root';
+		$parent_id  = null;
+		if ( isset( $_POST['parent_id'] ) ) {
+			$parent_value = trim( (string) wp_unslash( $_POST['parent_id'] ) );
+			$parent_id    = '' === $parent_value ? null : $parent_value;
+		}
 
 		return array(
 			'name'        => isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '',
 			'description' => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
 			'type'        => $topic_type,
-			'parent_id'   => $parent_id > 0 ? $parent_id : null,
+			'parent_id'   => $parent_id,
 			'is_active'   => isset( $_POST['is_active'] ) ? 1 : 0,
 			'sort_order'  => isset( $_POST['sort_order'] ) ? (int) wp_unslash( $_POST['sort_order'] ) : 0,
 			// Keep legacy fields for backward compat with code that checks them.
@@ -848,7 +858,7 @@ class TopicsPage {
 			'not-found'    => array( 'error', __( 'Topic not found.', 'wp-helpdesk' ) ),
 			// New simplified model error codes.
 			'root-cannot-have-parent'  => array( 'error', __( 'Root topics cannot have a parent topic.', 'wp-helpdesk' ) ),
-			'followup-missing-parent'  => array( 'error', __( 'Follow-up topics must have a parent topic.', 'wp-helpdesk' ) ),
+			'followup-missing-parent'  => array( 'error', __( 'Follow-up topic must have a parent topic.', 'wp-helpdesk' ) ),
 			'invalid-parent-topic'     => array( 'error', __( 'The selected parent topic is invalid.', 'wp-helpdesk' ) ),
 			'circular-parent-topic'    => array( 'error', __( 'The selected parent would create a circular hierarchy.', 'wp-helpdesk' ) ),
 			'invalid-topic-type'       => array( 'error', __( 'Invalid topic type.', 'wp-helpdesk' ) ),

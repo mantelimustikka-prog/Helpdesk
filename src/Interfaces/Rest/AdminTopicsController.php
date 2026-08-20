@@ -83,11 +83,12 @@ class AdminTopicsController {
 	 * @return WP_REST_Response
 	 */
 	public function createTopic( WP_REST_Request $request ): WP_REST_Response {
-		$payload   = $this->extractPayload( $request );
-		$type      = (string) ( $payload['type'] ?? 'root' );
-		$parent_id = isset( $payload['parent_id'] ) && (int) $payload['parent_id'] > 0 ? (int) $payload['parent_id'] : null;
+		$payload = $this->topic_service->normalizeTopicPayload( $this->extractPayload( $request ) );
+		if ( isset( $payload['error_code'] ) ) {
+			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( (string) $payload['error_code'] ) ), 400 );
+		}
 
-		$error_code = $this->topic_service->validateTypeConstraints( $type, $parent_id, 0 );
+		$error_code = $this->topic_service->validateTypeConstraints( (string) $payload['type'], $payload['parent_id'], 0 );
 		if ( null !== $error_code ) {
 			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
 		}
@@ -125,11 +126,12 @@ class AdminTopicsController {
 	 */
 	public function updateTopic( WP_REST_Request $request ): WP_REST_Response {
 		$topic_id  = (int) $request['id'];
-		$payload   = $this->extractPayload( $request );
-		$type      = (string) ( $payload['type'] ?? 'root' );
-		$parent_id = isset( $payload['parent_id'] ) && (int) $payload['parent_id'] > 0 ? (int) $payload['parent_id'] : null;
+		$payload   = $this->topic_service->normalizeTopicPayload( $this->extractPayload( $request ) );
+		if ( isset( $payload['error_code'] ) ) {
+			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( (string) $payload['error_code'] ) ), 400 );
+		}
 
-		$error_code = $this->topic_service->validateTypeConstraints( $type, $parent_id, $topic_id );
+		$error_code = $this->topic_service->validateTypeConstraints( (string) $payload['type'], $payload['parent_id'], $topic_id );
 		if ( null !== $error_code ) {
 			return new WP_REST_Response( array( 'message' => $this->messageForErrorCode( $error_code ) ), 400 );
 		}
@@ -227,7 +229,16 @@ class AdminTopicsController {
 
 		foreach ( array( 'name', 'description', 'sort_order', 'is_active', 'type', 'parent_id' ) as $field ) {
 			if ( null !== $request->get_param( $field ) ) {
-				$payload[ $field ] = $request->get_param( $field );
+				$value = $request->get_param( $field );
+				if ( 'type' === $field ) {
+					$value = strtolower( trim( (string) $value ) );
+				}
+
+				if ( 'parent_id' === $field ) {
+					$value = '' === trim( (string) $value ) ? null : $value;
+				}
+
+				$payload[ $field ] = $value;
 			}
 		}
 
@@ -290,7 +301,7 @@ class AdminTopicsController {
 	protected function messageForErrorCode( string $error_code ): string {
 		$messages = array(
 			'root-cannot-have-parent'  => 'Root topics cannot have a parent topic.',
-			'followup-missing-parent'  => 'Follow-up topics must have a parent topic.',
+			'followup-missing-parent'  => 'Follow-up topic must have a parent topic.',
 			'invalid-parent-topic'     => 'The selected parent topic is invalid.',
 			'circular-parent-topic'    => 'The selected parent would create a circular hierarchy.',
 			'invalid-topic-type'       => 'Invalid topic type.',

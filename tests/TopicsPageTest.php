@@ -14,7 +14,7 @@ final class TopicsPageTest extends TestCase {
 		wp_helpdesk_test_reset_state();
 	}
 
-	public function testRenderFormShowsFlowBehaviorAndFollowUpSelector(): void {
+	public function testRenderFormShowsTypeAndParentSelectors(): void {
 		$topic_service = new class extends TopicService {
 			public function listTopics( array $args = [] ): array {
 				return array(
@@ -36,11 +36,11 @@ final class TopicsPageTest extends TestCase {
 		$page->renderForm( 'new' );
 		$output = (string) ob_get_clean();
 
-		self::assertStringContainsString( 'Flow behavior', $output );
-		self::assertStringContainsString( 'Final step', $output );
-		self::assertStringContainsString( 'Follow-up topics', $output );
-		self::assertStringContainsString( 'Parent topics', $output );
-		self::assertStringContainsString( 'multiple', $output );
+		self::assertStringContainsString( 'Type', $output );
+		self::assertStringContainsString( 'Root Topic', $output );
+		self::assertStringContainsString( 'Follow-up Topic', $output );
+		self::assertStringContainsString( 'Parent Topic', $output );
+		self::assertStringContainsString( 'Required for Follow-up topics', $output );
 	}
 
 	public function testHandlePostRejectsFollowUpWithoutParentTopic(): void {
@@ -55,16 +55,106 @@ final class TopicsPageTest extends TestCase {
 			'hd_topic_nonce'  => 'valid-topic-nonce',
 			'hd_topic_action' => 'create',
 			'name'            => 'Billing follow-up',
-			'node_type'       => 'final',
-			'hierarchy_type'  => 'follow_up',
+			'topic_type'      => 'FOLLOWUP',
 		);
 
 		$page->handlePost();
 
-		self::assertStringContainsString( 'msg=follow-up-missing-parent', (string) $page->redirect_target );
+		self::assertStringContainsString( 'msg=followup-missing-parent', (string) $page->redirect_target );
 	}
 
-	public function testHandlePostRejectsBranchWithoutNextTopic(): void {
+	public function testHandlePostAllowsRootTopicWithoutParent(): void {
+		$topic_service = new class extends TopicService {
+			public array $created_payload = array();
+
+			public function createTopic( array $data ): int {
+				$this->created_payload = $data;
+				return 31;
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		$_GET['page'] = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'create',
+			'name'            => 'General',
+			'topic_type'      => 'ROOT',
+			'parent_id'       => '',
+		);
+
+		$page->handlePost();
+
+		self::assertSame( 'root', $topic_service->created_payload['type'] );
+		self::assertNull( $topic_service->created_payload['parent_id'] );
+		self::assertStringContainsString( 'msg=created', (string) $page->redirect_target );
+	}
+
+	public function testHandlePostRootTopicIgnoresSubmittedParent(): void {
+		$topic_service = new class extends TopicService {
+			public array $created_payload = array();
+
+			public function createTopic( array $data ): int {
+				$this->created_payload = $data;
+				return 32;
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		$_GET['page'] = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'create',
+			'name'            => 'General',
+			'topic_type'      => 'ROOT',
+			'parent_id'       => '9',
+		);
+
+		$page->handlePost();
+
+		self::assertSame( 'root', $topic_service->created_payload['type'] );
+		self::assertNull( $topic_service->created_payload['parent_id'] );
+		self::assertStringContainsString( 'msg=created', (string) $page->redirect_target );
+	}
+
+	public function testHandlePostAllowsFollowUpTopicWithParent(): void {
+		$topic_service = new class extends TopicService {
+			public array $created_payload = array();
+
+			public function validateTypeConstraints( string $type, ?int $parent_id, int $topic_id = 0 ): ?string {
+				return null;
+			}
+
+			public function createTopic( array $data ): int {
+				$this->created_payload = $data;
+				return 33;
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		$_GET['page'] = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'create',
+			'name'            => 'Invoices',
+			'topic_type'      => 'FOLLOWUP',
+			'parent_id'       => '4',
+		);
+
+		$page->handlePost();
+
+		self::assertSame( 'followup', $topic_service->created_payload['type'] );
+		self::assertSame( 4, $topic_service->created_payload['parent_id'] );
+		self::assertStringContainsString( 'msg=created', (string) $page->redirect_target );
+	}
+
+	public function testHandlePostRejectsInvalidTopicType(): void {
 		$page = new TopicsPageTestDouble(
 			new class extends TopicService {},
 			new class extends TopicTransitionService {}
@@ -76,15 +166,15 @@ final class TopicsPageTest extends TestCase {
 			'hd_topic_nonce'  => 'valid-topic-nonce',
 			'hd_topic_action' => 'create',
 			'name'            => 'Billing',
-			'node_type'       => 'branch',
+			'topic_type'      => 'unknown',
 		);
 
 		$page->handlePost();
 
-		self::assertStringContainsString( 'msg=branch-missing-transition', (string) $page->redirect_target );
+		self::assertStringContainsString( 'msg=invalid-topic-type', (string) $page->redirect_target );
 	}
 
-	public function testHandlePostFinalTopicClearsFollowUpsBeforeSync(): void {
+	public function testHandlePostRootTopicSubmittedParentIsClearedBeforeCreate(): void {
 		$topic_service = new class extends TopicService {
 			public array $created_payload = array();
 
@@ -94,35 +184,22 @@ final class TopicsPageTest extends TestCase {
 			}
 		};
 
-		$transition_service = new class extends TopicTransitionService {
-			public array $synced = array();
-
-			public function syncAdminParentTopics( int $to_topic_id, array $parent_topic_ids ): bool {
-				return true;
-			}
-
-			public function syncAdminNextTopics( int $from_topic_id, array $next_topic_ids ): bool {
-				$this->synced = $next_topic_ids;
-				return true;
-			}
-		};
-
-		$page = new TopicsPageTestDouble( $topic_service, $transition_service );
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
 
 		$_GET['page'] = 'wp-helpdesk-topics';
 		$_SERVER['REQUEST_METHOD'] = 'POST';
 		$_POST = array(
-			'hd_topic_nonce'   => 'valid-topic-nonce',
-			'hd_topic_action'  => 'create',
-			'name'             => 'Resolved',
-			'node_type'        => 'final',
-			'next_topic_ids'   => array( 99 ),
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'create',
+			'name'            => 'Resolved',
+			'topic_type'      => 'ROOT',
+			'parent_id'       => '99',
 		);
 
 		$page->handlePost();
 
-		self::assertSame( 1, $topic_service->created_payload['is_final'] );
-		self::assertSame( array(), $transition_service->synced );
+		self::assertSame( 'root', $topic_service->created_payload['type'] );
+		self::assertNull( $topic_service->created_payload['parent_id'] );
 		self::assertStringContainsString( 'msg=created', (string) $page->redirect_target );
 	}
 
@@ -250,8 +327,38 @@ final class TopicsPageTest extends TestCase {
 		$page->renderForm( 'new' );
 		$output = (string) ob_get_clean();
 
-		self::assertStringContainsString( 'value="follow_up" checked="checked"', $output );
+		self::assertStringContainsString( 'value="followup" checked="checked"', $output );
 		self::assertStringContainsString( 'option value="4" selected="selected"', $output );
+	}
+
+	public function testHandlePostUpdatingTopicToRootClearsParent(): void {
+		$topic_service = new class extends TopicService {
+			public array $updated_payload = array();
+
+			public function updateTopic( int $id, array $data ): bool {
+				$this->updated_payload = $data;
+				return true;
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		$_GET['page'] = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'update',
+			'hd_topic_id'     => 11,
+			'name'            => 'Invoices',
+			'topic_type'      => 'ROOT',
+			'parent_id'       => '4',
+		);
+
+		$page->handlePost();
+
+		self::assertSame( 'root', $topic_service->updated_payload['type'] );
+		self::assertNull( $topic_service->updated_payload['parent_id'] );
+		self::assertStringContainsString( 'msg=updated', (string) $page->redirect_target );
 	}
 }
 

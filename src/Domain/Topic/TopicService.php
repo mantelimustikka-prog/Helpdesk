@@ -114,33 +114,59 @@ class TopicService {
 	 * @return string|null Error code or null.
 	 */
 	public function validateTypeConstraints( string $type, ?int $parent_id, int $topic_id = 0 ): ?string {
+		if ( ! in_array( $type, array( 'root', 'followup' ), true ) ) {
+			return 'invalid-topic-type';
+		}
+
 		if ( 'root' === $type ) {
-			if ( null !== $parent_id && $parent_id > 0 ) {
-				return 'root-cannot-have-parent';
-			}
-
 			return null;
 		}
 
-		if ( 'followup' === $type ) {
-			if ( null === $parent_id || $parent_id <= 0 ) {
-				return 'followup-missing-parent';
-			}
-
-			$parent = $this->repository->find( $parent_id, $this->network_id );
-			if ( ! $parent ) {
-				return 'invalid-parent-topic';
-			}
-
-			// Prevent circular chains.
-			if ( $topic_id > 0 && $this->wouldCreateCycle( $topic_id, $parent_id ) ) {
-				return 'circular-parent-topic';
-			}
-
-			return null;
+		if ( null === $parent_id || $parent_id <= 0 ) {
+			return 'followup-missing-parent';
 		}
 
-		return 'invalid-topic-type';
+		$parent = $this->repository->find( $parent_id, $this->network_id );
+		if ( ! $parent ) {
+			return 'invalid-parent-topic';
+		}
+
+		// Prevent circular chains.
+		if ( $topic_id > 0 && $this->wouldCreateCycle( $topic_id, $parent_id ) ) {
+			return 'circular-parent-topic';
+		}
+
+		return null;
+	}
+
+	/**
+	 * Normalize topic hierarchy input prior to validation/persistence.
+	 *
+	 * @param array<string, mixed> $data Topic payload.
+	 * @return array<string, mixed>
+	 */
+	public function normalizeTopicPayload( array $data ): array {
+		$type = array_key_exists( 'type', $data )
+			? strtolower( trim( (string) $data['type'] ) )
+			: 'root';
+
+		if ( ! in_array( $type, array( 'root', 'followup' ), true ) ) {
+			$data['error_code'] = 'invalid-topic-type';
+			return $data;
+		}
+
+		$parent_id = $this->normalizeParentId( $data['parent_id'] ?? null );
+
+		if ( 'root' === $type ) {
+			$parent_id = null;
+		} elseif ( null === $parent_id ) {
+			$data['error_code'] = 'followup-missing-parent';
+		}
+
+		$data['type']      = $type;
+		$data['parent_id'] = $parent_id;
+
+		return $data;
 	}
 
 	/**
@@ -281,6 +307,11 @@ class TopicService {
 	 * @return int
 	 */
 	public function createTopic( array $data ): int {
+		$data = $this->normalizeTopicPayload( $data );
+		if ( isset( $data['error_code'] ) ) {
+			return 0;
+		}
+
 		$name = isset( $data['name'] ) ? sanitize_text_field( trim( (string) $data['name'] ) ) : '';
 		if ( '' === $name ) {
 			return 0;
@@ -296,8 +327,8 @@ class TopicService {
 				'network_id'  => $this->network_id,
 				'title'       => $name,
 				'slug'        => $slug,
-				'type'        => in_array( (string) ( $data['type'] ?? '' ), array( 'root', 'followup' ), true ) ? (string) $data['type'] : 'root',
-				'parent_id'   => isset( $data['parent_id'] ) && (int) $data['parent_id'] > 0 ? (int) $data['parent_id'] : null,
+				'type'        => (string) $data['type'],
+				'parent_id'   => $data['parent_id'],
 				'description' => isset( $data['description'] ) ? sanitize_textarea_field( (string) $data['description'] ) : '',
 				'is_final'    => $this->resolveIsFinalFlag( $data ) ? 1 : 0,
 				'is_active'   => isset( $data['is_active'] ) ? (int) (bool) $data['is_active'] : 1,
@@ -319,6 +350,27 @@ class TopicService {
 		$existing = $this->repository->find( $id, $this->network_id );
 		if ( ! $existing ) {
 			return false;
+		}
+
+		$should_normalize_hierarchy = array_key_exists( 'type', $data ) || array_key_exists( 'parent_id', $data );
+		if ( $should_normalize_hierarchy ) {
+			$normalized_hierarchy = $this->normalizeTopicPayload(
+				array(
+					'type'      => array_key_exists( 'type', $data ) ? $data['type'] : (string) ( $existing['type'] ?? 'root' ),
+					'parent_id' => array_key_exists( 'parent_id', $data ) ? $data['parent_id'] : ( $existing['parent_id'] ?? null ),
+				)
+			);
+			if ( isset( $normalized_hierarchy['error_code'] ) ) {
+				return false;
+			}
+
+			if ( array_key_exists( 'type', $data ) ) {
+				$data['type'] = $normalized_hierarchy['type'];
+			}
+
+			if ( array_key_exists( 'parent_id', $data ) || ( array_key_exists( 'type', $data ) && 'root' === $normalized_hierarchy['type'] ) ) {
+				$data['parent_id'] = $normalized_hierarchy['parent_id'];
+			}
 		}
 
 		$update = array(
@@ -359,14 +411,12 @@ class TopicService {
 			$update['is_final'] = $this->resolveIsFinalFlag( $data, ! empty( $existing['is_final'] ) ) ? 1 : 0;
 		}
 
-		if ( isset( $data['type'] ) && in_array( (string) $data['type'], array( 'root', 'followup' ), true ) ) {
+		if ( isset( $data['type'] ) ) {
 			$update['type'] = (string) $data['type'];
 		}
 
 		if ( array_key_exists( 'parent_id', $data ) ) {
-			$update['parent_id'] = isset( $data['parent_id'] ) && (int) $data['parent_id'] > 0
-				? (int) $data['parent_id']
-				: null;
+			$update['parent_id'] = $data['parent_id'];
 		}
 
 		return $this->repository->update( $id, $update, $this->network_id );
@@ -557,6 +607,29 @@ class TopicService {
 		}
 
 		return $default;
+	}
+
+	/**
+	 * Normalize a submitted parent id value to a persisted topic parent id.
+	 *
+	 * @param mixed $parent_id Submitted parent id value.
+	 * @return int|null
+	 */
+	protected function normalizeParentId( $parent_id ): ?int {
+		if ( null === $parent_id ) {
+			return null;
+		}
+
+		if ( is_string( $parent_id ) ) {
+			$parent_id = trim( $parent_id );
+			if ( '' === $parent_id ) {
+				return null;
+			}
+		}
+
+		$parent_id = (int) $parent_id;
+
+		return $parent_id > 0 ? $parent_id : null;
 	}
 
 	/**

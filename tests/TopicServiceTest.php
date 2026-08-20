@@ -41,6 +41,66 @@ final class TopicServiceTest extends TestCase {
 		self::assertSame( 1, $repository->created_data['network_id'] );
 	}
 
+	public function testCreateTopicNormalizesRootParentToNullWhenSubmitted(): void {
+		$repository = new class extends TopicRepository {
+			public array $created_data = array();
+
+			public function findBySlug( string $slug, int $network_id ): ?array {
+				return null;
+			}
+
+			public function create( array $data ): int {
+				$this->created_data = $data;
+				return 22;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		$topic_id = $service->createTopic(
+			array(
+				'name'      => 'General',
+				'type'      => 'ROOT',
+				'parent_id' => '17',
+			)
+		);
+
+		self::assertSame( 22, $topic_id );
+		self::assertSame( 'root', $repository->created_data['type'] );
+		self::assertNull( $repository->created_data['parent_id'] );
+	}
+
+	public function testCreateTopicPersistsFollowupParent(): void {
+		$repository = new class extends TopicRepository {
+			public array $created_data = array();
+
+			public function findBySlug( string $slug, int $network_id ): ?array {
+				return null;
+			}
+
+			public function create( array $data ): int {
+				$this->created_data = $data;
+				return 24;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		$topic_id = $service->createTopic(
+			array(
+				'name'      => 'Invoices',
+				'type'      => 'FOLLOWUP',
+				'parent_id' => '9',
+			)
+		);
+
+		self::assertSame( 24, $topic_id );
+		self::assertSame( 'followup', $repository->created_data['type'] );
+		self::assertSame( 9, $repository->created_data['parent_id'] );
+	}
+
 	public function testUpdateTopicRejectsEmptyName(): void {
 		$repository = new class extends TopicRepository {
 			public function find( int $id, int $network_id ): ?array {
@@ -82,6 +142,34 @@ final class TopicServiceTest extends TestCase {
 
 		self::assertTrue( $service->updateTopic( 7, array( 'node_type' => 'final' ) ) );
 		self::assertSame( 1, $repository->updated['is_final'] );
+	}
+
+	public function testUpdateTopicChangingToRootClearsExistingParent(): void {
+		$repository = new class extends TopicRepository {
+			public array $updated = array();
+
+			public function find( int $id, int $network_id ): ?array {
+				return array(
+					'id'        => $id,
+					'title'     => 'Existing Topic',
+					'slug'      => 'existing-topic',
+					'type'      => 'followup',
+					'parent_id' => 5,
+				);
+			}
+
+			public function update( int $id, array $data, int $network_id ): bool {
+				$this->updated = $data;
+				return true;
+			}
+		};
+
+		$service = new TopicService();
+		$this->injectRepository( $service, $repository );
+
+		self::assertTrue( $service->updateTopic( 7, array( 'type' => 'ROOT', 'parent_id' => '5' ) ) );
+		self::assertSame( 'root', $repository->updated['type'] );
+		self::assertNull( $repository->updated['parent_id'] );
 	}
 
 	public function testListTopicsAddsNameAlias(): void {
@@ -221,18 +309,12 @@ final class TopicServiceTest extends TestCase {
 		self::assertTrue( $tree[0]['children'][0]['matches_search'] );
 	}
 
-	public function testValidateTypeConstraintsRootCannotHaveParent(): void {
-		$repository = new class extends TopicRepository {
-			public function find( int $id, int $network_id ): ?array {
-				return array( 'id' => $id, 'title' => 'General', 'slug' => 'general' );
-			}
-		};
-
+	public function testValidateTypeConstraintsRootSkipsParentRequirement(): void {
 		$service = new TopicService();
-		$this->injectRepository( $service, $repository );
+		$this->injectRepository( $service, new TopicRepository() );
 
 		$error_code = $service->validateTypeConstraints( 'root', 5, 0 );
-		self::assertSame( 'root-cannot-have-parent', $error_code );
+		self::assertNull( $error_code );
 	}
 
 	public function testValidateTypeConstraintsFollowupRequiresParent(): void {
