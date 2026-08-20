@@ -572,6 +572,77 @@ final class TopicServiceTest extends TestCase {
 		self::assertSame( 'invalid-topic-type', $error_code );
 	}
 
+	// normalizeTopicPayload – direct unit tests.
+
+	public function testNormalizeTopicPayloadRootWithNoParentReturnsNullParent(): void {
+		$result = $this->makeTopicService()->normalizeTopicPayload( array( 'type' => 'root' ) );
+
+		self::assertSame( 'root', $result['type'] );
+		self::assertNull( $result['parent_id'] );
+		self::assertArrayNotHasKey( 'error_code', $result );
+	}
+
+	public function testNormalizeTopicPayloadRootClearsSubmittedParent(): void {
+		$result = $this->makeTopicService()->normalizeTopicPayload( array( 'type' => 'root', 'parent_id' => '7' ) );
+
+		self::assertSame( 'root', $result['type'] );
+		self::assertNull( $result['parent_id'] );
+		self::assertArrayNotHasKey( 'error_code', $result );
+	}
+
+	public function testNormalizeTopicPayloadRootUppercaseTypeIsNormalized(): void {
+		$result = $this->makeTopicService()->normalizeTopicPayload( array( 'type' => 'ROOT', 'parent_id' => '3' ) );
+
+		self::assertSame( 'root', $result['type'] );
+		self::assertNull( $result['parent_id'] );
+		self::assertArrayNotHasKey( 'error_code', $result );
+	}
+
+	public function testNormalizeTopicPayloadFollowupWithValidParentPreservesParent(): void {
+		$result = $this->makeTopicService()->normalizeTopicPayload( array( 'type' => 'followup', 'parent_id' => '5' ) );
+
+		self::assertSame( 'followup', $result['type'] );
+		self::assertSame( 5, $result['parent_id'] );
+		self::assertArrayNotHasKey( 'error_code', $result );
+	}
+
+	public function testNormalizeTopicPayloadFollowupWithNoParentSetsErrorCode(): void {
+		$result = $this->makeTopicService()->normalizeTopicPayload( array( 'type' => 'followup' ) );
+
+		self::assertSame( 'followup-missing-parent', $result['error_code'] );
+		self::assertNull( $result['parent_id'] );
+	}
+
+	public function testNormalizeTopicPayloadFollowupWithEmptyParentSetsErrorCode(): void {
+		$result = $this->makeTopicService()->normalizeTopicPayload( array( 'type' => 'followup', 'parent_id' => '' ) );
+
+		self::assertSame( 'followup-missing-parent', $result['error_code'] );
+		self::assertNull( $result['parent_id'] );
+	}
+
+	public function testNormalizeTopicPayloadInvalidTypeSetsErrorCode(): void {
+		$result = $this->makeTopicService()->normalizeTopicPayload( array( 'type' => 'unknown' ) );
+
+		self::assertSame( 'invalid-topic-type', $result['error_code'] );
+	}
+
+	public function testNormalizeTopicPayloadDefaultsToRootWhenTypeAbsent(): void {
+		$result = $this->makeTopicService()->normalizeTopicPayload( array( 'name' => 'General' ) );
+
+		self::assertSame( 'root', $result['type'] );
+		self::assertNull( $result['parent_id'] );
+		self::assertArrayNotHasKey( 'error_code', $result );
+	}
+
+	/**
+	 * Create a TopicService with a stub repository (no DB) for pure-logic tests.
+	 */
+	private function makeTopicService(): TopicService {
+		$service = new TopicService();
+		$this->injectRepository( $service, new TopicRepository() );
+		return $service;
+	}
+
 	private function injectRepository( TopicService $service, TopicRepository $repository ): void {
 		$repository_property = new ReflectionProperty( TopicService::class, 'repository' );
 		$repository_property->setAccessible( true );
