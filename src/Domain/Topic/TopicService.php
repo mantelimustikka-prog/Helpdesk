@@ -160,7 +160,10 @@ class TopicService {
 		if ( 'root' === $type ) {
 			$parent_id = null;
 		} elseif ( null === $parent_id ) {
+			$data['type']       = $type;
+			$data['parent_id']  = null;
 			$data['error_code'] = 'followup-missing-parent';
+			return $data;
 		}
 
 		$data['type']      = $type;
