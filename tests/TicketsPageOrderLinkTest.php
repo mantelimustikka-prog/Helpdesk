@@ -24,11 +24,11 @@ final class TicketsPageOrderLinkTest extends TestCase {
 		wp_helpdesk_test_reset_state();
 	}
 
-	public function testNotOrderRelatedShowsLabel(): void {
+	public function testNotAnyExistingOrderRelatedShowsLabel(): void {
 		$page   = new TicketsPageOrderLinkTestDouble();
-		$output = $page->renderOrderRelationRowPublic( array( 'order_relation' => 'not_order_related' ) );
+		$output = $page->renderOrderRelationRowPublic( array( 'order_relation' => 'not_any_existing_order_related' ) );
 
-		self::assertStringContainsString( 'Not order related', $output );
+		self::assertStringContainsString( 'Not any existing order related', $output );
 		self::assertStringNotContainsString( '<a ', $output );
 	}
 

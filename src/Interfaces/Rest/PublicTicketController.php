@@ -362,7 +362,10 @@ class PublicTicketController {
 		// the attempt is not counted and the user immediately sees the login prompt.
 		$order_relation = sanitize_text_field( (string) $request->get_param( 'order_relation' ) );
 		if ( 'existing_order_related' === $order_relation ) {
-			return new WP_Error( 'hd_login_required', __( 'You must login to create this support request.', 'wp-helpdesk' ), array( 'status' => 401 ) );
+			return new WP_Error( 'hd_login_required', __( 'Please login to create ticket', 'wp-helpdesk' ), array( 'status' => 401 ) );
+		}
+		if ( 'not_any_existing_order_related' !== $order_relation ) {
+			return new WP_Error( 'hd_invalid_order_relation', __( 'Please select an order relation.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
 
 		$rate_limiter = new RateLimiter();
@@ -441,7 +444,8 @@ class PublicTicketController {
 		}
 
 		$order_relation = sanitize_text_field( (string) $request->get_param( 'order_relation' ) );
-		$order_validation = $this->validateOrderRelation( $order_relation, $user->ID );
+		$order_id = sanitize_text_field( (string) $request->get_param( 'order_id' ) );
+		$order_validation = $this->validateOrderRelation( $order_relation, $user->ID, $order_id );
 		if ( is_wp_error( $order_validation ) ) {
 			return $order_validation;
 		}
@@ -458,7 +462,7 @@ class PublicTicketController {
 				'form_type'       => 'member',
 				'topic_path'      => $this->normaliseTopicPath( $request->get_param( 'topic_path' ), $topic_id ),
 				'session_token'   => sanitize_text_field( (string) $request->get_param( 'form_session_token' ) ),
-				'order_relation'  => $order_relation,
+				'order_relation'  => $order_validation,
 			)
 		);
 	}
@@ -589,6 +593,7 @@ class PublicTicketController {
 			'subject'         => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
 			'message'         => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),
 			'order_relation'  => array( 'required' => false, 'type' => 'string' ),
+			'order_id'        => array( 'required' => false, 'type' => 'string' ),
 		);
 	}
 
@@ -603,6 +608,7 @@ class PublicTicketController {
 			'subject'        => array( 'required' => true, 'type' => 'string', 'minLength' => 1, 'maxLength' => 255 ),
 			'message'        => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),
 			'order_relation' => array( 'required' => false, 'type' => 'string' ),
+			'order_id'       => array( 'required' => false, 'type' => 'string' ),
 		);
 	}
 
@@ -738,34 +744,41 @@ class PublicTicketController {
 	 * Validate an order_relation value.
 	 *
 	 * Acceptable values:
-	 *  - 'not_order_related'
-	 *  - a WooCommerce order ID (as a string) belonging to the current user
-	 *
-	 * For guests (user_id = null), only 'not_order_related' is valid; guests
-	 * cannot submit an existing-order relation without logging in.
+	 *  - 'not_any_existing_order_related'
+	 *  - 'existing_order_related' + an order id belonging to the current user
 	 *
 	 * @param string   $order_relation The submitted value.
 	 * @param int|null $user_id        Authenticated user id, or null for guests.
-	 * @return true|WP_Error
+	 * @param string   $order_id       Selected order id for existing-order path.
+	 * @return string|WP_Error
 	 */
-	protected function validateOrderRelation( string $order_relation, ?int $user_id ) {
+	protected function validateOrderRelation( string $order_relation, ?int $user_id, string $order_id = '' ) {
 		if ( '' === $order_relation ) {
 			return new WP_Error( 'hd_missing_order_relation', __( 'Please select an order relation.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
 
-		if ( 'not_order_related' === $order_relation ) {
-			return true;
+		if ( 'not_any_existing_order_related' === $order_relation ) {
+			return $order_relation;
 		}
 
-		// For authenticated users validate ownership against their order IDs.
-		if ( null !== $user_id && $user_id > 0 ) {
-			$user_orders = $this->getUserLifetimeOrders( $user_id );
-			if ( ! in_array( $order_relation, $user_orders, true ) ) {
-				return new WP_Error( 'hd_invalid_order_relation', __( 'The selected order does not belong to your account.', 'wp-helpdesk' ), array( 'status' => 422 ) );
-			}
+		if ( 'existing_order_related' !== $order_relation ) {
+			return new WP_Error( 'hd_invalid_order_relation', __( 'Please select an order relation.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
 
-		return true;
+		if ( null === $user_id || $user_id <= 0 ) {
+			return new WP_Error( 'hd_login_required', __( 'Please login to create ticket', 'wp-helpdesk' ), array( 'status' => 401 ) );
+		}
+
+		if ( '' === trim( $order_id ) ) {
+			return new WP_Error( 'hd_missing_order_relation', __( 'Please select #Order.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		}
+
+		$user_orders = $this->getUserLifetimeOrders( $user_id );
+		if ( ! in_array( $order_id, $user_orders, true ) ) {
+			return new WP_Error( 'hd_invalid_order_relation', __( 'The selected order does not belong to your account.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		}
+
+		return $order_id;
 	}
 
 	/**

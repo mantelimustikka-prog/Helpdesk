@@ -453,8 +453,8 @@ class TicketsPage {
 
 		echo '<p><strong>' . esc_html__( 'Order:', 'wp-helpdesk' ) . '</strong> ';
 
-		if ( 'not_order_related' === $order_rel ) {
-			echo esc_html__( 'Not order related', 'wp-helpdesk' );
+		if ( 'not_any_existing_order_related' === $order_rel ) {
+			echo esc_html__( 'Not any existing order related', 'wp-helpdesk' );
 		} elseif ( ctype_digit( $order_rel ) && function_exists( 'wc_get_order' ) ) {
 			$order = $this->getWooCommerceOrder( (int) $order_rel );
 			if ( $order ) {

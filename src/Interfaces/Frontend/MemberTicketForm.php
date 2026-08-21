@@ -169,10 +169,19 @@ class MemberTicketForm extends GuestTicketForm {
 						required
 						aria-required="true"
 					>
-						<option value=""><?php esc_html_e( 'Select option', 'wp-helpdesk' ); ?></option>
-						<option value="not_order_related"><?php esc_html_e( 'Not order related', 'wp-helpdesk' ); ?></option>
+						<option value="" selected disabled><?php esc_html_e( 'Select Option', 'wp-helpdesk' ); ?></option>
+						<option value="existing_order_related"><?php esc_html_e( 'Existing order related', 'wp-helpdesk' ); ?></option>
+						<option value="not_any_existing_order_related"><?php esc_html_e( 'Not any existing order related', 'wp-helpdesk' ); ?></option>
 					</select>
-					<p class="hd-field-hint"><?php esc_html_e( 'Select the order this request relates to, or choose "Not order related".', 'wp-helpdesk' ); ?></p>
+				</div>
+				<div class="hd-field hd-form-step--hidden" data-role="order-select-field">
+					<label for="hd-member-order-id" class="hd-label">
+						<?php esc_html_e( 'Select #Order', 'wp-helpdesk' ); ?>
+						<span class="hd-required" aria-hidden="true">*</span>
+					</label>
+					<select id="hd-member-order-id" name="order_id" class="hd-select" aria-required="false">
+						<option value="" selected disabled><?php esc_html_e( 'Select #Order', 'wp-helpdesk' ); ?></option>
+					</select>
 				</div>
 				<div class="hd-field">
 					<label for="hd-member-subject" class="hd-label">
