@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 use WPHelpdesk\Domain\Attachment\AttachmentService;
+use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Interfaces\Admin\Pages\TicketsPage;
 use WPHelpdesk\Interfaces\Frontend\GuestTicketView;
 use WPHelpdesk\Interfaces\Rest\PublicTicketController;
@@ -46,6 +47,74 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 		$a = $controller->generateGuestTokenPublic();
 		$b = $controller->generateGuestTokenPublic();
 		self::assertNotSame( $a, $b );
+	}
+
+	public function testCreateGuestTicketStoresHashedTokenAndReturnsLink(): void {
+		$GLOBALS['wp_site_options'][ Constants::OPTION_GENERAL_REQUIRE_TOPIC ] = 0;
+
+		global $wpdb;
+		$wpdb = new class {
+			public string $base_prefix = 'wp_';
+			public string $sitemeta = 'wp_sitemeta';
+			public int $insert_id = 41;
+			/** @var array<int, array{table:string,data:array<string,mixed>,format:array<int,string>}> */
+			public array $insert_calls = array();
+
+			public function prepare( string $query, ...$args ): string {
+				return $query;
+			}
+
+			public function query( string $query ): int {
+				return 1;
+			}
+
+			public function get_var( string $query ) {
+				return 2001;
+			}
+
+			public function insert( string $table, array $data, array $format = array() ): int {
+				$this->insert_calls[] = array(
+					'table'  => $table,
+					'data'   => $data,
+					'format' => $format,
+				);
+				$this->insert_id++;
+				return 1;
+			}
+		};
+
+		$controller = new class extends PublicTicketController {
+			public function createForTest( array $data ) {
+				return parent::createTicket( $data );
+			}
+
+			protected function generateGuestToken(): string {
+				return 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+			}
+		};
+
+		$response = $controller->createForTest(
+			array(
+				'requester_name'  => 'Guest User',
+				'requester_email' => 'guest@example.test',
+				'requester_phone' => '0400000000',
+				'subject'         => 'Need help',
+				'message'         => 'My issue details',
+				'user_id'         => null,
+				'form_type'       => 'guest',
+				'order_relation'  => 'not_order_related',
+				'topic_path'      => array(),
+			)
+		);
+
+		self::assertInstanceOf( WP_REST_Response::class, $response );
+		self::assertSame( 201, $response->status );
+		self::assertArrayHasKey( 'ticket_link', $response->data );
+
+		$ticket_insert = $wpdb->insert_calls[0]['data'];
+		self::assertArrayHasKey( 'guest_token_hash', $ticket_insert );
+		self::assertSame( hash( 'sha256', str_repeat( 'a', 64 ) ), $ticket_insert['guest_token_hash'] );
+		self::assertArrayNotHasKey( 'guest_token', $ticket_insert );
 	}
 
 	// -------------------------------------------------------------------------
@@ -91,6 +160,25 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 		self::assertStringContainsString( 'Please log in', $output );
 	}
 
+	public function testTicketReplyEmailIncludesLinkWhenTicketLinkPresent(): void {
+		$template = dirname( __DIR__ ) . '/templates/emails/ticket-reply.php';
+
+		ob_start();
+		$vars = array(
+			'ticket'  => array(
+				'ticket_no'   => 'HD-004000',
+				'subject'     => 'Follow-up',
+				'ticket_link' => 'https://example.test/helpdesk/ticket/HD-004000/token123/',
+			),
+			'message' => array( 'body' => 'New update' ),
+		);
+		include $template;
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'View and continue this ticket', $output );
+		self::assertStringContainsString( 'https://example.test/helpdesk/ticket/HD-004000/token123/', $output );
+	}
+
 	// -------------------------------------------------------------------------
 	// findTicketByTokenAndNo (no real DB – returns null gracefully)
 	// -------------------------------------------------------------------------
@@ -100,6 +188,32 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 		self::assertNull( $controller->findTicketByTokenAndNo( '', 'sometoken' ) );
 		self::assertNull( $controller->findTicketByTokenAndNo( 'HD-001', '' ) );
 		self::assertNull( $controller->findTicketByTokenAndNo( '', '' ) );
+	}
+
+	public function testFindTicketByTokenAndNoUsesHashedTokenLookup(): void {
+		global $wpdb;
+		$wpdb = new class {
+			public string $base_prefix = 'wp_';
+			/** @var array<int, mixed> */
+			public array $prepared_args = array();
+
+			public function prepare( string $query, ...$args ): string {
+				$this->prepared_args = $args;
+				return $query;
+			}
+
+			public function get_row( string $query, $output = ARRAY_A ): ?array {
+				return array( 'id' => 77, 'ticket_no' => 'HD-777' );
+			}
+		};
+
+		$controller = new PublicTicketController();
+		$token      = 'guest-token-xyz';
+		$ticket     = $controller->findTicketByTokenAndNo( 'HD-777', $token );
+
+		self::assertIsArray( $ticket );
+		self::assertSame( 'HD-777', $wpdb->prepared_args[0] );
+		self::assertSame( hash( 'sha256', $token ), $wpdb->prepared_args[1] );
 	}
 
 	// -------------------------------------------------------------------------

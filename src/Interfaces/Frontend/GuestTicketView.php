@@ -120,7 +120,7 @@ class GuestTicketView extends HelpdeskPage {
 				<h2 class="hd-section-title"><?php esc_html_e( 'Add a Reply', 'wp-helpdesk' ); ?></h2>
 				<div class="hd-reply-form" id="hd-guest-reply-form"
 					data-ticket-no="<?php echo esc_attr( (string) $ticket['ticket_no'] ); ?>"
-					data-guest-token="<?php echo esc_attr( (string) $ticket['guest_token'] ); ?>">
+					data-guest-token="<?php echo esc_attr( $guest_token ); ?>">
 					<div class="hd-field">
 						<label for="hd-guest-reply-body" class="hd-label">
 							<?php esc_html_e( 'Message', 'wp-helpdesk' ); ?>
@@ -149,7 +149,7 @@ class GuestTicketView extends HelpdeskPage {
 	}
 
 	/**
-	 * Look up a ticket by ticket_no + guest_token.
+	 * Look up a ticket by ticket_no + guest_token hash.
 	 *
 	 * @param string $ticket_no   Ticket number.
 	 * @param string $guest_token Guest access token.
@@ -159,14 +159,15 @@ class GuestTicketView extends HelpdeskPage {
 		if ( '' === $ticket_no || '' === $guest_token ) {
 			return null;
 		}
+		$guest_token_hash = hash( 'sha256', $guest_token );
 
 		global $wpdb;
 		$table = Schema::table( Constants::TABLE_TICKETS );
 		$row   = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE ticket_no = %s AND guest_token = %s LIMIT 1",
+				"SELECT * FROM {$table} WHERE ticket_no = %s AND guest_token_hash = %s LIMIT 1",
 				$ticket_no,
-				$guest_token
+				$guest_token_hash
 			),
 			ARRAY_A
 		);
