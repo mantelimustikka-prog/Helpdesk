@@ -429,6 +429,98 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 
 		self::assertStringContainsString( 'Please sign in to access your helpdesk requests.', $output );
 	}
+
+	// -------------------------------------------------------------------------
+	// Reply form includes file input and multipart enctype
+	// -------------------------------------------------------------------------
+
+	public function testReplyFormHasFileInputAndMultipartEnctype(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'multipart/form-data', $output, 'Reply form must use multipart/form-data encoding' );
+		self::assertStringContainsString( 'type="file"', $output, 'Reply form must include a file input' );
+		self::assertStringContainsString( 'hd_helpdesk_attachment', $output, 'File input must be named hd_helpdesk_attachment' );
+	}
+
+	// -------------------------------------------------------------------------
+	// Reply with attachment calls attachment service
+	// -------------------------------------------------------------------------
+
+	public function testReplyWithAttachmentCallsUploadService(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		$this->message_service->reply_id = 99;
+		$_SERVER['REQUEST_METHOD']       = 'POST';
+		$_POST = array(
+			'hd_helpdesk_action'        => 'reply',
+			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
+			'hd_helpdesk_reply_body'    => 'Attaching a document.',
+		);
+		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
+		$_FILES['hd_helpdesk_attachment'] = array(
+			'name'     => 'proof.pdf',
+			'type'     => 'application/pdf',
+			'tmp_name' => '/tmp/phpTEST',
+			'error'    => UPLOAD_ERR_OK,
+			'size'     => 2048,
+		);
+
+		$this->integration->render();
+
+		unset( $_FILES['hd_helpdesk_attachment'] );
+
+		self::assertNotEmpty( $this->attachment_service->upload_calls, 'handleUpload must be called when a file is submitted with the reply' );
+		self::assertSame( 11, $this->attachment_service->upload_calls[0]['ticket_id'] );
+		self::assertSame( 99, $this->attachment_service->upload_calls[0]['message_id'] );
+		self::assertSame( 'proof.pdf', $this->attachment_service->upload_calls[0]['file_name'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// Reply without attachment does not call upload service
+	// -------------------------------------------------------------------------
+
+	public function testReplyWithoutAttachmentSkipsUploadService(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		$this->message_service->reply_id = 100;
+		$_SERVER['REQUEST_METHOD']       = 'POST';
+		$_POST = array(
+			'hd_helpdesk_action'        => 'reply',
+			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
+			'hd_helpdesk_reply_body'    => 'No attachment here.',
+		);
+		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
+
+		$this->integration->render();
+
+		self::assertEmpty( $this->attachment_service->upload_calls, 'handleUpload must not be called when no file is submitted' );
+	}
 }
 
 final class TicketRepositoryDouble extends TicketRepository {
@@ -516,7 +608,20 @@ final class AttachmentServiceDouble extends AttachmentService {
 	/** @var array<int, array<string, mixed>> */
 	public array $attachments = array();
 
+	/** @var array<int, array<string, mixed>> */
+	public array $upload_calls = array();
+
 	public function getForTicket( int $ticket_id ): array {
 		return $this->attachments;
+	}
+
+	/** @param array<string, mixed> $file */
+	public function handleUpload( array $file, int $ticket_id, ?int $message_id, int $user_id ) {
+		$this->upload_calls[] = array(
+			'file_name'  => $file['name'],
+			'ticket_id'  => $ticket_id,
+			'message_id' => $message_id,
+		);
+		return array( 'id' => count( $this->upload_calls ) );
 	}
 }
