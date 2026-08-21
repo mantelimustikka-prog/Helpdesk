@@ -695,7 +695,8 @@ class TopicsPage {
 			error_log( '[WP Helpdesk] Topic save failed: ' . $error_detail ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
-		$this->redirectToList( 'error', $error_detail );
+		$this->storeLastSaveErrorDetail( $error_detail );
+		$this->redirectToList( 'error' );
 	}
 
 	/**
@@ -733,7 +734,8 @@ class TopicsPage {
 			error_log( '[WP Helpdesk] Topic save failed: ' . $error_detail ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
-		$this->redirectToList( 'error', $error_detail );
+		$this->storeLastSaveErrorDetail( $error_detail );
+		$this->redirectToList( 'error' );
 	}
 
 	/**
@@ -896,8 +898,8 @@ class TopicsPage {
 
 		list( $type, $message ) = $messages[ $msg ];
 		$error_detail = '';
-		if ( 'error' === $msg && isset( $_GET['error_detail'] ) ) {
-			$error_detail = sanitize_text_field( wp_unslash( $_GET['error_detail'] ) );
+		if ( 'error' === $msg ) {
+			$error_detail = $this->consumeLastSaveErrorDetail();
 		}
 		?>
 		<div class="notice notice-<?php echo esc_attr( $type ); ?> is-dismissible">
@@ -927,14 +929,41 @@ class TopicsPage {
 	 * @param string $message Message code.
 	 * @return void
 	 */
-	protected function redirectToList( string $message, string $error_detail = '' ): void {
-		$args = array( 'msg' => $message );
-		if ( '' !== $error_detail ) {
-			$args['error_detail'] = $error_detail;
+	protected function redirectToList( string $message ): void {
+		wp_safe_redirect( $this->getListUrl( array( 'msg' => $message ) ) );
+		exit;
+	}
+
+	/**
+	 * Persist last save error detail for the current admin user.
+	 *
+	 * @param string $error_detail Error detail.
+	 * @return void
+	 */
+	protected function storeLastSaveErrorDetail( string $error_detail ): void {
+		$user_id = (int) get_current_user_id();
+		if ( $user_id <= 0 ) {
+			return;
 		}
 
-		wp_safe_redirect( $this->getListUrl( $args ) );
-		exit;
+		update_user_meta( $user_id, 'hd_topics_last_save_error_detail', $error_detail );
+	}
+
+	/**
+	 * Read-and-clear the last save error detail for the current admin user.
+	 *
+	 * @return string
+	 */
+	protected function consumeLastSaveErrorDetail(): string {
+		$user_id = (int) get_current_user_id();
+		if ( $user_id <= 0 ) {
+			return '';
+		}
+
+		$error_detail = sanitize_text_field( (string) get_user_meta( $user_id, 'hd_topics_last_save_error_detail', true ) );
+		update_user_meta( $user_id, 'hd_topics_last_save_error_detail', '' );
+
+		return $error_detail;
 	}
 
 	/**

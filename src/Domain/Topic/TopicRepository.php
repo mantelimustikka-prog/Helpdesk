@@ -182,10 +182,10 @@ class TopicRepository {
 		}
 
 		$legacy_payload = $insert_payload;
-		for ( $retry = 0; $retry < 8; $retry++ ) {
+		for ( $retry = 0; $retry < 2; $retry++ ) {
 			$last_error = isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
 			$matches    = array();
-			$did_match  = preg_match( "/Unknown column '([^']+)' in 'field list'/i", $last_error, $matches );
+			$did_match  = preg_match( "/Unknown column '(type|parent_id)' in 'field list'/i", $last_error, $matches );
 
 			if ( 1 !== $did_match ) {
 				$this->last_error = $last_error;
@@ -233,7 +233,8 @@ class TopicRepository {
 		$data             = $this->filterPayloadBySupportedColumns( $data, $columns );
 
 		if ( empty( $data ) ) {
-			return null !== $this->find( $id, $network_id );
+			$this->last_error = 'No compatible topic columns were found for update.';
+			return false;
 		}
 
 		$result = $wpdb->update(

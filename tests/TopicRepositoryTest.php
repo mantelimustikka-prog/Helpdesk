@@ -142,4 +142,34 @@ final class TopicRepositoryTest extends TestCase {
 		self::assertSame( 0, $topic_id );
 		self::assertSame( "Column 'title' cannot be null", $repository->getLastError() );
 	}
+
+	public function testUpdateFailsWhenSchemaHasNoCompatibleColumns(): void {
+		global $wpdb;
+
+		$wpdb = new class {
+			public string $base_prefix = 'wp_';
+
+			public function get_col( string $query, int $column = 0 ): array {
+				return array( 'id', 'network_id' );
+			}
+
+			public function update( string $table, array $data, array $where, $format = null, $where_format = null ) {
+				return 0;
+			}
+		};
+
+		$repository = new TopicRepository();
+		$updated    = $repository->update(
+			12,
+			array(
+				'type'      => 'root',
+				'parent_id' => null,
+				'updated_at' => '2026-08-18 21:14:13',
+			),
+			1
+		);
+
+		self::assertFalse( $updated );
+		self::assertSame( 'No compatible topic columns were found for update.', $repository->getLastError() );
+	}
 }

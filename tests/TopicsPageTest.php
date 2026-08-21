@@ -227,10 +227,11 @@ final class TopicsPageTest extends TestCase {
 
 		$page->handlePost();
 
-		$query = parse_url( (string) $page->redirect_target, PHP_URL_QUERY );
-		parse_str( (string) $query, $args );
-		self::assertSame( 'error', $args['msg'] ?? '' );
-		self::assertSame( "Unknown column 'type' in 'INSERT INTO'", $args['error_detail'] ?? '' );
+		self::assertStringContainsString( 'msg=error', (string) $page->redirect_target );
+		self::assertSame(
+			"Unknown column 'type' in 'INSERT INTO'",
+			(string) ( $GLOBALS['wp_user_meta'][7]['hd_topics_last_save_error_detail'] ?? '' )
+		);
 	}
 
 	public function testRenderListViewDefaultsToTreeModeAndShowsHierarchyActions(): void {
@@ -398,7 +399,7 @@ final class TopicsPageTest extends TestCase {
 		);
 
 		$_GET['msg'] = 'error';
-		$_GET['error_detail'] = "Unknown column 'type' in 'INSERT INTO'";
+		$GLOBALS['wp_user_meta'][7]['hd_topics_last_save_error_detail'] = "Unknown column 'type' in 'INSERT INTO'";
 
 		ob_start();
 		$page->renderNoticeForTest();
@@ -406,6 +407,7 @@ final class TopicsPageTest extends TestCase {
 
 		self::assertStringContainsString( 'Unable to save the topic.', $output );
 		self::assertStringContainsString( "Unknown column &#039;type&#039; in &#039;INSERT INTO&#039;", $output );
+		self::assertSame( '', (string) ( $GLOBALS['wp_user_meta'][7]['hd_topics_last_save_error_detail'] ?? '' ) );
 	}
 }
 
@@ -424,12 +426,8 @@ final class TopicsPageTestDouble extends TopicsPage {
 		$this->renderNotice();
 	}
 
-	protected function redirectToList( string $message, string $error_detail = '' ): void {
-		$args = array( 'msg' => $message );
-		if ( '' !== $error_detail ) {
-			$args['error_detail'] = $error_detail;
-		}
-		$this->redirect_target = $this->getListUrl( $args );
+	protected function redirectToList( string $message ): void {
+		$this->redirect_target = $this->getListUrl( array( 'msg' => $message ) );
 	}
 
 	protected function redirectToForm( string $action, string $message, int $topic_id = 0 ): void {
