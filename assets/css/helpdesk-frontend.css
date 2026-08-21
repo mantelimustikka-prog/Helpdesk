@@ -301,3 +301,245 @@
 	gap: 8px;
 	margin-top: 16px;
 }
+
+/* -------------------------------------------------------------------------
+ * Attachment gallery
+ * ---------------------------------------------------------------------- */
+
+.hd-attachments {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin: 16px 0;
+}
+
+.hd-attachment {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	padding: 10px;
+	max-width: 280px;
+	width: 100%;
+}
+
+.hd-attachment--image {
+	flex-direction: column;
+	align-items: center;
+}
+
+.hd-attachment__thumb-btn {
+	background: none;
+	border: none;
+	padding: 0;
+	cursor: pointer;
+	display: block;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.hd-attachment__thumb-btn:focus {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+
+.hd-attachment__thumb {
+	display: block;
+	width: 100%;
+	max-width: 240px;
+	height: 140px;
+	object-fit: cover;
+	border-radius: 4px;
+}
+
+.hd-attachment__icon {
+	font-size: 2rem;
+	line-height: 1;
+	flex-shrink: 0;
+}
+
+.hd-attachment__info {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+	width: 100%;
+}
+
+.hd-attachment__name {
+	font-weight: 600;
+	font-size: 0.875rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.hd-attachment__meta {
+	font-size: 0.8rem;
+	color: #646970;
+}
+
+.hd-attachment__actions {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+	margin-top: 4px;
+}
+
+.hd-btn--xs {
+	font-size: 0.78rem;
+	padding: 3px 8px;
+}
+
+/* -------------------------------------------------------------------------
+ * Lightbox / modal
+ * ---------------------------------------------------------------------- */
+
+.hd-lightbox {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.85);
+	z-index: 99999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.hd-lightbox[hidden] {
+	display: none;
+}
+
+.hd-lightbox__img {
+	max-width: 90vw;
+	max-height: 90vh;
+	object-fit: contain;
+	border-radius: 4px;
+	box-shadow: 0 4px 32px rgba(0, 0, 0, 0.6);
+}
+
+.hd-lightbox__close {
+	position: absolute;
+	top: 16px;
+	right: 20px;
+	background: none;
+	border: none;
+	color: #fff;
+	font-size: 2rem;
+	cursor: pointer;
+	line-height: 1;
+	padding: 0;
+}
+
+.hd-lightbox__close:hover,
+.hd-lightbox__close:focus {
+	color: #f0f0f1;
+	outline: 2px solid #f0f0f1;
+	outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------------
+ * Guest ticket view
+ * ---------------------------------------------------------------------- */
+
+.hd-ticket-view {
+	max-width: 760px;
+}
+
+.hd-ticket-meta {
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	padding: 12px 16px;
+	margin-bottom: 20px;
+}
+
+.hd-ticket-meta p {
+	margin: 4px 0;
+}
+
+.hd-status-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 0.8rem;
+	background: #dcdcde;
+	color: #1d2327;
+}
+
+.hd-section-title {
+	font-size: 1.05rem;
+	margin-top: 28px;
+	margin-bottom: 12px;
+	border-bottom: 1px solid #dcdcde;
+	padding-bottom: 6px;
+}
+
+.hd-thread {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.hd-thread__message {
+	padding: 12px 16px;
+	border-radius: 4px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+}
+
+.hd-thread__message--agent {
+	background: #f0f6fc;
+	border-color: #c3d9f5;
+}
+
+.hd-thread__meta {
+	display: flex;
+	gap: 12px;
+	font-size: 0.8rem;
+	color: #646970;
+	margin-bottom: 6px;
+}
+
+.hd-thread__author {
+	font-weight: 600;
+	text-transform: capitalize;
+}
+
+.hd-thread__body > *:last-child {
+	margin-bottom: 0;
+}
+
+.hd-reply-form {
+	max-width: 560px;
+	margin-top: 12px;
+}
+
+.hd-success-message--hidden {
+	display: none;
+}
+
+.hd-success-message {
+	color: #00a32a;
+	font-size: 0.9rem;
+	margin-top: 8px;
+}
+
+/* -------------------------------------------------------------------------
+ * Responsive
+ * ---------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+	.hd-attachments {
+		flex-direction: column;
+	}
+
+	.hd-attachment {
+		max-width: 100%;
+	}
+
+	.hd-attachment__thumb {
+		max-width: 100%;
+	}
+}
