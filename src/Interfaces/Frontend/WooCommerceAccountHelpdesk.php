@@ -199,13 +199,18 @@ class WooCommerceAccountHelpdesk {
 			return;
 		}
 
+		$action = sanitize_key( (string) ( $_POST['hd_helpdesk_action'] ?? '' ) );
+		if ( 'reply' !== $action ) {
+			return;
+		}
+
 		$route = $this->parseEndpointRequest();
 		if ( 'request' !== $route['view'] ) {
 			return;
 		}
 
 		$this->post_handled = true;
-		$this->handleReplySubmission( $route['ticket_no'] );
+		$this->processReply( $route['ticket_no'] );
 	}
 
 	/**
@@ -226,7 +231,7 @@ class WooCommerceAccountHelpdesk {
 		$route = $this->parseEndpointRequest();
 
 		if ( ! $this->post_handled && 'POST' === strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) && 'request' === $route['view'] ) {
-			if ( $this->handleReplySubmission( $route['ticket_no'] ) ) {
+			if ( $this->processReply( $route['ticket_no'] ) ) {
 				return;
 			}
 		}
@@ -409,44 +414,54 @@ class WooCommerceAccountHelpdesk {
 		</div>
 		<?php endif; ?>
 
-		<div class="hd-account-helpdesk__section">
+		<div class="hd-account-helpdesk__section hd-reply-section">
 			<h4><?php esc_html_e( 'Send a reply', 'wp-helpdesk' ); ?></h4>
-			<form method="post" action="<?php echo esc_url( $this->buildAccountUrl( 'request/' . $ticket_no ) ); ?>" enctype="multipart/form-data" class="hd-reply-form">
+			<form
+				method="post"
+				action="<?php echo esc_url( $this->buildAccountUrl( 'request/' . $ticket_no ) ); ?>"
+				enctype="multipart/form-data"
+				class="hd-reply-form"
+				novalidate
+			>
 				<?php wp_nonce_field( 'hd_my_account_reply', 'hd_my_account_reply_nonce' ); ?>
 				<input type="hidden" name="hd_helpdesk_action" value="reply">
-				<div class="hd-field">
-					<label for="hd-helpdesk-reply-body" class="hd-label">
-						<?php esc_html_e( 'Message', 'wp-helpdesk' ); ?>
-						<span class="hd-required" aria-hidden="true">*</span>
+
+				<div class="hd-reply-form__field">
+					<label for="hd-reply-body" class="hd-reply-form__label">
+						<?php esc_html_e( 'Your message', 'wp-helpdesk' ); ?>
+						<abbr title="<?php esc_attr_e( 'Required', 'wp-helpdesk' ); ?>">*</abbr>
 					</label>
 					<textarea
-						id="hd-helpdesk-reply-body"
+						id="hd-reply-body"
 						name="hd_helpdesk_reply_body"
-						class="hd-textarea"
-						rows="6"
+						class="hd-reply-form__textarea"
+						rows="5"
 						required
 						aria-required="true"
+						placeholder="<?php esc_attr_e( 'Type your reply here…', 'wp-helpdesk' ); ?>"
 					></textarea>
 				</div>
-				<div class="hd-field">
-					<label for="hd-helpdesk-reply-attachment" class="hd-label">
-						<?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?>
+
+				<div class="hd-reply-form__field">
+					<label for="hd-reply-attachment" class="hd-reply-form__label">
+						<?php esc_html_e( 'Attachments (optional)', 'wp-helpdesk' ); ?>
 					</label>
 					<input
 						type="file"
-						id="hd-helpdesk-reply-attachment"
+						id="hd-reply-attachment"
 						name="hd_helpdesk_attachment[]"
 						class="hd-file-input"
 						multiple
 						accept="image/jpeg,image/png,image/gif,application/pdf,text/plain,application/zip"
+						aria-describedby="hd-reply-attachment-hint"
 					>
-					<p class="hd-field-hint">
-						<?php esc_html_e( 'Optional. You may attach images or documents (JPEG, PNG, GIF, PDF, TXT, ZIP). Maximum 10 MB per file.', 'wp-helpdesk' ); ?>
-					</p>
+					<span id="hd-reply-attachment-hint" class="hd-reply-form__hint">
+						<?php esc_html_e( 'Images or documents (JPEG, PNG, GIF, PDF, TXT, ZIP). Up to 10 MB each.', 'wp-helpdesk' ); ?>
+					</span>
 				</div>
-				<p class="hd-error-message" id="hd-helpdesk-reply-error" aria-live="assertive" role="alert"></p>
-				<div class="hd-form-actions">
-					<button type="submit" class="hd-btn hd-btn--primary">
+
+				<div class="hd-reply-form__actions">
+					<button type="submit" class="hd-btn hd-btn--primary hd-reply-form__submit">
 						<?php esc_html_e( 'Send reply', 'wp-helpdesk' ); ?>
 					</button>
 				</div>
@@ -526,22 +541,22 @@ class WooCommerceAccountHelpdesk {
 	}
 
 	/**
-	 * Handle member reply submission on the request detail view.
+	 * Process a member reply POST for the given ticket.
 	 *
-	 * @param string $ticket_no Ticket number.
+	 * Validates the nonce, retrieves the ticket, saves the reply message,
+	 * uploads any attached files, fires the hd_ticket_replied action, and
+	 * issues a redirect. Returns true when a redirect was issued, false when
+	 * validation failed (notice is set for the caller to display).
+	 *
+	 * @param string $ticket_no Ticket number from the endpoint path.
 	 * @return bool True when a redirect was issued.
 	 */
-	protected function handleReplySubmission( string $ticket_no ): bool {
-		$action = sanitize_key( (string) ( $_POST['hd_helpdesk_action'] ?? '' ) );
-		if ( 'reply' !== $action ) {
-			return false;
-		}
-
+	protected function processReply( string $ticket_no ): bool {
 		$nonce = sanitize_text_field( (string) ( $_POST['hd_my_account_reply_nonce'] ?? '' ) );
 		if ( '' === $nonce || ! wp_verify_nonce( $nonce, 'hd_my_account_reply' ) ) {
 			$this->notice = array(
 				'type'    => 'error',
-				'message' => __( 'Security check failed.', 'wp-helpdesk' ),
+				'message' => __( 'Security check failed. Please try again.', 'wp-helpdesk' ),
 			);
 			return false;
 		}
@@ -550,7 +565,7 @@ class WooCommerceAccountHelpdesk {
 		if ( null === $ticket ) {
 			$this->notice = array(
 				'type'    => 'error',
-				'message' => __( 'That request could not be found or you do not have permission to reply to it.', 'wp-helpdesk' ),
+				'message' => __( 'Request not found or you do not have permission to reply.', 'wp-helpdesk' ),
 			);
 			return false;
 		}
@@ -575,13 +590,12 @@ class WooCommerceAccountHelpdesk {
 		if ( $message_id <= 0 ) {
 			$this->notice = array(
 				'type'    => 'error',
-				'message' => __( 'Your reply could not be sent. Please try again.', 'wp-helpdesk' ),
+				'message' => __( 'Your reply could not be saved. Please try again.', 'wp-helpdesk' ),
 			);
 			return false;
 		}
 
-		// Handle optional file attachment on the reply.
-		$attachment_error = $this->maybeUploadReplyAttachment( (int) $ticket['id'], $message_id );
+		$upload_error = $this->uploadAttachments( (int) $ticket['id'], $message_id );
 
 		$message = $this->message_service->getMessage( $message_id );
 		do_action(
@@ -599,7 +613,7 @@ class WooCommerceAccountHelpdesk {
 
 		$redirect_url = $this->buildAccountUrl( 'request/' . $ticket_no );
 		$separator    = false !== strpos( $redirect_url, '?' ) ? '&' : '?';
-		$status       = $attachment_error instanceof \WP_Error ? 'sent_with_attachment_error' : 'sent';
+		$status       = $upload_error instanceof \WP_Error ? 'sent_with_attachment_error' : 'sent';
 
 		return $this->redirectTo( $redirect_url . $separator . 'hd_reply_status=' . rawurlencode( $status ) );
 	}
@@ -633,18 +647,18 @@ class WooCommerceAccountHelpdesk {
 	}
 
 	/**
-	 * Upload one or more reply attachments from $_FILES if any were submitted.
+	 * Upload reply attachments from $_FILES to the ticket and message.
 	 *
-	 * Looks for files under the 'hd_helpdesk_attachment' key (array notation from
-	 * the multiple-file input). Silently skips when no files are present.
-	 * Errors are not fatal to the reply submission; the last error, if any, is
-	 * returned so the caller can record it.
+	 * Handles the array-indexed format produced by a multiple-file input
+	 * (name="hd_helpdesk_attachment[]"). Files with UPLOAD_ERR_NO_FILE are
+	 * silently skipped. Upload errors do not abort the reply; the last error
+	 * is returned so the caller can surface it in the redirect status flag.
 	 *
-	 * @param int      $ticket_id  Ticket ID.
-	 * @param int|null $message_id Message ID, or null.
-	 * @return \WP_Error|null WP_Error on failure, null on success or no file.
+	 * @param int $ticket_id  Ticket ID to associate attachments with.
+	 * @param int $message_id Message ID to associate attachments with.
+	 * @return \WP_Error|null WP_Error when any upload fails, null on success or when no files are present.
 	 */
-	protected function maybeUploadReplyAttachment( int $ticket_id, ?int $message_id ): ?\WP_Error {
+	protected function uploadAttachments( int $ticket_id, int $message_id ): ?\WP_Error {
 		if ( empty( $_FILES['hd_helpdesk_attachment'] ) ) {
 			return null;
 		}
@@ -652,33 +666,36 @@ class WooCommerceAccountHelpdesk {
 		$files      = $_FILES['hd_helpdesk_attachment'];
 		$last_error = null;
 
-		// Array format: name="hd_helpdesk_attachment[]" (multiple file input).
 		if ( is_array( $files['name'] ) ) {
-			foreach ( array_keys( $files['name'] ) as $i ) {
-				if ( UPLOAD_ERR_NO_FILE === (int) $files['error'][ $i ] ) {
+			foreach ( array_keys( $files['name'] ) as $index ) {
+				if ( UPLOAD_ERR_NO_FILE === (int) $files['error'][ $index ] ) {
 					continue;
 				}
-				$single = array(
-					'name'     => $files['name'][ $i ],
-					'type'     => $files['type'][ $i ],
-					'tmp_name' => $files['tmp_name'][ $i ],
-					'error'    => $files['error'][ $i ],
-					'size'     => $files['size'][ $i ],
+
+				$file = array(
+					'name'     => $files['name'][ $index ],
+					'type'     => $files['type'][ $index ],
+					'tmp_name' => $files['tmp_name'][ $index ],
+					'error'    => $files['error'][ $index ],
+					'size'     => $files['size'][ $index ],
 				);
+
 				$result = $this->attachment_service->handleUpload(
-					$single,
+					$file,
 					$ticket_id,
 					$message_id,
 					get_current_user_id()
 				);
+
 				if ( $result instanceof \WP_Error ) {
 					$last_error = $result;
 				}
 			}
+
 			return $last_error;
 		}
 
-		// Legacy flat format: name="hd_helpdesk_attachment" (single file input).
+		// Flat single-file fallback (name="hd_helpdesk_attachment").
 		if ( ! empty( $files['name'] ) ) {
 			$result = $this->attachment_service->handleUpload(
 				$files,
@@ -686,6 +703,7 @@ class WooCommerceAccountHelpdesk {
 				$message_id,
 				get_current_user_id()
 			);
+
 			if ( $result instanceof \WP_Error ) {
 				return $result;
 			}
