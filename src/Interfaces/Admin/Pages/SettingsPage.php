@@ -140,6 +140,11 @@ class SettingsPage {
 		$allow_guest = $this->booleanFromPost( 'hd_general_allow_guest_tickets' );
 		$require_topic = $this->booleanFromPost( 'hd_general_require_topic' );
 
+		$retention_days = isset( $_POST['hd_data_retention_days'] ) ? (int) wp_unslash( $_POST['hd_data_retention_days'] ) : 365;
+		if ( $retention_days < 1 ) {
+			$errors[] = __( 'Retention days must be at least 1.', 'wp-helpdesk' );
+		}
+
 		if ( ! empty( $errors ) ) {
 			foreach ( $errors as $error ) {
 				add_settings_error( 'wp_helpdesk_settings', 'wp_helpdesk_settings_error', $error, 'error' );
@@ -157,6 +162,7 @@ class SettingsPage {
 		update_site_option( Constants::OPTION_GENERAL_AUTO_ASSIGN_MODE, $assign );
 		update_site_option( Constants::OPTION_GENERAL_TIMEZONE_MODE, $timezone );
 		update_site_option( Constants::OPTION_GENERAL_DATE_FORMAT, $date_fmt );
+		update_site_option( Constants::OPTION_GENERAL_RETENTION_DAYS, $retention_days );
 
 		update_site_option( Constants::OPTION_TICKET_START, $start );
 		$current_counter = get_site_option( Constants::OPTION_TICKET_COUNTER, false );
@@ -265,6 +271,10 @@ class SettingsPage {
 
 		$counter     = (int) get_site_option( Constants::OPTION_TICKET_COUNTER, $start );
 		$next_ticket = max( $counter, $start );
+		$retention_days = (int) get_site_option( Constants::OPTION_GENERAL_RETENTION_DAYS, 365 );
+		if ( $retention_days < 1 ) {
+			$retention_days = 365;
+		}
 		?>
 		<form method="post">
 			<?php wp_nonce_field( 'hd_settings_save', 'hd_settings_nonce' ); ?>
@@ -372,6 +382,17 @@ class SettingsPage {
 							<option value="wp_default" <?php selected( $date_fmt, 'wp_default' ); ?>><?php esc_html_e( 'WordPress default', 'wp-helpdesk' ); ?></option>
 							<option value="iso8601" <?php selected( $date_fmt, 'iso8601' ); ?>><?php esc_html_e( 'ISO 8601 (YYYY-MM-DD)', 'wp-helpdesk' ); ?></option>
 						</select>
+					</td>
+				</tr>
+			</table>
+
+			<h2><?php esc_html_e( 'Data Retention', 'wp-helpdesk' ); ?></h2>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="hd_data_retention_days"><?php esc_html_e( 'Auto-Delete After (days)', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input type="number" id="hd_data_retention_days" name="hd_data_retention_days" value="<?php echo esc_attr( (string) $retention_days ); ?>" min="1" class="small-text">
+						<p class="description"><?php esc_html_e( 'Closed tickets and all their attachments will be automatically deleted after this many days. Set to a large number to effectively disable auto-deletion.', 'wp-helpdesk' ); ?></p>
 					</td>
 				</tr>
 			</table>

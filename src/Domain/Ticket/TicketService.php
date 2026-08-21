@@ -5,6 +5,7 @@
 
 namespace WPHelpdesk\Domain\Ticket;
 
+use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Support\Helpers;
 
 class TicketService {
@@ -131,12 +132,15 @@ class TicketService {
 	}
 
 	/**
-	 * Delete a ticket.
+	 * Delete a ticket and all its attachments.
 	 *
 	 * @param int $id Ticket id.
 	 * @return bool
 	 */
 	public function deleteTicket( int $id ): bool {
+		$attachment_service = new AttachmentService();
+		$attachment_service->deleteForTicket( $id );
+
 		return $this->repository->delete( $id, $this->network_id );
 	}
 

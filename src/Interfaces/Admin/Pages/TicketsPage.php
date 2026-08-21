@@ -51,32 +51,66 @@ class TicketsPage {
 				<?php if ( empty( $tickets ) ) : ?>
 					<p><?php esc_html_e( 'No tickets found yet.', 'wp-helpdesk' ); ?></p>
 				<?php else : ?>
-					<table class="widefat striped">
-						<thead>
-							<tr>
-								<th><?php esc_html_e( 'Ticket', 'wp-helpdesk' ); ?></th>
-								<th><?php esc_html_e( 'Subject', 'wp-helpdesk' ); ?></th>
-								<th><?php esc_html_e( 'Requester', 'wp-helpdesk' ); ?></th>
-								<th><?php esc_html_e( 'Status', 'wp-helpdesk' ); ?></th>
-								<th><?php esc_html_e( 'Updated', 'wp-helpdesk' ); ?></th>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ( $tickets as $ticket ) : ?>
+					<form method="post" id="hd-bulk-form">
+						<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
+						<input type="hidden" name="hd_ticket_action" value="bulk_delete">
+						<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
+							<div style="margin-bottom:8px;">
+								<button type="submit" class="button button-secondary" onclick="return confirm('<?php esc_attr_e( 'Delete selected tickets and all their attachments?', 'wp-helpdesk' ); ?>');">
+									<?php esc_html_e( 'Delete Selected', 'wp-helpdesk' ); ?>
+								</button>
+							</div>
+						<?php endif; ?>
+						<table class="widefat striped">
+							<thead>
 								<tr>
-									<td>
-										<a href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . (int) $ticket['id'] ) ); ?>">
-											<?php echo esc_html( (string) $ticket['ticket_no'] ); ?>
-										</a>
-									</td>
-									<td><?php echo esc_html( (string) $ticket['subject'] ); ?></td>
-									<td><?php echo esc_html( (string) $ticket['requester_name'] . ' (' . (string) $ticket['requester_email'] . ')' ); ?></td>
-									<td><?php echo esc_html( (string) $ticket['status'] ); ?></td>
-									<td><?php echo esc_html( (string) $ticket['updated_at'] ); ?></td>
+									<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
+										<td class="check-column">
+											<input type="checkbox" id="hd-select-all" title="<?php esc_attr_e( 'Select all', 'wp-helpdesk' ); ?>">
+										</td>
+									<?php endif; ?>
+									<th><?php esc_html_e( 'Ticket', 'wp-helpdesk' ); ?></th>
+									<th><?php esc_html_e( 'Subject', 'wp-helpdesk' ); ?></th>
+									<th><?php esc_html_e( 'Requester', 'wp-helpdesk' ); ?></th>
+									<th><?php esc_html_e( 'Status', 'wp-helpdesk' ); ?></th>
+									<th><?php esc_html_e( 'Updated', 'wp-helpdesk' ); ?></th>
 								</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								<?php foreach ( $tickets as $ticket ) : ?>
+									<tr>
+										<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
+											<td class="check-column">
+												<input type="checkbox" name="hd_ticket_ids[]" value="<?php echo esc_attr( (string) $ticket['id'] ); ?>">
+											</td>
+										<?php endif; ?>
+										<td>
+											<a href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . (int) $ticket['id'] ) ); ?>">
+												<?php echo esc_html( (string) $ticket['ticket_no'] ); ?>
+											</a>
+										</td>
+										<td><?php echo esc_html( (string) $ticket['subject'] ); ?></td>
+										<td><?php echo esc_html( (string) $ticket['requester_name'] . ' (' . (string) $ticket['requester_email'] . ')' ); ?></td>
+										<td><?php echo esc_html( (string) $ticket['status'] ); ?></td>
+										<td><?php echo esc_html( (string) $ticket['updated_at'] ); ?></td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</form>
+					<script>
+						(function () {
+							var selectAll = document.getElementById('hd-select-all');
+							if (selectAll) {
+								selectAll.addEventListener('change', function () {
+									var checkboxes = document.querySelectorAll('#hd-bulk-form input[name="hd_ticket_ids[]"]');
+									for (var i = 0; i < checkboxes.length; i++) {
+										checkboxes[i].checked = selectAll.checked;
+									}
+								});
+							}
+						})();
+					</script>
 				<?php endif; ?>
 			</div>
 
@@ -155,7 +189,7 @@ class TicketsPage {
 	 *
 	 * @return void
 	 */
-	protected function handlePost(): void {
+	public function handlePost(): void {
 		if ( 'POST' !== strtoupper( $_SERVER['REQUEST_METHOD'] ?? '' ) ) {
 			return;
 		}
@@ -170,6 +204,12 @@ class TicketsPage {
 
 		$action = isset( $_POST['hd_ticket_action'] ) ? sanitize_key( wp_unslash( $_POST['hd_ticket_action'] ) ) : '';
 		$ticket_id = isset( $_POST['hd_ticket_id'] ) ? (int) $_POST['hd_ticket_id'] : 0;
+
+		if ( 'bulk_delete' === $action ) {
+			$this->handleBulkDelete();
+			return;
+		}
+
 		if ( $ticket_id <= 0 ) {
 			return;
 		}
@@ -180,6 +220,44 @@ class TicketsPage {
 		if ( 'status' === $action ) {
 			$this->handleStatusPost( $ticket_id );
 		}
+	}
+
+	/**
+	 * Handle bulk deletion of selected tickets.
+	 *
+	 * @return void
+	 */
+	protected function handleBulkDelete(): void {
+		if ( ! current_user_can( 'hd_manage_tickets' ) ) {
+			wp_die( esc_html__( 'You do not have permission to delete tickets.', 'wp-helpdesk' ) );
+		}
+
+		$raw_ids = isset( $_POST['hd_ticket_ids'] ) && is_array( $_POST['hd_ticket_ids'] )
+			? $_POST['hd_ticket_ids']
+			: array();
+
+		$ticket_ids = array_filter( array_map( 'intval', $raw_ids ) );
+		if ( empty( $ticket_ids ) ) {
+			wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+			exit;
+		}
+
+		$ticket_service = $this->getTicketService();
+		foreach ( $ticket_ids as $id ) {
+			$ticket_service->deleteTicket( $id );
+		}
+
+		wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+		exit;
+	}
+
+	/**
+	 * Get the TicketService instance (overridable in tests).
+	 *
+	 * @return \WPHelpdesk\Domain\Ticket\TicketService
+	 */
+	protected function getTicketService(): \WPHelpdesk\Domain\Ticket\TicketService {
+		return new \WPHelpdesk\Domain\Ticket\TicketService();
 	}
 
 	/**
