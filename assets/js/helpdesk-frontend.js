@@ -299,6 +299,10 @@
 			return;
 		}
 
+		// Clear any lingering error (e.g. "Please select an order relation." from a
+		// previous submit attempt) so it does not persist while the order list loads.
+		this._clearError();
+
 		if ( orderField ) {
 			orderField.classList.remove( 'hd-form-step--hidden' );
 		}
