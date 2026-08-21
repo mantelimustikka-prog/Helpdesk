@@ -419,8 +419,15 @@
 		this._clearTopicError();
 		this._refreshKnowledgeBaseSuggestions();
 
-		if ( hintEl ) {
-			hintEl.textContent = opt && opt.dataset.description ? opt.dataset.description : '';
+		if ( level === 0 ) {
+			if ( hintEl ) {
+				hintEl.textContent = opt && opt.dataset.description ? opt.dataset.description : '';
+			}
+		} else {
+			var fieldHintEl = select.parentNode ? select.parentNode.querySelector( '.hd-followup-topic-description' ) : null;
+			if ( fieldHintEl ) {
+				fieldHintEl.textContent = opt && opt.dataset.description ? opt.dataset.description : '';
+			}
 		}
 
 		apiGet( 'topics/' + encodeURIComponent( val ) + '/children' ).then( function ( children ) {
@@ -548,8 +555,13 @@
 			self._onTopicChange( select, level );
 		} );
 
+		var hint = document.createElement( 'p' );
+		hint.className = 'hd-field-hint hd-followup-topic-description';
+		hint.setAttribute( 'aria-live', 'polite' );
+
 		field.appendChild( label );
 		field.appendChild( select );
+		field.appendChild( hint );
 		if ( branchContainer ) {
 			branchContainer.appendChild( field );
 		}
@@ -592,8 +604,13 @@
 			self._onTopicChange( select, level );
 		} );
 
+		var hint = document.createElement( 'p' );
+		hint.className = 'hd-field-hint hd-followup-topic-description';
+		hint.setAttribute( 'aria-live', 'polite' );
+
 		field.appendChild( label );
 		field.appendChild( select );
+		field.appendChild( hint );
 		if ( branchContainer ) {
 			branchContainer.appendChild( field );
 		}
@@ -1119,32 +1136,37 @@
 						var successMsg  = r.data.message || 'Your reply has been sent.';
 						var fileInput   = form.querySelector( 'input[type="file"]' );
 						var ticketId    = r.data.ticket_id;
-						if ( fileInput && fileInput.files && fileInput.files.length > 0 && ticketId ) {
-							var fd = new FormData();
-							fd.append( 'file', fileInput.files[0] );
-							fd.append( 'guest_token', guestToken );
-							fetch( restBase + 'tickets/' + ticketId + '/attachments', {
-								method: 'POST',
-								headers: { 'X-WP-Nonce': restNonce },
-								body: fd
-							} )
-								.then( function () {
-									bodyField.value  = '';
-									fileInput.value  = '';
-									successEl.textContent = successMsg;
-									successEl.classList.remove( 'hd-success-message--hidden' );
-									submitBtn.disabled    = false;
-									submitBtn.textContent = 'Send reply';
-								} )
-								.catch( function () {
-									bodyField.value  = '';
-									fileInput.value  = '';
-									successEl.textContent = successMsg;
-									successEl.classList.remove( 'hd-success-message--hidden' );
-									showError( 'Your reply was sent but the attachment could not be uploaded.' );
-									submitBtn.disabled    = false;
-									submitBtn.textContent = 'Send reply';
+						var selectedFiles = ( fileInput && fileInput.files ) ? Array.prototype.slice.call( fileInput.files ) : [];
+						if ( selectedFiles.length > 0 && ticketId ) {
+							var chain = Promise.resolve();
+							selectedFiles.forEach( function ( file ) {
+								chain = chain.then( function () {
+									var fd = new FormData();
+									fd.append( 'file', file );
+									fd.append( 'guest_token', guestToken );
+									return fetch( restBase + 'tickets/' + ticketId + '/attachments', {
+										method: 'POST',
+										headers: { 'X-WP-Nonce': restNonce },
+										body: fd
+									} );
 								} );
+							} );
+							chain.then( function () {
+								bodyField.value  = '';
+								fileInput.value  = '';
+								successEl.textContent = successMsg;
+								successEl.classList.remove( 'hd-success-message--hidden' );
+								submitBtn.disabled    = false;
+								submitBtn.textContent = 'Send reply';
+							} ).catch( function () {
+								bodyField.value  = '';
+								fileInput.value  = '';
+								successEl.textContent = successMsg;
+								successEl.classList.remove( 'hd-success-message--hidden' );
+								showError( 'Your reply was sent but one or more attachments could not be uploaded.' );
+								submitBtn.disabled    = false;
+								submitBtn.textContent = 'Send reply';
+							} );
 							return;
 						}
 						bodyField.value = '';

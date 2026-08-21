@@ -132,15 +132,16 @@ class GuestTicketView extends HelpdeskPage {
 					</div>
 					<div class="hd-field">
 						<label for="hd-guest-reply-attachment" class="hd-label">
-							<?php esc_html_e( 'Attachment', 'wp-helpdesk' ); ?>
+							<?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?>
 						</label>
 						<input
 							type="file"
 							id="hd-guest-reply-attachment"
 							name="hd-guest-reply-attachment"
+							multiple
 							accept="<?php echo esc_attr( implode( ',', \WPHelpdesk\Domain\Attachment\AttachmentService::ALLOWED_MIME_TYPES ) ); ?>"
 						>
-						<span class="hd-description"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB.', 'wp-helpdesk' ); ?></span>
+						<span class="hd-description"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB per file.', 'wp-helpdesk' ); ?></span>
 					</div>
 					<div class="hd-form-actions">
 						<button type="button" class="hd-btn hd-btn--primary" id="hd-guest-reply-submit">

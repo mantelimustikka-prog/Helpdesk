@@ -476,12 +476,13 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 			'hd_helpdesk_reply_body'    => 'Attaching a document.',
 		);
 		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
+		// Simulate the array format PHP uses for name="hd_helpdesk_attachment[]".
 		$_FILES['hd_helpdesk_attachment'] = array(
-			'name'     => 'proof.pdf',
-			'type'     => 'application/pdf',
-			'tmp_name' => '/tmp/phpTEST',
-			'error'    => UPLOAD_ERR_OK,
-			'size'     => 2048,
+			'name'     => array( 'proof.pdf' ),
+			'type'     => array( 'application/pdf' ),
+			'tmp_name' => array( '/tmp/phpTEST' ),
+			'error'    => array( UPLOAD_ERR_OK ),
+			'size'     => array( 2048 ),
 		);
 
 		$this->integration->render();
@@ -492,6 +493,47 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertSame( 11, $this->attachment_service->upload_calls[0]['ticket_id'] );
 		self::assertSame( 99, $this->attachment_service->upload_calls[0]['message_id'] );
 		self::assertSame( 'proof.pdf', $this->attachment_service->upload_calls[0]['file_name'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// Reply with multiple attachments calls attachment service for each file
+	// -------------------------------------------------------------------------
+
+	public function testReplyWithMultipleAttachmentsCallsUploadServiceForEachFile(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		$this->message_service->reply_id = 101;
+		$_SERVER['REQUEST_METHOD']       = 'POST';
+		$_POST = array(
+			'hd_helpdesk_action'        => 'reply',
+			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
+			'hd_helpdesk_reply_body'    => 'Attaching two files.',
+		);
+		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
+		$_FILES['hd_helpdesk_attachment'] = array(
+			'name'     => array( 'first.pdf', 'second.jpg' ),
+			'type'     => array( 'application/pdf', 'image/jpeg' ),
+			'tmp_name' => array( '/tmp/phpTEST1', '/tmp/phpTEST2' ),
+			'error'    => array( UPLOAD_ERR_OK, UPLOAD_ERR_OK ),
+			'size'     => array( 1024, 2048 ),
+		);
+
+		$this->integration->render();
+
+		unset( $_FILES['hd_helpdesk_attachment'] );
+
+		self::assertCount( 2, $this->attachment_service->upload_calls, 'handleUpload must be called once per submitted file' );
+		self::assertSame( 'first.pdf', $this->attachment_service->upload_calls[0]['file_name'] );
+		self::assertSame( 'second.jpg', $this->attachment_service->upload_calls[1]['file_name'] );
+		self::assertSame( 11, $this->attachment_service->upload_calls[0]['ticket_id'] );
+		self::assertSame( 101, $this->attachment_service->upload_calls[0]['message_id'] );
 	}
 
 	// -------------------------------------------------------------------------
