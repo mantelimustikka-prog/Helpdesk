@@ -157,7 +157,7 @@ class TopicRepository {
 		}
 
 		$legacy_payload = $data;
-		while ( true ) {
+		for ( $retry = 0; $retry < 2; $retry++ ) {
 			$last_error = isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
 			$matches    = array();
 			$did_match  = preg_match( "/Unknown column '(type|parent_id)' in 'field list'/i", $last_error, $matches );
@@ -178,6 +178,8 @@ class TopicRepository {
 				return (int) $wpdb->insert_id;
 			}
 		}
+
+		return 0;
 	}
 
 	/**
