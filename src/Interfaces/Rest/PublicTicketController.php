@@ -8,6 +8,7 @@ namespace WPHelpdesk\Interfaces\Rest;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
+use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseService;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Infrastructure\Security\RateLimiter;
@@ -26,11 +27,13 @@ class PublicTicketController {
 	protected TopicService $topic_service;
 	protected TopicTransitionService $topic_transition_service;
 	protected KnowledgeBaseService $kb_service;
+	protected AttachmentService $attachment_service;
 
-	public function __construct( ?TopicService $topic_service = null, ?TopicTransitionService $topic_transition_service = null, ?KnowledgeBaseService $kb_service = null ) {
+	public function __construct( ?TopicService $topic_service = null, ?TopicTransitionService $topic_transition_service = null, ?KnowledgeBaseService $kb_service = null, ?AttachmentService $attachment_service = null ) {
 		$this->topic_service            = $topic_service ?: new TopicService();
 		$this->topic_transition_service = $topic_transition_service ?: new TopicTransitionService();
 		$this->kb_service               = $kb_service ?: new KnowledgeBaseService();
+		$this->attachment_service       = $attachment_service ?: new AttachmentService();
 	}
 
 	/**
@@ -163,6 +166,16 @@ class PublicTicketController {
 			array(
 				'methods'             => 'GET',
 				'callback'            => array( $this, 'suggestKnowledgeBase' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/tickets/(?P<id>\d+)/attachments',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'uploadAttachment' ),
 				'permission_callback' => '__return_true',
 			)
 		);
@@ -568,6 +581,7 @@ class PublicTicketController {
 		}
 
 		$response_data = array(
+			'ticket_id' => $ticket_id,
 			'ticket_no' => $ticket_no,
 			'message'   => __( 'Your support request has been submitted.', 'wp-helpdesk' ),
 		);
@@ -577,6 +591,77 @@ class PublicTicketController {
 		}
 
 		return new WP_REST_Response( $response_data, 201 );
+	}
+
+	/**
+	 * POST /tickets/{id}/attachments – upload an attachment to an existing ticket.
+	 *
+	 * Auth: valid nonce required, plus one of:
+	 *  – guest: guest_token param matches the ticket's stored hash
+	 *  – member: the logged-in user owns the ticket or has admin capability
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function uploadAttachment( WP_REST_Request $request ) {
+		$nonce = $request->get_header( 'X-WP-Nonce' );
+		if ( empty( $nonce ) ) {
+			$nonce = $request->get_param( '_wpnonce' );
+		}
+		if ( empty( $nonce ) || ! wp_verify_nonce( (string) $nonce, 'wp_rest' ) ) {
+			return new WP_Error( 'hd_invalid_nonce', __( 'Invalid or missing nonce.', 'wp-helpdesk' ), array( 'status' => 403 ) );
+		}
+
+		$ticket_id = (int) $request['id'];
+
+		global $wpdb;
+		$table  = Schema::table( Constants::TABLE_TICKETS );
+		$ticket = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d LIMIT 1", $ticket_id ),
+			ARRAY_A
+		);
+
+		if ( empty( $ticket ) ) {
+			return new WP_Error( 'hd_not_found', __( 'Ticket not found.', 'wp-helpdesk' ), array( 'status' => 404 ) );
+		}
+
+		if ( is_user_logged_in() ) {
+			$user_id = get_current_user_id();
+			if (
+				(int) ( $ticket['user_id'] ?? 0 ) !== $user_id &&
+				! current_user_can( 'hd_manage_tickets' ) &&
+				! current_user_can( 'hd_reply_tickets' )
+			) {
+				return new WP_Error( 'hd_forbidden', __( 'Access denied.', 'wp-helpdesk' ), array( 'status' => 403 ) );
+			}
+		} else {
+			$guest_token = sanitize_text_field( (string) $request->get_param( 'guest_token' ) );
+			if ( '' === $guest_token ) {
+				return new WP_Error( 'hd_forbidden', __( 'Access denied.', 'wp-helpdesk' ), array( 'status' => 403 ) );
+			}
+			$expected_hash = $this->hashGuestToken( $guest_token );
+			if ( (string) ( $ticket['guest_token_hash'] ?? '' ) !== $expected_hash ) {
+				return new WP_Error( 'hd_forbidden', __( 'Access denied.', 'wp-helpdesk' ), array( 'status' => 403 ) );
+			}
+			$user_id = 0;
+		}
+
+		if ( empty( $_FILES['file'] ) ) {
+			return new WP_REST_Response( array( 'message' => __( 'No file uploaded.', 'wp-helpdesk' ) ), 400 );
+		}
+
+		$result = $this->attachment_service->handleUpload(
+			$_FILES['file'],
+			$ticket_id,
+			null,
+			$user_id
+		);
+
+		if ( $result instanceof WP_Error ) {
+			return $result;
+		}
+
+		return new WP_REST_Response( $result, 201 );
 	}
 
 	/**
