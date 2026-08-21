@@ -234,6 +234,103 @@ final class TopicsPageTest extends TestCase {
 		);
 	}
 
+	public function testHandlePostDeleteRemovesSelectedTopic(): void {
+		$deleted_ids = array();
+
+		$topic_service = new class ( $deleted_ids ) extends TopicService {
+			/** @var array<int, int> */
+			private array $log;
+
+			/** @param array<int, int> &$log */
+			public function __construct( array &$log ) {
+				$this->log = &$log;
+			}
+
+			public function deleteTopic( int $id ): bool {
+				$this->log[] = $id;
+				return true;
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		$_GET['page']            = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'delete',
+			'hd_topic_id'     => '5',
+		);
+
+		$page->handlePost();
+
+		self::assertContains( 5, $deleted_ids, 'deleteTopic must be called with the submitted topic id' );
+		self::assertStringContainsString( 'msg=deleted', (string) $page->redirect_target );
+	}
+
+	public function testHandlePostDeleteDoesNotAffectOtherTopics(): void {
+		$deleted_ids = array();
+
+		$topic_service = new class ( $deleted_ids ) extends TopicService {
+			/** @var array<int, int> */
+			private array $log;
+
+			/** @param array<int, int> &$log */
+			public function __construct( array &$log ) {
+				$this->log = &$log;
+			}
+
+			public function deleteTopic( int $id ): bool {
+				$this->log[] = $id;
+				return true;
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		$_GET['page']            = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'delete',
+			'hd_topic_id'     => '5',
+		);
+
+		$page->handlePost();
+
+		self::assertNotContains( 1, $deleted_ids, 'deleteTopic must not be called for an unrelated topic (id=1)' );
+		self::assertCount( 1, $deleted_ids, 'Exactly one topic must be deleted' );
+	}
+
+	public function testRenderListViewRowActionsUseDataAttributesNotNestedForms(): void {
+		$topic_service = new class extends TopicService {
+			public function countTopics( array $args = array() ): int {
+				return 1;
+			}
+
+			public function listTopics( array $args = array() ): array {
+				return array(
+					array( 'id' => 7, 'name' => 'Billing', 'slug' => 'billing', 'is_active' => 1, 'sort_order' => 0, 'updated_at' => '2026-01-01 00:00:00' ),
+				);
+			}
+		};
+
+		$GLOBALS['wp_user_meta'][7]['hd_topics_view_mode'] = 'flat';
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		ob_start();
+		$page->renderList();
+		$output = (string) ob_get_clean();
+
+		// Row actions must use data-attribute buttons, not forms nested inside the bulk form.
+		self::assertStringContainsString( 'hd-topic-row-action', $output, 'Row action buttons must have hd-topic-row-action class' );
+		self::assertStringContainsString( 'data-action="delete"', $output, 'Delete button must carry data-action attribute' );
+		self::assertStringContainsString( 'data-topic-id="7"', $output, 'Delete button must carry data-topic-id attribute' );
+		// The shared row-action form must be rendered separately.
+		self::assertStringContainsString( 'id="hd-row-action-form"', $output, 'Standalone row-action form must be rendered' );
+	}
+
 	public function testRenderListViewDefaultsToTreeModeAndShowsHierarchyActions(): void {
 		$topic_service = new class extends TopicService {
 			public function countTopics( array $args = array() ): int {

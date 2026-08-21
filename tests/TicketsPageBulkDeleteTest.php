@@ -28,6 +28,11 @@ final class TicketsPageTestDouble extends TicketsPage {
 		return $this->injected_service ?? parent::getTicketService();
 	}
 
+	protected function redirectTo( string $url ): void {
+		wp_safe_redirect( $url );
+		// Do not call exit so tests can continue making assertions.
+	}
+
 	protected function listTickets( int $limit, string $status_filter = '' ): array {
 		return array(
 			array(

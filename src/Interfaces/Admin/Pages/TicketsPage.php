@@ -316,8 +316,8 @@ class TicketsPage {
 
 		$ticket_ids = array_filter( array_map( 'intval', $raw_ids ) );
 		if ( empty( $ticket_ids ) ) {
-			wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
-			exit;
+			$this->redirectTo( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+			return;
 		}
 
 		$ticket_service = $this->getTicketService();
@@ -325,7 +325,17 @@ class TicketsPage {
 			$ticket_service->deleteTicket( $id );
 		}
 
-		wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+		$this->redirectTo( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+	}
+
+	/**
+	 * Redirect to the given URL and exit. Overridable in tests.
+	 *
+	 * @param string $url Target URL.
+	 * @return void
+	 */
+	protected function redirectTo( string $url ): void {
+		wp_safe_redirect( $url );
 		exit;
 	}
 
