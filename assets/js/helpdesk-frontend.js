@@ -419,8 +419,15 @@
 		this._clearTopicError();
 		this._refreshKnowledgeBaseSuggestions();
 
-		if ( hintEl ) {
-			hintEl.textContent = opt && opt.dataset.description ? opt.dataset.description : '';
+		if ( level === 0 ) {
+			if ( hintEl ) {
+				hintEl.textContent = opt && opt.dataset.description ? opt.dataset.description : '';
+			}
+		} else {
+			var fieldHintEl = select.parentNode ? select.parentNode.querySelector( '.hd-followup-topic-description' ) : null;
+			if ( fieldHintEl ) {
+				fieldHintEl.textContent = opt && opt.dataset.description ? opt.dataset.description : '';
+			}
 		}
 
 		apiGet( 'topics/' + encodeURIComponent( val ) + '/children' ).then( function ( children ) {
@@ -548,8 +555,13 @@
 			self._onTopicChange( select, level );
 		} );
 
+		var hint = document.createElement( 'p' );
+		hint.className = 'hd-field-hint hd-followup-topic-description';
+		hint.setAttribute( 'aria-live', 'polite' );
+
 		field.appendChild( label );
 		field.appendChild( select );
+		field.appendChild( hint );
 		if ( branchContainer ) {
 			branchContainer.appendChild( field );
 		}
@@ -592,8 +604,13 @@
 			self._onTopicChange( select, level );
 		} );
 
+		var hint = document.createElement( 'p' );
+		hint.className = 'hd-field-hint hd-followup-topic-description';
+		hint.setAttribute( 'aria-live', 'polite' );
+
 		field.appendChild( label );
 		field.appendChild( select );
+		field.appendChild( hint );
 		if ( branchContainer ) {
 			branchContainer.appendChild( field );
 		}
