@@ -377,39 +377,45 @@ class WooCommerceAccountHelpdesk {
 
 		<div class="hd-account-helpdesk__section">
 			<h4><?php esc_html_e( 'Send a reply', 'wp-helpdesk' ); ?></h4>
-			<form method="post" enctype="multipart/form-data">
+			<form method="post" enctype="multipart/form-data" class="hd-reply-form">
 				<?php wp_nonce_field( 'hd_my_account_reply', 'hd_my_account_reply_nonce' ); ?>
 				<input type="hidden" name="hd_helpdesk_action" value="reply">
-				<p>
-					<label for="hd-helpdesk-reply-body"><?php esc_html_e( 'Message', 'wp-helpdesk' ); ?></label><br>
-					<textarea id="hd-helpdesk-reply-body" name="hd_helpdesk_reply_body" rows="6" style="width:100%;"></textarea>
-				</p>
-				<p>
-					<label for="hd-helpdesk-reply-attachment"><?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?></label><br>
-					<div class="hd-file-picker">
-						<input
-							type="file"
-							id="hd-helpdesk-reply-attachment"
-							name="hd_helpdesk_attachment[]"
-							class="hd-file-picker__input"
-							multiple
-							accept="image/jpeg,image/png,image/gif,application/pdf,text/plain,application/zip"
-							aria-describedby="hd-helpdesk-reply-attachment-selection hd-helpdesk-reply-attachment-help"
-						>
-						<div class="hd-file-picker__controls">
-							<label for="hd-helpdesk-reply-attachment" class="hd-btn hd-btn--secondary hd-file-picker__button">
-								<?php esc_html_e( 'Browse…', 'wp-helpdesk' ); ?>
-							</label>
-							<span
-								class="hd-file-picker__selection"
-								id="hd-helpdesk-reply-attachment-selection"
-								data-empty-text="<?php echo esc_attr( __( 'No files chosen', 'wp-helpdesk' ) ); ?>"
-							><?php esc_html_e( 'No files chosen', 'wp-helpdesk' ); ?></span>
-						</div>
-						<span class="hd-description" id="hd-helpdesk-reply-attachment-help"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB per file.', 'wp-helpdesk' ); ?></span>
-					</div>
-				</p>
-				<p><button type="submit"><?php esc_html_e( 'Send reply', 'wp-helpdesk' ); ?></button></p>
+				<div class="hd-field">
+					<label for="hd-helpdesk-reply-body" class="hd-label">
+						<?php esc_html_e( 'Message', 'wp-helpdesk' ); ?>
+						<span class="hd-required" aria-hidden="true">*</span>
+					</label>
+					<textarea
+						id="hd-helpdesk-reply-body"
+						name="hd_helpdesk_reply_body"
+						class="hd-textarea"
+						rows="6"
+						required
+						aria-required="true"
+					></textarea>
+				</div>
+				<div class="hd-field">
+					<label for="hd-helpdesk-reply-attachment" class="hd-label">
+						<?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?>
+					</label>
+					<input
+						type="file"
+						id="hd-helpdesk-reply-attachment"
+						name="hd_helpdesk_attachment[]"
+						class="hd-file-input"
+						multiple
+						accept="image/jpeg,image/png,image/gif,application/pdf,text/plain,application/zip"
+					>
+					<p class="hd-field-hint">
+						<?php esc_html_e( 'Optional. You may attach images or documents (JPEG, PNG, GIF, PDF, TXT, ZIP). Maximum 10 MB per file.', 'wp-helpdesk' ); ?>
+					</p>
+				</div>
+				<p class="hd-error-message" id="hd-helpdesk-reply-error" aria-live="assertive" role="alert"></p>
+				<div class="hd-form-actions">
+					<button type="submit" class="hd-btn hd-btn--primary">
+						<?php esc_html_e( 'Send reply', 'wp-helpdesk' ); ?>
+					</button>
+				</div>
 			</form>
 		</div>
 		<?php

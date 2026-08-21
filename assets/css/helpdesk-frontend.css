@@ -205,6 +205,12 @@
 	min-height: 1.2em;
 }
 
+.hd-file-input {
+	display: block;
+	margin-top: 4px;
+	max-width: 100%;
+}
+
 .hd-file-picker {
 	display: flex;
 	flex-direction: column;

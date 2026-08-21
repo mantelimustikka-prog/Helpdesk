@@ -134,28 +134,17 @@ class GuestTicketView extends HelpdeskPage {
 						<label for="hd-guest-reply-attachment" class="hd-label">
 							<?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?>
 						</label>
-						<div class="hd-file-picker">
-							<input
-								type="file"
-								id="hd-guest-reply-attachment"
-								name="hd_guest_reply_attachment[]"
-								class="hd-file-picker__input"
-								multiple
-								accept="<?php echo esc_attr( implode( ',', \WPHelpdesk\Domain\Attachment\AttachmentService::ALLOWED_MIME_TYPES ) ); ?>"
-								aria-describedby="hd-guest-reply-attachment-selection hd-guest-reply-attachment-help"
-							>
-							<div class="hd-file-picker__controls">
-								<label for="hd-guest-reply-attachment" class="hd-btn hd-btn--secondary hd-file-picker__button">
-									<?php esc_html_e( 'Browse…', 'wp-helpdesk' ); ?>
-								</label>
-								<span
-									class="hd-file-picker__selection"
-									id="hd-guest-reply-attachment-selection"
-									data-empty-text="<?php echo esc_attr( __( 'No files chosen', 'wp-helpdesk' ) ); ?>"
-								><?php esc_html_e( 'No files chosen', 'wp-helpdesk' ); ?></span>
-							</div>
-							<span class="hd-description" id="hd-guest-reply-attachment-help"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB per file.', 'wp-helpdesk' ); ?></span>
-						</div>
+						<input
+							type="file"
+							id="hd-guest-reply-attachment"
+							name="hd_guest_reply_attachment[]"
+							class="hd-file-input"
+							multiple
+							accept="<?php echo esc_attr( implode( ',', \WPHelpdesk\Domain\Attachment\AttachmentService::ALLOWED_MIME_TYPES ) ); ?>"
+						>
+						<p class="hd-field-hint">
+							<?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB per file.', 'wp-helpdesk' ); ?>
+						</p>
 					</div>
 					<div class="hd-form-actions">
 						<button type="submit" class="hd-btn hd-btn--primary" id="hd-guest-reply-submit">
