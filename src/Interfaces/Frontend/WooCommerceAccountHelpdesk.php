@@ -65,6 +65,7 @@ class WooCommerceAccountHelpdesk {
 		// final array handed to the template.
 		add_filter( 'woocommerce_account_menu_items', array( $this, 'addMenuItem' ), 9999 );
 		add_action( 'woocommerce_account_' . self::ENDPOINT . '_endpoint', array( $this, 'render' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueueAssets' ) );
 	}
 
 	/**
@@ -75,6 +76,30 @@ class WooCommerceAccountHelpdesk {
 	public function addEndpoint(): void {
 		$mask = ( defined( 'EP_ROOT' ) ? EP_ROOT : 0 ) | ( defined( 'EP_PAGES' ) ? EP_PAGES : 0 );
 		add_rewrite_endpoint( self::ENDPOINT, $mask );
+	}
+
+	/**
+	 * Enqueue the Helpdesk stylesheet on WooCommerce My Account pages.
+	 *
+	 * The FrontendRouter only loads assets on standalone /helpdesk/* pages.
+	 * Without this hook the reply form and attachment gallery on the My Account
+	 * endpoint have no plugin CSS, which leaves the WooCommerce theme free to
+	 * apply conflicting styles that make the submit button and file input appear
+	 * inert (no cursor, wrong opacity, or invisible).
+	 *
+	 * @return void
+	 */
+	public function enqueueAssets(): void {
+		if ( ! is_account_page() ) {
+			return;
+		}
+
+		wp_enqueue_style(
+			'wp-helpdesk-frontend',
+			Helpers::pluginUrl( 'assets/css/helpdesk-frontend.css' ),
+			array(),
+			HD_VERSION
+		);
 	}
 
 	/**

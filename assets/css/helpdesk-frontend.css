@@ -564,6 +564,37 @@
 	margin-top: 12px;
 }
 
+/* -------------------------------------------------------------------------
+ * Reply form interaction hardening
+ * Ensures the submit button and file input are always interactive regardless
+ * of WooCommerce theme CSS that may apply inside .woocommerce-MyAccount-content.
+ * ---------------------------------------------------------------------- */
+
+.hd-reply-section .hd-reply-form {
+	position: relative;
+}
+
+.hd-reply-section .hd-reply-form .hd-reply-form__submit {
+	pointer-events: auto;
+	cursor: pointer;
+	opacity: 1;
+	display: inline-block;
+}
+
+.hd-reply-section .hd-reply-form input[type="file"].hd-file-input {
+	pointer-events: auto;
+	cursor: pointer;
+	display: block;
+	opacity: 1;
+	position: static;
+	clip: auto;
+	clip-path: none;
+	width: auto;
+	height: auto;
+	overflow: visible;
+	margin: 0;
+}
+
 .hd-success-message--hidden {
 	display: none;
 }

@@ -58,6 +58,8 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_enqueued_scripts'] = array();
 		$GLOBALS['wp_inline_scripts'] = array();
 		$GLOBALS['wp_localized_scripts'] = array();
+		$GLOBALS['wp_enqueued_styles'] = array();
+		$GLOBALS['wc_is_account_page'] = false;
 		$GLOBALS['wp_safe_redirect_to'] = null;
 		$GLOBALS['wp_filters'] = array();
 		$GLOBALS['wp_doing_action'] = array();
@@ -566,6 +568,17 @@ if ( ! function_exists( 'wp_localize_script' ) ) {
 
 if ( ! function_exists( 'wp_enqueue_style' ) ) {
 	function wp_enqueue_style( string $handle, string $src = '', array $deps = array(), string $ver = '' ): void {
+		$GLOBALS['wp_enqueued_styles'][ $handle ] = array(
+			'src'  => $src,
+			'deps' => $deps,
+			'ver'  => $ver,
+		);
+	}
+}
+
+if ( ! function_exists( 'is_account_page' ) ) {
+	function is_account_page(): bool {
+		return (bool) ( $GLOBALS['wc_is_account_page'] ?? false );
 	}
 }
 

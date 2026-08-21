@@ -627,6 +627,33 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertCount( 2, $this->attachment_service->upload_calls );
 		self::assertStringContainsString( 'Your reply was sent, but one or more attachments could not be uploaded.', $output );
 	}
+
+	// -------------------------------------------------------------------------
+	// Asset enqueuing on WooCommerce My Account pages
+	// -------------------------------------------------------------------------
+
+	public function testRegisterAddsEnqueueScriptsHookWhenAccountPageIsAvailable(): void {
+		$this->integration->register();
+
+		self::assertArrayHasKey( 'wp_enqueue_scripts', $GLOBALS['wp_filters'], 'wp_enqueue_scripts hook must be registered to load plugin CSS on My Account pages' );
+	}
+
+	public function testEnqueueAssetsLoadsStylesheetOnAccountPage(): void {
+		$GLOBALS['wc_is_account_page'] = true;
+
+		$this->integration->enqueueAssets();
+
+		self::assertArrayHasKey( 'wp-helpdesk-frontend', $GLOBALS['wp_enqueued_styles'], 'Helpdesk stylesheet must be enqueued on WooCommerce My Account pages' );
+		self::assertStringContainsString( 'helpdesk-frontend.css', $GLOBALS['wp_enqueued_styles']['wp-helpdesk-frontend']['src'] );
+	}
+
+	public function testEnqueueAssetsSkipsStylesheetWhenNotOnAccountPage(): void {
+		$GLOBALS['wc_is_account_page'] = false;
+
+		$this->integration->enqueueAssets();
+
+		self::assertArrayNotHasKey( 'wp-helpdesk-frontend', $GLOBALS['wp_enqueued_styles'], 'Helpdesk stylesheet must not be enqueued on non-account pages' );
+	}
 }
 
 final class TicketRepositoryDouble extends TicketRepository {
