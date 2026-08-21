@@ -652,6 +652,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertSame( 'error', $pending['type'] ?? null );
 		self::assertStringContainsString( 'Your reply was sent, but one or more attachments could not be uploaded.', $pending['message'] ?? '' );
 	}
+
 	public function testFilesWithNonOkUploadErrorAreSkippedWithoutCallingUploadService(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
 		$this->ticket_repository->ticket      = array(

@@ -196,8 +196,10 @@ class WooCommerceAccountHelpdesk {
 		$route = $this->parseEndpointRequest();
 
 		if ( 'request' === $route['view'] ) {
-			$this->loadPendingNotice();
 			$this->handleReplySubmission( $route['ticket_no'] );
+			if ( 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
+				$this->loadPendingNotice();
+			}
 		}
 
 		$active_nav = 'request' === $route['view'] ? 'requests' : $route['view'];
