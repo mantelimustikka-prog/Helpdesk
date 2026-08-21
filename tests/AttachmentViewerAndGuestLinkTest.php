@@ -334,6 +334,94 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// Open/Download links appear regardless of who uploaded the file
+	// -------------------------------------------------------------------------
+
+	public function testUserUploadedAttachmentShowsOpenAndDownloadInUserView(): void {
+		$view        = new GuestTicketView();
+		$attachments = array(
+			array(
+				'mime_type'   => 'application/pdf',
+				'url'         => 'https://example.test/user-doc.pdf',
+				'file_name'   => 'user-doc.pdf',
+				'file_size'   => 1024,
+				'created_at'  => '2026-01-10 12:00:00',
+				'uploaded_by' => 42, // regular user
+			),
+		);
+
+		ob_start();
+		$view->renderAttachments( $attachments );
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Open', $output, 'User-uploaded attachment must show Open link in user view' );
+		self::assertStringContainsString( 'Download', $output, 'User-uploaded attachment must show Download link in user view' );
+	}
+
+	public function testAdminUploadedAttachmentShowsOpenAndDownloadInUserView(): void {
+		$view        = new GuestTicketView();
+		$attachments = array(
+			array(
+				'mime_type'   => 'application/pdf',
+				'url'         => 'https://example.test/admin-doc.pdf',
+				'file_name'   => 'admin-doc.pdf',
+				'file_size'   => 2048,
+				'created_at'  => '2026-01-10 13:00:00',
+				'uploaded_by' => 1, // admin user
+			),
+		);
+
+		ob_start();
+		$view->renderAttachments( $attachments );
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Open', $output, 'Admin-uploaded attachment must show Open link in user view' );
+		self::assertStringContainsString( 'Download', $output, 'Admin-uploaded attachment must show Download link in user view' );
+	}
+
+	public function testUserUploadedAttachmentShowsOpenAndDownloadInAdminView(): void {
+		$page        = new TicketsPage();
+		$attachments = array(
+			array(
+				'mime_type'   => 'application/pdf',
+				'url'         => 'https://example.test/user-report.pdf',
+				'file_name'   => 'user-report.pdf',
+				'file_size'   => 3000,
+				'created_at'  => '2026-01-11 09:00:00',
+				'uploaded_by' => 55, // regular user
+			),
+		);
+
+		ob_start();
+		$page->renderAttachments( $attachments );
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Open', $output, 'User-uploaded attachment must show Open link in admin view' );
+		self::assertStringContainsString( 'Download', $output, 'User-uploaded attachment must show Download link in admin view' );
+	}
+
+	public function testAdminUploadedAttachmentShowsOpenAndDownloadInAdminView(): void {
+		$page        = new TicketsPage();
+		$attachments = array(
+			array(
+				'mime_type'   => 'application/pdf',
+				'url'         => 'https://example.test/admin-report.pdf',
+				'file_name'   => 'admin-report.pdf',
+				'file_size'   => 4000,
+				'created_at'  => '2026-01-11 10:00:00',
+				'uploaded_by' => 1, // admin user
+			),
+		);
+
+		ob_start();
+		$page->renderAttachments( $attachments );
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Open', $output, 'Admin-uploaded attachment must show Open link in admin view' );
+		self::assertStringContainsString( 'Download', $output, 'Admin-uploaded attachment must show Download link in admin view' );
+	}
+
+	// -------------------------------------------------------------------------
 	// GuestTicketView renders "not found" page for empty credentials
 	// -------------------------------------------------------------------------
 

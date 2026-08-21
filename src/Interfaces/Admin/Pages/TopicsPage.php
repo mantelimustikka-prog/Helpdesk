@@ -218,6 +218,30 @@ class TopicsPage {
 			<?php endif; ?>
 		</form>
 
+		<!-- Standalone row-action form placed outside the bulk form to avoid nested-form issues. -->
+		<form id="hd-row-action-form" method="post" style="display:none">
+			<?php wp_nonce_field( 'hd_topic_action', 'hd_topic_nonce' ); ?>
+			<input type="hidden" id="hd-row-action-type" name="hd_topic_action" value="">
+			<input type="hidden" id="hd-row-topic-id" name="hd_topic_id" value="">
+		</form>
+		<script>
+			(function () {
+				document.addEventListener( 'click', function ( e ) {
+					var btn = e.target.closest( '.hd-topic-row-action' );
+					if ( ! btn ) {
+						return;
+					}
+					var msg = btn.getAttribute( 'data-confirm' );
+					if ( msg && ! window.confirm( msg ) ) {
+						return;
+					}
+					document.getElementById( 'hd-row-action-type' ).value  = btn.getAttribute( 'data-action' );
+					document.getElementById( 'hd-row-topic-id' ).value     = btn.getAttribute( 'data-topic-id' );
+					document.getElementById( 'hd-row-action-form' ).submit();
+				} );
+			}() );
+		</script>
+
 		<?php if ( ! $is_tree && $pages > 1 ) : ?>
 			<div class="tablenav bottom">
 				<div class="tablenav-pages">
@@ -590,18 +614,17 @@ class TopicsPage {
 		?>
 		<a class="button button-small" href="<?php echo esc_url( $this->getListUrl( array( 'action' => 'edit', 'id' => (int) $topic['id'] ) ) ); ?>"><?php esc_html_e( 'Edit', 'wp-helpdesk' ); ?></a>
 		<a class="button button-small" href="<?php echo esc_url( $this->getListUrl( array( 'action' => 'new', 'parent_topic_id' => (int) $topic['id'] ) ) ); ?>"><?php esc_html_e( 'Add Child', 'wp-helpdesk' ); ?></a>
-		<form method="post">
-			<?php wp_nonce_field( 'hd_topic_action', 'hd_topic_nonce' ); ?>
-			<input type="hidden" name="hd_topic_action" value="<?php echo esc_attr( ! empty( $topic['is_active'] ) ? 'deactivate' : 'activate' ); ?>">
-			<input type="hidden" name="hd_topic_id" value="<?php echo esc_attr( (string) $topic['id'] ); ?>">
-			<button type="submit" class="button button-small"><?php echo esc_html( ! empty( $topic['is_active'] ) ? __( 'Deactivate', 'wp-helpdesk' ) : __( 'Activate', 'wp-helpdesk' ) ); ?></button>
-		</form>
-		<form method="post">
-			<?php wp_nonce_field( 'hd_topic_action', 'hd_topic_nonce' ); ?>
-			<input type="hidden" name="hd_topic_action" value="delete">
-			<input type="hidden" name="hd_topic_id" value="<?php echo esc_attr( (string) $topic['id'] ); ?>">
-			<button type="submit" class="button button-small" onclick="return confirm('<?php echo esc_js( __( 'Delete this topic?', 'wp-helpdesk' ) ); ?>');"><?php esc_html_e( 'Delete', 'wp-helpdesk' ); ?></button>
-		</form>
+		<button type="button" class="button button-small hd-topic-row-action"
+			data-action="<?php echo esc_attr( ! empty( $topic['is_active'] ) ? 'deactivate' : 'activate' ); ?>"
+			data-topic-id="<?php echo esc_attr( (string) $topic['id'] ); ?>">
+			<?php echo esc_html( ! empty( $topic['is_active'] ) ? __( 'Deactivate', 'wp-helpdesk' ) : __( 'Activate', 'wp-helpdesk' ) ); ?>
+		</button>
+		<button type="button" class="button button-small hd-topic-row-action"
+			data-action="delete"
+			data-topic-id="<?php echo esc_attr( (string) $topic['id'] ); ?>"
+			data-confirm="<?php echo esc_attr( __( 'Delete this topic?', 'wp-helpdesk' ) ); ?>">
+			<?php esc_html_e( 'Delete', 'wp-helpdesk' ); ?>
+		</button>
 		<?php
 	}
 
