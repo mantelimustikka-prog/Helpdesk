@@ -57,6 +57,20 @@
 		} );
 	}
 
+	function apiUpload( path, formData ) {
+		return window.fetch( restBase + path, {
+			method: 'POST',
+			credentials: 'same-origin',
+			headers: { 'X-WP-Nonce': restNonce },
+			body: formData
+		} ).then( function ( res ) {
+			return res.json().then( function ( data ) {
+				data.__status = res.status;
+				return data;
+			} );
+		} );
+	}
+
 	function FormController( container, formType ) {
 		this.container = container;
 		this.formType = formType;
@@ -751,6 +765,10 @@
 				if ( confirmMsg && res.ticket_no ) {
 					confirmMsg.textContent = 'Your request ' + res.ticket_no + ' has been submitted. We will be in touch via email.';
 				}
+				// Upload any selected attachments after successful ticket creation.
+				if ( res.ticket_id ) {
+					self._uploadAttachments( res.ticket_id, res.ticket_link );
+				}
 				self._goToStep( self._getNextStepIndex( 'submit' ) );
 				self._clearState();
 			} else {
@@ -760,6 +778,31 @@
 		} ).catch( function () {
 			self._showError( 'Network error. Please check your connection and try again.' );
 			submitBtn.disabled = false;
+		} );
+	};
+
+	FormController.prototype._uploadAttachments = function ( ticketId, ticketLink ) {
+		var fileInput = this.container.querySelector( 'input[name="attachments[]"]' );
+		if ( ! fileInput || ! fileInput.files || fileInput.files.length === 0 ) {
+			return;
+		}
+		var guestToken = '';
+		if ( ticketLink ) {
+			// Extract guest token from ticket_link URL: /helpdesk/ticket/{no}/{token}/
+			var parts = ticketLink.replace( /\/$/, '' ).split( '/' );
+			guestToken = parts[ parts.length - 1 ] || '';
+		}
+		var self  = this;
+		var files = Array.prototype.slice.call( fileInput.files );
+		files.forEach( function ( file ) {
+			var fd = new FormData();
+			fd.append( 'file', file );
+			if ( guestToken ) {
+				fd.append( 'guest_token', guestToken );
+			}
+			apiUpload( 'tickets/' + ticketId + '/attachments', fd ).catch( function () {
+				self._showError( 'One or more attachments could not be uploaded. Please try again.' );
+			} );
 		} );
 	};
 

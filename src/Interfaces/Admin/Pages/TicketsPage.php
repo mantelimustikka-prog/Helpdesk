@@ -41,6 +41,14 @@ class TicketsPage {
 		<div class="wrap hd-admin-wrap">
 			<h1><?php esc_html_e( 'Ticket Queue', 'wp-helpdesk' ); ?></h1>
 
+			<?php
+			// Display attachment upload error passed via redirect URL.
+			if ( ! empty( $_GET['hd_attach_error'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$error_msg = sanitize_text_field( rawurldecode( wp_unslash( (string) $_GET['hd_attach_error'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $error_msg ) . '</p></div>';
+			}
+			?>
+
 			<form method="get" style="margin-bottom:16px;">
 				<input type="hidden" name="page" value="wp-helpdesk-tickets">
 				<label for="hd-status-filter"><strong><?php esc_html_e( 'Filter by status:', 'wp-helpdesk' ); ?></strong></label>
@@ -160,7 +168,7 @@ class TicketsPage {
 					<?php endif; ?>
 
 					<?php if ( current_user_can( 'hd_reply_tickets' ) || current_user_can( 'hd_manage_tickets' ) ) : ?>
-						<form method="post" style="margin-top: 16px;">
+						<form method="post" enctype="multipart/form-data" style="margin-top: 16px;">
 							<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
 							<input type="hidden" name="hd_ticket_id" value="<?php echo esc_attr( (string) $selected_ticket['id'] ); ?>">
 							<input type="hidden" name="hd_ticket_action" value="reply">
@@ -173,6 +181,16 @@ class TicketsPage {
 									<input type="checkbox" name="hd_is_internal" value="1">
 									<?php esc_html_e( 'Internal note', 'wp-helpdesk' ); ?>
 								</label>
+							</p>
+							<p>
+								<label for="hd-reply-attachment"><strong><?php esc_html_e( 'Attachment', 'wp-helpdesk' ); ?></strong></label><br>
+								<input
+									type="file"
+									id="hd-reply-attachment"
+									name="hd_attachment"
+									accept="image/jpeg,image/png,image/gif,application/pdf,text/plain,application/zip"
+								>
+								<span class="description"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB.', 'wp-helpdesk' ); ?></span>
 							</p>
 							<?php submit_button( __( 'Add Reply', 'wp-helpdesk' ), 'secondary', 'submit', false ); ?>
 						</form>
@@ -364,10 +382,43 @@ class TicketsPage {
 			ARRAY_A
 		);
 
+		$message_id = $message ? (int) $message['id'] : null;
+
+		// Handle optional file attachment.
+		$upload_error = $this->maybeUploadReplyAttachment( $ticket_id, $message_id );
+
 		do_action( 'hd_ticket_replied', $ticket, $message ?: array() );
 
-		wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . $ticket_id ) );
+		$redirect = network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . $ticket_id );
+		if ( null !== $upload_error ) {
+			$redirect = add_query_arg( 'hd_attach_error', rawurlencode( $upload_error->get_error_message() ), $redirect );
+		}
+		wp_safe_redirect( $redirect );
 		exit;
+	}
+
+	/**
+	 * Upload a reply attachment from $_FILES if one was submitted.
+	 *
+	 * Extracted so it can be tested without triggering the redirect/exit path.
+	 *
+	 * @param int      $ticket_id  Ticket ID.
+	 * @param int|null $message_id Message ID, or null.
+	 * @return \WP_Error|null WP_Error on failure, null on success or when no file is present.
+	 */
+	protected function maybeUploadReplyAttachment( int $ticket_id, ?int $message_id ): ?\WP_Error {
+		if ( ! empty( $_FILES['hd_attachment'] ) && ! empty( $_FILES['hd_attachment']['name'] ) ) {
+			$result = $this->attachment_service->handleUpload(
+				$_FILES['hd_attachment'],
+				$ticket_id,
+				$message_id,
+				get_current_user_id()
+			);
+			if ( $result instanceof \WP_Error ) {
+				return $result;
+			}
+		}
+		return null;
 	}
 
 	/**
