@@ -9,14 +9,29 @@ use WPHelpdesk\Support\Constants;
 
 class Migrator {
 	/**
-	 * Run all available migrations.
+	 * Run all available migrations from the default migrations directory.
 	 *
 	 * @return void
 	 */
 	public static function runAll(): void {
-		$migration_files = glob( trailingslashit( HD_PATH ) . 'migrations/*.php' );
+		static::runAllFromDirectory( trailingslashit( HD_PATH ) . 'migrations' );
+	}
+
+	/**
+	 * Run all available migrations from a given directory.
+	 *
+	 * Migrations are PHP files that return an object with an `up()` method.
+	 * Each migration is recorded by file name in the `hd_applied_migrations`
+	 * site option so it is never executed more than once.
+	 *
+	 * @param string $directory Absolute path to the migrations directory.
+	 * @return void
+	 */
+	public static function runAllFromDirectory( string $directory ): void {
+		$migration_files = glob( trailingslashit( $directory ) . '*.php' );
 
 		if ( empty( $migration_files ) ) {
+			update_site_option( Constants::OPTION_DB_VERSION, HD_VERSION );
 			return;
 		}
 
