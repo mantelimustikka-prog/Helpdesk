@@ -290,7 +290,7 @@ final class PublicTicketControllerTest extends TestCase {
 				'subject'         => 'Need help',
 				'message'         => 'Details',
 				'user_id'         => null,
-				'order_relation'  => 'not_order_related',
+				'order_relation'  => 'not_any_existing_order_related',
 			)
 		);
 
@@ -365,6 +365,29 @@ final class PublicTicketControllerTest extends TestCase {
 		self::assertInstanceOf( WP_Error::class, $response );
 	}
 
+	public function testSubmitMemberTicketWithExistingOrderRelationRequiresOrderSelection(): void {
+		wp_helpdesk_test_reset_state();
+		$GLOBALS['wp_current_user'] = (object) array(
+			'ID'           => 5,
+			'user_email'   => 'test@example.com',
+			'display_name' => 'Test User',
+		);
+		$GLOBALS['wp_user_meta'][5]['phone'] = '0401234567';
+
+		$controller = new PublicTicketController( new TopicService(), new TopicTransitionService(), new KnowledgeBaseService() );
+		$request    = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid-rest-nonce' );
+		$request->set_param( 'topic_id', 1 );
+		$request->set_param( 'subject', 'Order help' );
+		$request->set_param( 'message', 'I need help' );
+		$request->set_param( 'order_relation', 'existing_order_related' );
+
+		$response = $controller->submitMemberTicket( $request );
+
+		self::assertInstanceOf( WP_Error::class, $response );
+		self::assertSame( 'hd_missing_order_relation', $response->get_error_code() );
+	}
+
 	public function testSubmitGuestTicketWithExistingOrderRelationReturnsLoginRequired(): void {
 		wp_helpdesk_test_reset_state();
 		$GLOBALS['wp_logged_in'] = false;
@@ -384,9 +407,10 @@ final class PublicTicketControllerTest extends TestCase {
 
 		self::assertInstanceOf( WP_Error::class, $response );
 		self::assertSame( 'hd_login_required', $response->get_error_code() );
+		self::assertSame( 'Please login to create ticket', $response->get_error_message() );
 	}
 
-	public function testSubmitGuestTicketWithNotOrderRelatedPassesValidation(): void {
+	public function testSubmitGuestTicketWithNotAnyExistingOrderRelatedPassesValidation(): void {
 		wp_helpdesk_test_reset_state();
 		$GLOBALS['wp_logged_in'] = false;
 
@@ -422,7 +446,7 @@ final class PublicTicketControllerTest extends TestCase {
 		$request->set_param( 'requester_phone', '0401234567' );
 		$request->set_param( 'subject', 'Help' );
 		$request->set_param( 'message', 'I need help' );
-		$request->set_param( 'order_relation', 'not_order_related' );
+		$request->set_param( 'order_relation', 'not_any_existing_order_related' );
 
 		$response = $controller->submitGuestTicket( $request );
 

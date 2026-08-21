@@ -102,7 +102,7 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 				'message'         => 'My issue details',
 				'user_id'         => null,
 				'form_type'       => 'guest',
-				'order_relation'  => 'not_order_related',
+				'order_relation'  => 'not_any_existing_order_related',
 				'topic_path'      => array(),
 			)
 		);

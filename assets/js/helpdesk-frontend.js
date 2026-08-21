@@ -74,6 +74,7 @@
 		this.resetCounter = this._loadResetCounter();
 		this.pendingState = null;
 		this.persistTimer = null;
+		this.userOrders = null;
 
 		this._bindEvents();
 		this._bindStorageEvent();
@@ -117,6 +118,13 @@
 		if ( submitBtn ) {
 			submitBtn.addEventListener( 'click', function () {
 				self._submitForm( submitBtn );
+			} );
+		}
+
+		var orderRelationSelect = this.container.querySelector( 'select[name="order_relation"]' );
+		if ( orderRelationSelect ) {
+			orderRelationSelect.addEventListener( 'change', function () {
+				self._onOrderRelationChange();
 			} );
 		}
 
@@ -190,10 +198,11 @@
 		if ( topicSelect ) {
 			topicSelect.value = '';
 		}
-		var orderSelect = this.container.querySelector( 'select[name="order_relation"]' );
-		if ( orderSelect ) {
-			orderSelect.value = '';
+		var orderRelationSelect = this.container.querySelector( 'select[name="order_relation"]' );
+		if ( orderRelationSelect ) {
+			orderRelationSelect.value = '';
 		}
+		this._hideOrderSelectField();
 		var branchContainer = this.container.querySelector( '[data-role="topic-branch"]' );
 		if ( branchContainer ) {
 			branchContainer.innerHTML = '';
@@ -266,34 +275,89 @@
 			// Ignore topic load failure.
 		} );
 
-		// Load user orders for the order_relation dropdown (member form only).
-		if ( this.formType === 'member' ) {
-			this._loadUserOrders();
-		}
 	};
 
 	/**
-	 * Load user lifetime orders and populate all order_relation select elements.
+	 * Handle order relation selection changes.
 	 */
-	FormController.prototype._loadUserOrders = function () {
+	FormController.prototype._onOrderRelationChange = function ( restoreOrderId ) {
+		var orderRelationSelect = this.container.querySelector( 'select[name="order_relation"]' );
+		var orderField = this.container.querySelector( '[data-role="order-select-field"]' );
+		var orderSelect = this.container.querySelector( 'select[name="order_id"]' );
+		var value = orderRelationSelect ? String( orderRelationSelect.value || '' ) : '';
 		var self = this;
 
-		apiGet( 'user-orders' ).then( function ( orders ) {
-			if ( ! Array.isArray( orders ) ) {
-				return;
-			}
+		if ( value !== 'existing_order_related' ) {
+			this._hideOrderSelectField();
+			this._clearError();
+			return;
+		}
 
-			self.container.querySelectorAll( 'select[name="order_relation"]' ).forEach( function ( sel ) {
-				orders.forEach( function ( order ) {
-					var opt = document.createElement( 'option' );
-					opt.value = String( order.id );
-					opt.textContent = '#' + String( order.number );
-					sel.appendChild( opt );
-				} );
-			} );
+		if ( this.formType === 'guest' ) {
+			this._hideOrderSelectField();
+			this._showError( i18n.errorLoginRequired || 'Please login to create ticket' );
+			return;
+		}
+
+		if ( orderField ) {
+			orderField.classList.remove( 'hd-form-step--hidden' );
+		}
+		if ( orderSelect ) {
+			orderSelect.required = true;
+			orderSelect.setAttribute( 'aria-required', 'true' );
+		}
+
+		if ( Array.isArray( this.userOrders ) ) {
+			this._renderOrderSelectOptions( this.userOrders, restoreOrderId );
+			return;
+		}
+
+		apiGet( 'user-orders' ).then( function ( orders ) {
+			self.userOrders = Array.isArray( orders ) ? orders : [];
+			self._renderOrderSelectOptions( self.userOrders, restoreOrderId );
 		} ).catch( function () {
-			// Ignore failure – user can still pick "Not order related".
+			self.userOrders = [];
+			self._renderOrderSelectOptions( [], restoreOrderId );
 		} );
+	};
+
+	FormController.prototype._renderOrderSelectOptions = function ( orders, restoreOrderId ) {
+		var orderSelect = this.container.querySelector( 'select[name="order_id"]' );
+		if ( ! orderSelect ) {
+			return;
+		}
+		orderSelect.innerHTML = '';
+
+		var placeholder = document.createElement( 'option' );
+		placeholder.value = '';
+		placeholder.textContent = i18n.selectOrderPlaceholder || 'Select #Order';
+		placeholder.disabled = true;
+		placeholder.selected = true;
+		orderSelect.appendChild( placeholder );
+
+		orders.forEach( function ( order ) {
+			var opt = document.createElement( 'option' );
+			opt.value = String( order.id );
+			opt.textContent = '#' + String( order.number );
+			orderSelect.appendChild( opt );
+		} );
+
+		if ( restoreOrderId ) {
+			orderSelect.value = String( restoreOrderId );
+		}
+	};
+
+	FormController.prototype._hideOrderSelectField = function () {
+		var orderField = this.container.querySelector( '[data-role="order-select-field"]' );
+		var orderSelect = this.container.querySelector( 'select[name="order_id"]' );
+		if ( orderField ) {
+			orderField.classList.add( 'hd-form-step--hidden' );
+		}
+		if ( orderSelect ) {
+			orderSelect.required = false;
+			orderSelect.setAttribute( 'aria-required', 'false' );
+			orderSelect.value = '';
+		}
 	};
 
 	FormController.prototype._onTopicChange = function ( select, level ) {
@@ -619,7 +683,9 @@
 		if ( ! data.order_relation || data.order_relation.trim() === '' ) {
 			errors.push( i18n.errorSelectOrderRelation || 'Please select an order relation.' );
 		} else if ( this.formType === 'guest' && data.order_relation === 'existing_order_related' ) {
-			errors.push( i18n.errorLoginRequired || 'You must login to create this support request.' );
+			errors.push( i18n.errorLoginRequired || 'Please login to create ticket' );
+		} else if ( this.formType === 'member' && data.order_relation === 'existing_order_related' && ( ! data.order_id || data.order_id.trim() === '' ) ) {
+			errors.push( i18n.errorSelectOrder || 'Please select #Order.' );
 		}
 		if ( ! data.subject || data.subject.trim() === '' ) {
 			errors.push( 'Please enter a subject.' );
@@ -761,6 +827,7 @@
 				sel.value = data[ sel.name ];
 			}
 		} );
+		this._onOrderRelationChange( data.order_id || '' );
 
 		var topicPath = Array.isArray( this.pendingState.topicPath ) ? this.pendingState.topicPath : [];
 		var topicSelect = this.container.querySelector( 'select[name="topic_id"]' );
@@ -836,10 +903,11 @@
 			topicSelect.value = '';
 		}
 
-		var orderSelect = this.container.querySelector( 'select[name="order_relation"]' );
-		if ( orderSelect ) {
-			orderSelect.value = '';
+		var orderRelationSelect = this.container.querySelector( 'select[name="order_relation"]' );
+		if ( orderRelationSelect ) {
+			orderRelationSelect.value = '';
 		}
+		this._hideOrderSelectField();
 
 		var branchContainer = this.container.querySelector( '[data-role="topic-branch"]' );
 		if ( branchContainer ) {

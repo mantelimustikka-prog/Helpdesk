@@ -5,8 +5,8 @@
  * Migration 014 – Add order_relation to tickets table.
  *
  * Stores the required order relation for each ticket:
- *  - 'not_order_related' – the request has no associated order
- *  - a WooCommerce order number string – the related order
+ *  - 'not_any_existing_order_related' – the request has no existing order
+ *  - a WooCommerce order id string – the related order
  */
 
 return new class {

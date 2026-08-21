@@ -78,6 +78,17 @@ final class FrontendTopicDescriptionTest extends TestCase {
 		);
 	}
 
+	public function testGuestOrderRelationOptionsUsePlaceholderAndNewValues(): void {
+		$output = $this->captureGuestForm();
+
+		self::assertStringContainsString( '<option value="" selected disabled>Select Option</option>', $output );
+		self::assertStringContainsString( '<option value="existing_order_related">Existing order related</option>', $output );
+		self::assertStringContainsString( '<option value="not_any_existing_order_related">Not any existing order related</option>', $output );
+		self::assertStringNotContainsString( 'not_order_related', $output );
+		self::assertStringContainsString( 'data-role="order-select-field"', $output );
+		self::assertStringContainsString( 'name="order_id"', $output );
+	}
+
 	// -----------------------------------------------------------------------
 	// Member form – step 0 description hint
 	// -----------------------------------------------------------------------
@@ -122,6 +133,17 @@ final class FrontendTopicDescriptionTest extends TestCase {
 			$output,
 			'The step-1 topic description summary container must be empty in the server-rendered HTML.'
 		);
+	}
+
+	public function testMemberOrderRelationOptionsUsePlaceholderAndNewValues(): void {
+		$output = $this->captureMemberForm();
+
+		self::assertStringContainsString( '<option value="" selected disabled>Select Option</option>', $output );
+		self::assertStringContainsString( '<option value="existing_order_related">Existing order related</option>', $output );
+		self::assertStringContainsString( '<option value="not_any_existing_order_related">Not any existing order related</option>', $output );
+		self::assertStringNotContainsString( 'not_order_related', $output );
+		self::assertStringContainsString( 'data-role="order-select-field"', $output );
+		self::assertStringContainsString( 'name="order_id"', $output );
 	}
 
 	// -----------------------------------------------------------------------

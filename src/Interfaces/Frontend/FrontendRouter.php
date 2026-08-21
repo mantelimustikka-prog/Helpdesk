@@ -221,9 +221,13 @@ class FrontendRouter {
 				'i18n' => array(
 					'followupTopicLabel' => __( 'Follow-up topic', 'wp-helpdesk' ),
 					'selectPlaceholder'  => __( 'Select …', 'wp-helpdesk' ),
+					'selectOrderPlaceholder' => __( 'Select #Order', 'wp-helpdesk' ),
 					'errorSelectTopic'   => __( 'Please select a topic.', 'wp-helpdesk' ),
 					'errorCompleteTopic' => __( 'Please complete topic selection.', 'wp-helpdesk' ),
 					'errorLoadTransitions' => __( 'Could not load follow-up topics. Please try again.', 'wp-helpdesk' ),
+					'errorSelectOrderRelation' => __( 'Please select an order relation.', 'wp-helpdesk' ),
+					'errorLoginRequired' => __( 'Please login to create ticket', 'wp-helpdesk' ),
+					'errorSelectOrder' => __( 'Please select #Order.', 'wp-helpdesk' ),
 					'kbSuggestionsTitle' => __( 'Helpful articles', 'wp-helpdesk' ),
 					'kbNoSuggestions'    => __( 'No related knowledge base articles were found for this topic yet.', 'wp-helpdesk' ),
 				),
