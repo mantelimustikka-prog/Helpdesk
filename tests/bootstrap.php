@@ -78,6 +78,8 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wc_page_permalinks'] = array(
 			'myaccount' => 'https://example.test/my-account/',
 		);
+		$GLOBALS['wp_is_multisite']       = false;
+		$GLOBALS['wp_switch_to_blog_log'] = array();
 		// Simulate an initialised WP rewrite object so getAccountPageUrl()'s null
 		// guard passes in normal test scenarios. The test doubles for wc_get_page_permalink
 		// never call methods on this object, so a plain stdClass sentinel is safe here.
@@ -454,6 +456,25 @@ if ( ! function_exists( 'get_current_network_id' ) ) {
 if ( ! function_exists( 'get_current_blog_id' ) ) {
 	function get_current_blog_id(): int {
 		return 1;
+	}
+}
+
+if ( ! function_exists( 'is_multisite' ) ) {
+	function is_multisite(): bool {
+		return (bool) ( $GLOBALS['wp_is_multisite'] ?? false );
+	}
+}
+
+if ( ! function_exists( 'switch_to_blog' ) ) {
+	function switch_to_blog( int $new_blog_id ): bool {
+		$GLOBALS['wp_switch_to_blog_log'][] = $new_blog_id;
+		return true;
+	}
+}
+
+if ( ! function_exists( 'restore_current_blog' ) ) {
+	function restore_current_blog(): bool {
+		return true;
 	}
 }
 

@@ -94,4 +94,73 @@ final class TicketsPageOrderLinkTest extends TestCase {
 		self::assertStringContainsString( '#999', $output );
 		self::assertStringNotContainsString( '<a ', $output );
 	}
+
+	public function testMultisiteOrderLinkSwitchesToOriginatingSite(): void {
+		$GLOBALS['wp_is_multisite']       = true;
+		$GLOBALS['wp_switch_to_blog_log'] = array();
+
+		$page = new class extends TicketsPageOrderLinkTestDouble {
+			protected function getWooCommerceOrder( int $order_id ) {
+				return new class( $order_id ) {
+					private int $id;
+
+					public function __construct( int $id ) {
+						$this->id = $id;
+					}
+
+					public function get_order_number(): string {
+						return (string) $this->id;
+					}
+
+					public function get_edit_order_url(): string {
+						return 'https://site5.example.test/wp-admin/admin.php?page=wc-orders&id=' . $this->id;
+					}
+				};
+			}
+		};
+
+		$output = $page->renderOrderRelationRowPublic( array(
+			'order_relation' => '200',
+			'site_id'        => 5,
+		) );
+
+		self::assertContains( 5, $GLOBALS['wp_switch_to_blog_log'], 'switch_to_blog must be called with the ticket site_id' );
+		self::assertStringContainsString( '<a ', $output );
+		self::assertStringContainsString( '#200', $output );
+		self::assertStringContainsString( 'site5.example.test', $output );
+	}
+
+	public function testSingleSiteOrderLinkDoesNotSwitchBlog(): void {
+		$GLOBALS['wp_is_multisite']       = false;
+		$GLOBALS['wp_switch_to_blog_log'] = array();
+
+		$page = new class extends TicketsPageOrderLinkTestDouble {
+			protected function getWooCommerceOrder( int $order_id ) {
+				return new class( $order_id ) {
+					private int $id;
+
+					public function __construct( int $id ) {
+						$this->id = $id;
+					}
+
+					public function get_order_number(): string {
+						return (string) $this->id;
+					}
+
+					public function get_edit_order_url(): string {
+						return 'https://example.test/wp-admin/admin.php?page=wc-orders&id=' . $this->id;
+					}
+				};
+			}
+		};
+
+		$output = $page->renderOrderRelationRowPublic( array(
+			'order_relation' => '55',
+			'site_id'        => 3,
+		) );
+
+		self::assertEmpty( $GLOBALS['wp_switch_to_blog_log'], 'switch_to_blog must NOT be called on a single-site install' );
+		self::assertStringContainsString( '#55', $output );
+	}
 }
+
