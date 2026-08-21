@@ -231,6 +231,8 @@ class WooCommerceAccountHelpdesk {
 			}
 		}
 
+		$this->maybeHydrateReplyStatusNotice( $route['view'] );
+
 		$active_nav = 'request' === $route['view'] ? 'requests' : $route['view'];
 		$links      = $this->getNavigationLinks( $active_nav );
 
@@ -409,7 +411,7 @@ class WooCommerceAccountHelpdesk {
 
 		<div class="hd-account-helpdesk__section">
 			<h4><?php esc_html_e( 'Send a reply', 'wp-helpdesk' ); ?></h4>
-			<form method="post" enctype="multipart/form-data" class="hd-reply-form">
+			<form method="post" action="<?php echo esc_url( $this->buildAccountUrl( 'request/' . $ticket_no ) ); ?>" enctype="multipart/form-data" class="hd-reply-form">
 				<?php wp_nonce_field( 'hd_my_account_reply', 'hd_my_account_reply_nonce' ); ?>
 				<input type="hidden" name="hd_helpdesk_action" value="reply">
 				<div class="hd-field">
@@ -579,7 +581,7 @@ class WooCommerceAccountHelpdesk {
 		}
 
 		// Handle optional file attachment on the reply.
-		$this->maybeUploadReplyAttachment( (int) $ticket['id'], $message_id );
+		$attachment_error = $this->maybeUploadReplyAttachment( (int) $ticket['id'], $message_id );
 
 		$message = $this->message_service->getMessage( $message_id );
 		do_action(
@@ -595,7 +597,39 @@ class WooCommerceAccountHelpdesk {
 			)
 		);
 
-		return $this->redirectTo( $this->buildAccountUrl( 'request/' . $ticket_no ) );
+		$redirect_url = $this->buildAccountUrl( 'request/' . $ticket_no );
+		$separator    = false !== strpos( $redirect_url, '?' ) ? '&' : '?';
+		$status       = $attachment_error instanceof \WP_Error ? 'sent_with_attachment_error' : 'sent';
+
+		return $this->redirectTo( $redirect_url . $separator . 'hd_reply_status=' . rawurlencode( $status ) );
+	}
+
+	/**
+	 * Hydrate a one-time reply notice from URL status.
+	 *
+	 * @param string $view Active subview key.
+	 * @return void
+	 */
+	protected function maybeHydrateReplyStatusNotice( string $view ): void {
+		if ( null !== $this->notice || 'request' !== $view ) {
+			return;
+		}
+
+		$status = sanitize_key( (string) ( $_GET['hd_reply_status'] ?? '' ) );
+		if ( 'sent' === $status ) {
+			$this->notice = array(
+				'type'    => 'success',
+				'message' => __( 'Your reply was sent.', 'wp-helpdesk' ),
+			);
+			return;
+		}
+
+		if ( 'sent_with_attachment_error' === $status ) {
+			$this->notice = array(
+				'type'    => 'error',
+				'message' => __( 'Your reply was sent, but one or more attachments could not be uploaded.', 'wp-helpdesk' ),
+			);
+		}
 	}
 
 	/**

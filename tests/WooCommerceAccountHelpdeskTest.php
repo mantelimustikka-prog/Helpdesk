@@ -417,7 +417,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertSame( 'member', $this->message_service->posted_author_type );
 		self::assertSame( 'Here is my extra detail.', $this->message_service->posted_body );
-		self::assertSame( 'https://example.test/my-account/helpdesk/request/HD-10011/', $GLOBALS['wp_safe_redirect_to'] );
+		self::assertSame( 'https://example.test/my-account/helpdesk/request/HD-10011/?hd_reply_status=sent', $GLOBALS['wp_safe_redirect_to'] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -446,7 +446,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$this->integration->handleFormPost();
 
 		self::assertSame( 55, $this->message_service->reply_id );
-		self::assertSame( 'https://example.test/my-account/helpdesk/request/HD-10011/', $GLOBALS['wp_safe_redirect_to'] );
+		self::assertSame( 'https://example.test/my-account/helpdesk/request/HD-10011/?hd_reply_status=sent', $GLOBALS['wp_safe_redirect_to'] );
 	}
 
 	public function testHandleFormPostDoesNothingOnGet(): void {
@@ -527,9 +527,30 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		self::assertStringContainsString( 'multipart/form-data', $output, 'Reply form must use multipart/form-data encoding' );
+		self::assertStringContainsString( 'action="https://example.test/my-account/helpdesk/request/HD-10011/"', $output, 'Reply form must post back to the request detail URL' );
 		self::assertStringContainsString( 'type="file"', $output, 'Reply form must include a file input' );
 		self::assertStringContainsString( 'hd_helpdesk_attachment', $output, 'File input must be named hd_helpdesk_attachment' );
 		self::assertStringContainsString( 'hd-file-input', $output, 'File input must use the hd-file-input class for visibility' );
+	}
+
+	public function testRenderShowsSuccessNoticeFromReplyStatusQuery(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$_GET['hd_reply_status']              = 'sent';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Your reply was sent.', $output );
+		unset( $_GET['hd_reply_status'] );
 	}
 
 	// -------------------------------------------------------------------------
