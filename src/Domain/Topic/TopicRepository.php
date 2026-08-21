@@ -162,7 +162,7 @@ class TopicRepository {
 			$matches    = array();
 			$did_match  = preg_match( "/Unknown column '(type|parent_id)' in 'field list'/i", $last_error, $matches );
 
-			if ( false === $did_match || 1 !== $did_match ) {
+			if ( 1 !== $did_match ) {
 				return 0;
 			}
 
