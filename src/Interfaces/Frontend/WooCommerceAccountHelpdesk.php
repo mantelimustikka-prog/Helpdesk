@@ -627,7 +627,7 @@ class WooCommerceAccountHelpdesk {
 	 * @return void
 	 */
 	protected function doExit(): void {
-		exit; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		exit;
 	}
 
 	/**
@@ -644,7 +644,7 @@ class WooCommerceAccountHelpdesk {
 		);
 
 		foreach ( $this->normalizeReplyAttachmentFiles() as $file ) {
-			if ( UPLOAD_ERR_OK !== (int) ( $file['error'] ?? UPLOAD_ERR_NO_FILE ) ) {
+			if ( UPLOAD_ERR_OK !== (int) ( $file['error'] ?? UPLOAD_ERR_OK ) ) {
 				$results['failed']++;
 				continue;
 			}
