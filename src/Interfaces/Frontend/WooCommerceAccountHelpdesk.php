@@ -385,14 +385,15 @@ class WooCommerceAccountHelpdesk {
 					<textarea id="hd-helpdesk-reply-body" name="hd_helpdesk_reply_body" rows="6" style="width:100%;"></textarea>
 				</p>
 				<p>
-					<label for="hd-helpdesk-reply-attachment"><?php esc_html_e( 'Attachment', 'wp-helpdesk' ); ?></label><br>
+					<label for="hd-helpdesk-reply-attachment"><?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?></label><br>
 					<input
 						type="file"
 						id="hd-helpdesk-reply-attachment"
-						name="hd_helpdesk_attachment"
+						name="hd_helpdesk_attachment[]"
+						multiple
 						accept="image/jpeg,image/png,image/gif,application/pdf,text/plain,application/zip"
 					>
-					<span style="font-size:0.875em;"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB.', 'wp-helpdesk' ); ?></span>
+					<span style="font-size:0.875em;"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB per file.', 'wp-helpdesk' ); ?></span>
 				</p>
 				<p><button type="submit"><?php esc_html_e( 'Send reply', 'wp-helpdesk' ); ?></button></p>
 			</form>
@@ -546,19 +547,55 @@ class WooCommerceAccountHelpdesk {
 	}
 
 	/**
-	 * Upload a reply attachment from $_FILES if one was submitted.
+	 * Upload one or more reply attachments from $_FILES if any were submitted.
 	 *
-	 * Looks for a file under the 'hd_helpdesk_attachment' key. Silently skips
-	 * when no file is present. Errors are not fatal to the reply submission.
+	 * Looks for files under the 'hd_helpdesk_attachment' key (array notation from
+	 * the multiple-file input). Silently skips when no files are present.
+	 * Errors are not fatal to the reply submission; the last error, if any, is
+	 * returned so the caller can record it.
 	 *
 	 * @param int      $ticket_id  Ticket ID.
 	 * @param int|null $message_id Message ID, or null.
 	 * @return \WP_Error|null WP_Error on failure, null on success or no file.
 	 */
 	protected function maybeUploadReplyAttachment( int $ticket_id, ?int $message_id ): ?\WP_Error {
-		if ( ! empty( $_FILES['hd_helpdesk_attachment'] ) && ! empty( $_FILES['hd_helpdesk_attachment']['name'] ) ) {
+		if ( empty( $_FILES['hd_helpdesk_attachment'] ) ) {
+			return null;
+		}
+
+		$files      = $_FILES['hd_helpdesk_attachment'];
+		$last_error = null;
+
+		// Array format: name="hd_helpdesk_attachment[]" (multiple file input).
+		if ( is_array( $files['name'] ) ) {
+			foreach ( array_keys( $files['name'] ) as $i ) {
+				if ( UPLOAD_ERR_NO_FILE === (int) $files['error'][ $i ] ) {
+					continue;
+				}
+				$single = array(
+					'name'     => $files['name'][ $i ],
+					'type'     => $files['type'][ $i ],
+					'tmp_name' => $files['tmp_name'][ $i ],
+					'error'    => $files['error'][ $i ],
+					'size'     => $files['size'][ $i ],
+				);
+				$result = $this->attachment_service->handleUpload(
+					$single,
+					$ticket_id,
+					$message_id,
+					get_current_user_id()
+				);
+				if ( $result instanceof \WP_Error ) {
+					$last_error = $result;
+				}
+			}
+			return $last_error;
+		}
+
+		// Legacy flat format: name="hd_helpdesk_attachment" (single file input).
+		if ( ! empty( $files['name'] ) ) {
 			$result = $this->attachment_service->handleUpload(
-				$_FILES['hd_helpdesk_attachment'],
+				$files,
 				$ticket_id,
 				$message_id,
 				get_current_user_id()
@@ -567,6 +604,7 @@ class WooCommerceAccountHelpdesk {
 				return $result;
 			}
 		}
+
 		return null;
 	}
 
