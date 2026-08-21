@@ -262,9 +262,10 @@ class PublicTicketController {
 	}
 
 	/**
-	 * GET /user-orders – return order numbers available for the current user.
+	 * GET /user-orders – return order objects available for the current user.
 	 *
-	 * Returns an empty array for guests (not authenticated).
+	 * Each object has `id` (WC order ID as string) and `number` (human-readable
+	 * order number). Returns an empty array for guests (not authenticated).
 	 *
 	 * @param WP_REST_Request $request REST request.
 	 * @return WP_REST_Response
@@ -274,7 +275,7 @@ class PublicTicketController {
 			return new WP_REST_Response( array(), 200 );
 		}
 
-		$orders = $this->getUserLifetimeOrders( get_current_user_id() );
+		$orders = $this->getUserLifetimeOrderObjects( get_current_user_id() );
 
 		return new WP_REST_Response( $orders, 200 );
 	}
@@ -342,6 +343,13 @@ class PublicTicketController {
 			return new WP_Error( 'hd_invalid_nonce', __( 'Invalid or missing nonce.', 'wp-helpdesk' ), array( 'status' => 403 ) );
 		}
 
+		// Reject guests that select "Existing order related" before rate-limiting so
+		// the attempt is not counted and the user immediately sees the login prompt.
+		$order_relation = sanitize_text_field( (string) $request->get_param( 'order_relation' ) );
+		if ( 'existing_order_related' === $order_relation ) {
+			return new WP_Error( 'hd_login_required', __( 'You must login to create this support request.', 'wp-helpdesk' ), array( 'status' => 401 ) );
+		}
+
 		$rate_limiter = new RateLimiter();
 		$rate_key     = 'guest-ticket:' . $this->resolveClientIp( $request ) . ':' . strtolower( (string) $request->get_param( 'requester_email' ) );
 		if ( ! $rate_limiter->checkAndIncrement( $rate_key, 8, HOUR_IN_SECONDS ) ) {
@@ -361,8 +369,6 @@ class PublicTicketController {
 		if ( '' === trim( $phone ) ) {
 			return new WP_Error( 'hd_invalid_phone', __( 'Please provide a phone number.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
-
-		$order_relation = sanitize_text_field( (string) $request->get_param( 'order_relation' ) );
 
 		return $this->createTicket(
 			array(
@@ -701,10 +707,10 @@ class PublicTicketController {
 	 *
 	 * Acceptable values:
 	 *  - 'not_order_related'
-	 *  - a WooCommerce order number belonging to the current user
+	 *  - a WooCommerce order ID (as a string) belonging to the current user
 	 *
-	 * For guests (user_id = null), any non-empty string is accepted since we cannot
-	 * verify ownership without an account.
+	 * For guests (user_id = null), only 'not_order_related' is valid; guests
+	 * cannot submit an existing-order relation without logging in.
 	 *
 	 * @param string   $order_relation The submitted value.
 	 * @param int|null $user_id        Authenticated user id, or null for guests.
@@ -719,7 +725,7 @@ class PublicTicketController {
 			return true;
 		}
 
-		// For authenticated users validate ownership.
+		// For authenticated users validate ownership against their order IDs.
 		if ( null !== $user_id && $user_id > 0 ) {
 			$user_orders = $this->getUserLifetimeOrders( $user_id );
 			if ( ! in_array( $order_relation, $user_orders, true ) ) {
@@ -731,7 +737,10 @@ class PublicTicketController {
 	}
 
 	/**
-	 * Return all lifetime WooCommerce order numbers for a user as strings.
+	 * Return all lifetime WooCommerce order IDs for a user as strings.
+	 *
+	 * The stored value in order_relation is the WC order ID (numeric string) so
+	 * that the admin can later construct a direct link to the order.
 	 *
 	 * Falls back to an empty array when WooCommerce is not active.
 	 *
@@ -745,9 +754,9 @@ class PublicTicketController {
 
 		$orders = wc_get_orders(
 			array(
-				'customer_id' => $user_id,
-				'limit'       => -1,
-				'return'      => 'ids',
+				'customer' => $user_id,
+				'limit'    => -1,
+				'return'   => 'ids',
 			)
 		);
 
@@ -760,25 +769,50 @@ class PublicTicketController {
 				array_map(
 					static function ( $order_id ): string {
 						$order_id = (int) $order_id;
-						if ( $order_id <= 0 ) {
-							return '';
-						}
-
-						// Use the order number (may be different from ID if plugins override it).
-						if ( function_exists( 'wc_get_order' ) ) {
-							$order = wc_get_order( $order_id );
-							if ( $order ) {
-								return (string) $order->get_order_number();
-							}
-						}
-
-						return (string) $order_id;
+						return $order_id > 0 ? (string) $order_id : '';
 					},
 					$orders
 				),
 				static fn( string $v ): bool => '' !== $v
 			)
 		);
+	}
+
+	/**
+	 * Return all lifetime WooCommerce orders for a user as {id, number} objects.
+	 *
+	 * Used by the listUserOrders REST endpoint so the frontend can display the
+	 * human-readable order number while submitting the order ID as the value.
+	 *
+	 * @param int $user_id WordPress user id.
+	 * @return array<int, array{id: string, number: string}>
+	 */
+	protected function getUserLifetimeOrderObjects( int $user_id ): array {
+		if ( ! function_exists( 'wc_get_orders' ) ) {
+			return array();
+		}
+
+		$ids = $this->getUserLifetimeOrders( $user_id );
+		$result = array();
+
+		foreach ( $ids as $order_id_str ) {
+			$order_id = (int) $order_id_str;
+			$number   = $order_id_str;
+
+			if ( function_exists( 'wc_get_order' ) ) {
+				$order = wc_get_order( $order_id );
+				if ( $order ) {
+					$number = (string) $order->get_order_number();
+				}
+			}
+
+			$result[] = array(
+				'id'     => $order_id_str,
+				'number' => $number,
+			);
+		}
+
+		return $result;
 	}
 
 	/**

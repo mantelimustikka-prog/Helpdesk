@@ -284,10 +284,10 @@
 			}
 
 			self.container.querySelectorAll( 'select[name="order_relation"]' ).forEach( function ( sel ) {
-				orders.forEach( function ( orderNo ) {
+				orders.forEach( function ( order ) {
 					var opt = document.createElement( 'option' );
-					opt.value = String( orderNo );
-					opt.textContent = String( orderNo );
+					opt.value = String( order.id );
+					opt.textContent = '#' + String( order.number );
 					sel.appendChild( opt );
 				} );
 			} );
@@ -618,6 +618,8 @@
 		}
 		if ( ! data.order_relation || data.order_relation.trim() === '' ) {
 			errors.push( i18n.errorSelectOrderRelation || 'Please select an order relation.' );
+		} else if ( this.formType === 'guest' && data.order_relation === 'existing_order_related' ) {
+			errors.push( i18n.errorLoginRequired || 'You must login to create this support request.' );
 		}
 		if ( ! data.subject || data.subject.trim() === '' ) {
 			errors.push( 'Please enter a subject.' );

@@ -122,6 +122,7 @@ class TicketsPage {
 					<p><strong><?php esc_html_e( 'Subject:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['subject'] ); ?></p>
 					<p><strong><?php esc_html_e( 'Phone:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['requester_phone'] ); ?></p>
 					<p><strong><?php esc_html_e( 'Status:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['status'] ); ?></p>
+					<?php $this->renderOrderRelationRow( $selected_ticket ); ?>
 
 					<h3><?php esc_html_e( 'Thread', 'wp-helpdesk' ); ?></h3>
 					<?php if ( empty( $messages ) ) : ?>
@@ -351,6 +352,63 @@ class TicketsPage {
 
 		wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . $ticket_id ) );
 		exit;
+	}
+
+	/**
+	 * Fetch queue rows.
+	 *
+	 * @param int    $limit         Result limit.
+	 * @param string $status_filter Optional status to filter by.
+	 * @return array<int, array<string, mixed>>
+	 */
+	/**
+	 * Retrieve a WooCommerce order by ID.
+	 *
+	 * Thin wrapper around wc_get_order() so tests can override it without
+	 * defining or redefining a global function.
+	 *
+	 * @param int $order_id WC order ID.
+	 * @return object|false
+	 */
+	protected function getWooCommerceOrder( int $order_id ) {
+		if ( function_exists( 'wc_get_order' ) ) {
+			return wc_get_order( $order_id );
+		}
+		return false;
+	}
+
+	/**
+	 * Render the order relation row in the ticket detail view.
+	 *
+	 * When the ticket has a numeric order_relation (a WC order ID) and WooCommerce
+	 * is active, a direct clickable link to that order is shown.
+	 *
+	 * @param array<string, mixed> $ticket Ticket row.
+	 * @return void
+	 */
+	protected function renderOrderRelationRow( array $ticket ): void {
+		$order_rel = isset( $ticket['order_relation'] ) ? (string) $ticket['order_relation'] : '';
+		if ( '' === $order_rel ) {
+			return;
+		}
+
+		echo '<p><strong>' . esc_html__( 'Order:', 'wp-helpdesk' ) . '</strong> ';
+
+		if ( 'not_order_related' === $order_rel ) {
+			echo esc_html__( 'Not order related', 'wp-helpdesk' );
+		} elseif ( ctype_digit( $order_rel ) && function_exists( 'wc_get_order' ) ) {
+			$order = $this->getWooCommerceOrder( (int) $order_rel );
+			if ( $order ) {
+				$edit_url = $order->get_edit_order_url();
+				echo '<a href="' . esc_url( $edit_url ) . '" target="_blank">#' . esc_html( (string) $order->get_order_number() ) . '</a>';
+			} else {
+				echo '#' . esc_html( $order_rel );
+			}
+		} else {
+			echo esc_html( $order_rel );
+		}
+
+		echo '</p>';
 	}
 
 	/**

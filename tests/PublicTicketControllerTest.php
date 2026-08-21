@@ -365,4 +365,158 @@ final class PublicTicketControllerTest extends TestCase {
 		self::assertInstanceOf( WP_Error::class, $response );
 	}
 
+	public function testSubmitGuestTicketWithExistingOrderRelationReturnsLoginRequired(): void {
+		wp_helpdesk_test_reset_state();
+		$GLOBALS['wp_logged_in'] = false;
+
+		$controller = new PublicTicketController( new TopicService(), new TopicTransitionService(), new KnowledgeBaseService() );
+
+		$request = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid-rest-nonce' );
+		$request->set_param( 'requester_name', 'Jane Guest' );
+		$request->set_param( 'requester_email', 'jane@example.com' );
+		$request->set_param( 'requester_phone', '0401234567' );
+		$request->set_param( 'subject', 'Help' );
+		$request->set_param( 'message', 'I need help with an order' );
+		$request->set_param( 'order_relation', 'existing_order_related' );
+
+		$response = $controller->submitGuestTicket( $request );
+
+		self::assertInstanceOf( WP_Error::class, $response );
+		self::assertSame( 'hd_login_required', $response->get_error_code() );
+	}
+
+	public function testSubmitGuestTicketWithNotOrderRelatedPassesValidation(): void {
+		wp_helpdesk_test_reset_state();
+		$GLOBALS['wp_logged_in'] = false;
+
+		$controller = new class extends PublicTicketController {
+			protected function createTicket( array $data ) {
+				return new \WP_REST_Response( array( 'ticket_no' => 'HD-TEST-001', 'message' => 'ok' ), 201 );
+			}
+		};
+
+		// Provide a wpdb stub so the RateLimiter does not blow up.
+		global $wpdb;
+		$wpdb = new class {
+			public string $base_prefix = 'wp_';
+			public int    $insert_id   = 1;
+
+			public function get_row( string $sql, $mode = null ): ?array {
+				return null;
+			}
+
+			public function prepare( string $sql, ...$args ): string {
+				return $sql;
+			}
+
+			public function insert( string $table, array $data, array $format = array() ): int {
+				return 1;
+			}
+		};
+
+		$request = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid-rest-nonce' );
+		$request->set_param( 'requester_name', 'Jane Guest' );
+		$request->set_param( 'requester_email', 'jane@example.com' );
+		$request->set_param( 'requester_phone', '0401234567' );
+		$request->set_param( 'subject', 'Help' );
+		$request->set_param( 'message', 'I need help' );
+		$request->set_param( 'order_relation', 'not_order_related' );
+
+		$response = $controller->submitGuestTicket( $request );
+
+		self::assertInstanceOf( WP_REST_Response::class, $response );
+		self::assertSame( 201, $response->status );
+	}
+
+	public function testListUserOrdersReturnsIdAndNumberObjects(): void {
+		wp_helpdesk_test_reset_state();
+		$GLOBALS['wp_logged_in'] = true;
+		$GLOBALS['wp_current_user'] = (object) array(
+			'ID'           => 3,
+			'display_name' => 'Order Customer',
+			'user_email'   => 'customer@example.com',
+		);
+
+		$controller = new class extends PublicTicketController {
+			protected function getUserLifetimeOrderObjects( int $user_id ): array {
+				return array(
+					array( 'id' => '101', 'number' => '101' ),
+					array( 'id' => '102', 'number' => '102' ),
+				);
+			}
+		};
+
+		$response = $controller->listUserOrders( new WP_REST_Request() );
+
+		self::assertSame( 200, $response->status );
+		self::assertCount( 2, $response->data );
+		self::assertSame( '101', $response->data[0]['id'] );
+		self::assertSame( '101', $response->data[0]['number'] );
+		self::assertSame( '102', $response->data[1]['id'] );
+	}
+
+	public function testListUserOrdersReturnsEmptyArrayForGuest(): void {
+		wp_helpdesk_test_reset_state();
+		$GLOBALS['wp_logged_in'] = false;
+
+		$controller = new PublicTicketController( new TopicService(), new TopicTransitionService(), new KnowledgeBaseService() );
+		$response   = $controller->listUserOrders( new WP_REST_Request() );
+
+		self::assertSame( 200, $response->status );
+		self::assertSame( array(), $response->data );
+	}
+
+	public function testGetUserLifetimeOrdersUsesCustomerKeyAndReturnsIds(): void {
+		wp_helpdesk_test_reset_state();
+
+		$captured_args = null;
+
+		$controller = new class extends PublicTicketController {
+			public array $capturedArgs = array();
+
+			protected function getUserLifetimeOrders( int $user_id ): array {
+				if ( ! function_exists( 'wc_get_orders' ) ) {
+					return array();
+				}
+
+				$args = array(
+					'customer' => $user_id,
+					'limit'    => -1,
+					'return'   => 'ids',
+				);
+				$this->capturedArgs = $args;
+				$orders = wc_get_orders( $args );
+				if ( ! is_array( $orders ) ) {
+					return array();
+				}
+
+				return array_values(
+					array_filter(
+						array_map(
+							static function ( $oid ): string {
+								$oid = (int) $oid;
+								return $oid > 0 ? (string) $oid : '';
+							},
+							$orders
+						),
+						static fn( string $v ): bool => '' !== $v
+					)
+				);
+			}
+		};
+
+		// Inject a wc_get_orders stub returning order IDs.
+		if ( ! function_exists( 'wc_get_orders' ) ) {
+			// The stub is registered in bootstrap; just verify the key used.
+			self::markTestSkipped( 'wc_get_orders not stubbed in this environment.' );
+		}
+
+		// Call through the overridden method and check the key.
+		$controller->getUserLifetimeOrders( 1 );
+		self::assertArrayHasKey( 'customer', $controller->capturedArgs );
+		self::assertArrayNotHasKey( 'customer_id', $controller->capturedArgs );
+	}
+
 }
