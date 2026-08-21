@@ -28,6 +28,7 @@ class Constants {
 	public const OPTION_GENERAL_AUTO_ASSIGN_MODE     = 'hd_general_auto_assign_mode';
 	public const OPTION_GENERAL_TIMEZONE_MODE        = 'hd_general_timezone_mode';
 	public const OPTION_GENERAL_DATE_FORMAT          = 'hd_general_date_format';
+	public const OPTION_GENERAL_RETENTION_DAYS       = 'hd_data_retention_days';
 
 	// Integration – Email option keys.
 	public const OPTION_EMAIL_FROM_NAME       = 'hd_email_from_name';
@@ -95,6 +96,7 @@ class Constants {
 			self::OPTION_GENERAL_AUTO_ASSIGN_MODE,
 			self::OPTION_GENERAL_TIMEZONE_MODE,
 			self::OPTION_GENERAL_DATE_FORMAT,
+			self::OPTION_GENERAL_RETENTION_DAYS,
 			// Integration – Email.
 			self::OPTION_EMAIL_FROM_NAME,
 			self::OPTION_EMAIL_FROM_ADDRESS,

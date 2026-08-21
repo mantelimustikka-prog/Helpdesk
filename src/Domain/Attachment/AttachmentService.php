@@ -127,6 +127,36 @@ class AttachmentService {
 	}
 
 	/**
+	 * Delete all attachments for a ticket.
+	 *
+	 * @param int $ticket_id Ticket ID.
+	 * @return void
+	 */
+	public function deleteForTicket( int $ticket_id ): void {
+		global $wpdb;
+
+		$table = Schema::table( Constants::TABLE_ATTACHMENTS );
+
+		$wp_attachment_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT wp_attachment_id FROM {$table} WHERE ticket_id = %d",
+				$ticket_id
+			)
+		);
+
+		foreach ( $wp_attachment_ids as $wp_id ) {
+			wp_delete_attachment( (int) $wp_id, true );
+		}
+
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$table} WHERE ticket_id = %d",
+				$ticket_id
+			)
+		);
+	}
+
+	/**
 	 * Delete an attachment owned by a user or managed by an agent.
 	 *
 	 * @param int $attachment_id Attachment record ID.

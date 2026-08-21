@@ -51,6 +51,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_valid_nonces'] = array(
 			'hd_settings_save' => 'valid-settings-nonce',
 			'hd_topic_action'  => 'valid-topic-nonce',
+			'hd_ticket_action' => 'valid-ticket-nonce',
 			'wp_rest'          => 'valid-rest-nonce',
 		);
 		$GLOBALS['wp_mail_calls'] = array();

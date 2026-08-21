@@ -202,6 +202,22 @@ class MemberTicketForm extends GuestTicketForm {
 						aria-required="true"
 					></textarea>
 				</div>
+				<div class="hd-field">
+					<label for="hd-member-attachments" class="hd-label">
+						<?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?>
+					</label>
+					<input
+						type="file"
+						id="hd-member-attachments"
+						name="attachments[]"
+						class="hd-file-input"
+						multiple
+						accept="image/jpeg,image/png,image/gif,application/pdf,text/plain,application/zip"
+					>
+					<p class="hd-field-hint">
+						<?php esc_html_e( 'Optional. You may attach images or documents (JPEG, PNG, GIF, PDF, TXT, ZIP). Maximum 10 MB per file.', 'wp-helpdesk' ); ?>
+					</p>
+				</div>
 				<div class="hd-form-actions hd-form-actions--split">
 					<button type="button" class="hd-btn hd-btn--secondary" data-action="prev">
 						&larr; <?php esc_html_e( 'Back', 'wp-helpdesk' ); ?>
