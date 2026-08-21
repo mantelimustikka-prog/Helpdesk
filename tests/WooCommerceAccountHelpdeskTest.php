@@ -53,7 +53,6 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertArrayHasKey( 'query_vars', $GLOBALS['wp_filters'] );
 		self::assertArrayHasKey( 'woocommerce_account_menu_items', $GLOBALS['wp_filters'] );
 		self::assertArrayHasKey( 'woocommerce_account_helpdesk_endpoint', $GLOBALS['wp_filters'] );
-		self::assertArrayHasKey( 'template_redirect', $GLOBALS['wp_filters'] );
 	}
 
 	public function testRegisterDoesNothingWhenWooCommerceAccountPageIsUnavailable(): void {
@@ -393,7 +392,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertRegExp( '/Open<\/a>\s+<a[^>]+download=/', $output, 'A space must separate the Open and Download action links' );
 	}
 
-	public function testReplySubmissionPostsMemberMessageAndRedirects(): void {
+	public function testReplySubmissionPostsMemberMessageAndShowsSuccessNotice(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
 		$this->ticket_repository->ticket      = array(
 			'id'              => 11,
@@ -406,94 +405,42 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$this->message_service->reply_id      = 88;
 		$_SERVER['REQUEST_METHOD']            = 'POST';
 		$_POST = array(
-			'hd_helpdesk_action'        => 'reply',
+			'hd_helpdesk_action'        => 'submit_member_reply',
 			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
 			'hd_helpdesk_reply_body'    => 'Here is my extra detail.',
 		);
 		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
 
+		ob_start();
 		$this->integration->render();
+		$output = (string) ob_get_clean();
 
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertSame( 'member', $this->message_service->posted_author_type );
 		self::assertSame( 'Here is my extra detail.', $this->message_service->posted_body );
-		self::assertSame( 'https://example.test/my-account/helpdesk/request/HD-10011/?hd_reply_status=sent', $GLOBALS['wp_safe_redirect_to'] );
-	}
-
-	// -------------------------------------------------------------------------
-	// handleFormPost() — early-POST path (template_redirect hook)
-	// -------------------------------------------------------------------------
-
-	public function testHandleFormPostRedirectsOnSuccessfulReply(): void {
-		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
-		$this->ticket_repository->ticket      = array(
-			'id'              => 11,
-			'ticket_no'       => 'HD-10011',
-			'user_id'         => 7,
-			'requester_email' => 'member@example.test',
-			'subject'         => 'Billing question',
-			'status'          => 'open',
-		);
-		$this->message_service->reply_id = 55;
-		$_SERVER['REQUEST_METHOD']       = 'POST';
-		$_POST = array(
-			'hd_helpdesk_action'        => 'reply',
-			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
-			'hd_helpdesk_reply_body'    => 'Early-path reply text.',
-		);
-		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
-
-		$this->integration->handleFormPost();
-
-		self::assertSame( 55, $this->message_service->reply_id );
-		self::assertSame( 'https://example.test/my-account/helpdesk/request/HD-10011/?hd_reply_status=sent', $GLOBALS['wp_safe_redirect_to'] );
-	}
-
-	public function testHandleFormPostDoesNothingOnGet(): void {
-		$_SERVER['REQUEST_METHOD']            = 'GET';
-		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
-
-		$this->integration->handleFormPost();
-
+		self::assertStringContainsString( 'Your reply was sent.', $output );
 		self::assertNull( $GLOBALS['wp_safe_redirect_to'] );
 	}
 
-	public function testHandleFormPostDoesNothingWhenNotLoggedIn(): void {
-		$GLOBALS['wp_logged_in']              = false;
+	// -------------------------------------------------------------------------
+	// Reply handler guard behavior
+	// -------------------------------------------------------------------------
+
+	public function testReplySubmissionDoesNothingOutsideRequestDetailView(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'requests';
 		$_SERVER['REQUEST_METHOD']            = 'POST';
-		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
-		$_POST                                = array( 'hd_helpdesk_action' => 'reply' );
-
-		$this->integration->handleFormPost();
-
-		self::assertNull( $GLOBALS['wp_safe_redirect_to'] );
-		self::assertEmpty( $this->message_service->posted_body );
-	}
-
-	public function testHandleFormPostSetsPostHandledFlag(): void {
-		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
-		$this->ticket_repository->ticket      = array(
-			'id'              => 11,
-			'ticket_no'       => 'HD-10011',
-			'user_id'         => 7,
-			'requester_email' => 'member@example.test',
-			'subject'         => 'Flag test',
-			'status'          => 'open',
-		);
-		$this->message_service->reply_id = 56;
-		$_SERVER['REQUEST_METHOD']       = 'POST';
 		$_POST = array(
-			'hd_helpdesk_action'        => 'reply',
+			'hd_helpdesk_action'        => 'submit_member_reply',
 			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
-			'hd_helpdesk_reply_body'    => 'Some text.',
+			'hd_helpdesk_reply_body'    => 'Ignored body',
 		);
 		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
 
-		$this->integration->handleFormPost();
+		ob_start();
+		$this->integration->render();
+		ob_end_clean();
 
-		// After handleFormPost() the flag must be set so render() won't re-run
-		// handleReplySubmission() and post the reply a second time.
-		self::assertSame( 1, $this->message_service->posted_ticket_id > 0 ? 1 : 0 );
+		self::assertSame( 0, $this->message_service->posted_ticket_id );
 	}
 
 	public function testRenderRequiresAuthentication(): void {
@@ -533,26 +480,6 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertStringContainsString( 'hd-file-input', $output, 'File input must use the hd-file-input class for visibility' );
 	}
 
-	public function testRenderShowsSuccessNoticeFromReplyStatusQuery(): void {
-		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
-		$_GET['hd_reply_status']              = 'sent';
-		$this->ticket_repository->ticket      = array(
-			'id'              => 11,
-			'ticket_no'       => 'HD-10011',
-			'user_id'         => 7,
-			'requester_email' => 'agent@example.test',
-			'subject'         => 'Need billing help',
-			'status'          => 'waiting_customer',
-		);
-
-		ob_start();
-		$this->integration->render();
-		$output = (string) ob_get_clean();
-
-		self::assertStringContainsString( 'Your reply was sent.', $output );
-		unset( $_GET['hd_reply_status'] );
-	}
-
 	// -------------------------------------------------------------------------
 	// Reply with attachment calls attachment service
 	// -------------------------------------------------------------------------
@@ -570,7 +497,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$this->message_service->reply_id = 99;
 		$_SERVER['REQUEST_METHOD']       = 'POST';
 		$_POST = array(
-			'hd_helpdesk_action'        => 'reply',
+			'hd_helpdesk_action'        => 'submit_member_reply',
 			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
 			'hd_helpdesk_reply_body'    => 'Attaching a document.',
 		);
@@ -611,7 +538,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$this->message_service->reply_id = 101;
 		$_SERVER['REQUEST_METHOD']       = 'POST';
 		$_POST = array(
-			'hd_helpdesk_action'        => 'reply',
+			'hd_helpdesk_action'        => 'submit_member_reply',
 			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
 			'hd_helpdesk_reply_body'    => 'Attaching two files.',
 		);
@@ -652,7 +579,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$this->message_service->reply_id = 100;
 		$_SERVER['REQUEST_METHOD']       = 'POST';
 		$_POST = array(
-			'hd_helpdesk_action'        => 'reply',
+			'hd_helpdesk_action'        => 'submit_member_reply',
 			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
 			'hd_helpdesk_reply_body'    => 'No attachment here.',
 		);
@@ -661,6 +588,44 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$this->integration->render();
 
 		self::assertEmpty( $this->attachment_service->upload_calls, 'handleUpload must not be called when no file is submitted' );
+	}
+
+	public function testReplySubmissionShowsAttachmentWarningWhenAnyUploadFails(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		$this->message_service->reply_id         = 111;
+		$this->attachment_service->files_to_fail = array( 'bad.pdf' );
+		$_SERVER['REQUEST_METHOD']               = 'POST';
+		$_POST = array(
+			'hd_helpdesk_action'        => 'submit_member_reply',
+			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
+			'hd_helpdesk_reply_body'    => 'Uploading two files.',
+		);
+		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
+		$_FILES['hd_helpdesk_attachment'] = array(
+			'name'     => array( 'bad.pdf', 'good.jpg' ),
+			'type'     => array( 'application/pdf', 'image/jpeg' ),
+			'tmp_name' => array( '/tmp/phpFAIL', '/tmp/phpOK' ),
+			'error'    => array( UPLOAD_ERR_OK, UPLOAD_ERR_OK ),
+			'size'     => array( 1024, 2048 ),
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
+		unset( $_FILES['hd_helpdesk_attachment'] );
+
+		self::assertSame( 11, $this->message_service->posted_ticket_id );
+		self::assertCount( 2, $this->attachment_service->upload_calls );
+		self::assertStringContainsString( 'Your reply was sent, but one or more attachments could not be uploaded.', $output );
 	}
 }
 
@@ -752,6 +717,9 @@ final class AttachmentServiceDouble extends AttachmentService {
 	/** @var array<int, array<string, mixed>> */
 	public array $upload_calls = array();
 
+	/** @var array<int, string> */
+	public array $files_to_fail = array();
+
 	public function getForTicket( int $ticket_id ): array {
 		return $this->attachments;
 	}
@@ -763,6 +731,9 @@ final class AttachmentServiceDouble extends AttachmentService {
 			'ticket_id'  => $ticket_id,
 			'message_id' => $message_id,
 		);
+		if ( in_array( (string) $file['name'], $this->files_to_fail, true ) ) {
+			return new WP_Error( 'hd_attachment_upload', 'Upload failed in test double.' );
+		}
 		return array( 'id' => count( $this->upload_calls ) );
 	}
 }
