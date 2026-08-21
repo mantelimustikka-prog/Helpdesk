@@ -23,8 +23,7 @@ class WooCommerceAccountHelpdesk {
 	/** @var array{type:string,message:string}|null */
 	protected ?array $notice = null;
 
-	/** Set to true by handleFormPost() so render() skips a duplicate call. */
-	protected bool $post_handled = false;
+	protected string $reply_body_draft = '';
 
 	public function __construct(
 		?TicketRepository $ticket_repository = null,
@@ -65,7 +64,6 @@ class WooCommerceAccountHelpdesk {
 		// the priority-9999 callback guarantees Helpdesk is still present in the
 		// final array handed to the template.
 		add_filter( 'woocommerce_account_menu_items', array( $this, 'addMenuItem' ), 9999 );
-		add_action( 'template_redirect', array( $this, 'handleFormPost' ) );
 		add_action( 'woocommerce_account_' . self::ENDPOINT . '_endpoint', array( $this, 'render' ) );
 	}
 
@@ -181,39 +179,6 @@ class WooCommerceAccountHelpdesk {
 	}
 
 	/**
-	 * Handle a POST submission early (template_redirect), before any output is
-	 * sent, so that wp_safe_redirect() can set HTTP headers successfully.
-	 *
-	 * On success the handler redirects and exits. On failure it sets
-	 * $this->notice and sets $this->post_handled so render() skips the
-	 * duplicate call.
-	 *
-	 * @return void
-	 */
-	public function handleFormPost(): void {
-		if ( 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
-			return;
-		}
-
-		if ( ! is_user_logged_in() ) {
-			return;
-		}
-
-		$action = sanitize_key( (string) ( $_POST['hd_helpdesk_action'] ?? '' ) );
-		if ( 'reply' !== $action ) {
-			return;
-		}
-
-		$route = $this->parseEndpointRequest();
-		if ( 'request' !== $route['view'] ) {
-			return;
-		}
-
-		$this->post_handled = true;
-		$this->processReply( $route['ticket_no'] );
-	}
-
-	/**
 	 * Render the account endpoint content.
 	 *
 	 * @return void
@@ -230,13 +195,9 @@ class WooCommerceAccountHelpdesk {
 
 		$route = $this->parseEndpointRequest();
 
-		if ( ! $this->post_handled && 'POST' === strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) && 'request' === $route['view'] ) {
-			if ( $this->processReply( $route['ticket_no'] ) ) {
-				return;
-			}
+		if ( 'request' === $route['view'] ) {
+			$this->handleReplySubmission( $route['ticket_no'] );
 		}
-
-		$this->maybeHydrateReplyStatusNotice( $route['view'] );
 
 		$active_nav = 'request' === $route['view'] ? 'requests' : $route['view'];
 		$links      = $this->getNavigationLinks( $active_nav );
@@ -424,7 +385,7 @@ class WooCommerceAccountHelpdesk {
 				novalidate
 			>
 				<?php wp_nonce_field( 'hd_my_account_reply', 'hd_my_account_reply_nonce' ); ?>
-				<input type="hidden" name="hd_helpdesk_action" value="reply">
+				<input type="hidden" name="hd_helpdesk_action" value="submit_member_reply">
 
 				<div class="hd-reply-form__field">
 					<label for="hd-reply-body" class="hd-reply-form__label">
@@ -439,7 +400,7 @@ class WooCommerceAccountHelpdesk {
 						required
 						aria-required="true"
 						placeholder="<?php esc_attr_e( 'Type your reply here…', 'wp-helpdesk' ); ?>"
-					></textarea>
+					><?php echo esc_textarea( $this->reply_body_draft ); ?></textarea>
 				</div>
 
 				<div class="hd-reply-form__field">
@@ -541,24 +502,30 @@ class WooCommerceAccountHelpdesk {
 	}
 
 	/**
-	 * Process a member reply POST for the given ticket.
-	 *
-	 * Validates the nonce, retrieves the ticket, saves the reply message,
-	 * uploads any attached files, fires the hd_ticket_replied action, and
-	 * issues a redirect. Returns true when a redirect was issued, false when
-	 * validation failed (notice is set for the caller to display).
+	 * Handle a request-detail reply submission.
 	 *
 	 * @param string $ticket_no Ticket number from the endpoint path.
-	 * @return bool True when a redirect was issued.
+	 * @return void
 	 */
-	protected function processReply( string $ticket_no ): bool {
+	protected function handleReplySubmission( string $ticket_no ): void {
+		if ( 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
+			return;
+		}
+
+		$action = sanitize_key( (string) ( $_POST['hd_helpdesk_action'] ?? '' ) );
+		if ( 'submit_member_reply' !== $action ) {
+			return;
+		}
+
+		$this->reply_body_draft = sanitize_textarea_field( (string) ( $_POST['hd_helpdesk_reply_body'] ?? '' ) );
+
 		$nonce = sanitize_text_field( (string) ( $_POST['hd_my_account_reply_nonce'] ?? '' ) );
 		if ( '' === $nonce || ! wp_verify_nonce( $nonce, 'hd_my_account_reply' ) ) {
 			$this->notice = array(
 				'type'    => 'error',
 				'message' => __( 'Security check failed. Please try again.', 'wp-helpdesk' ),
 			);
-			return false;
+			return;
 		}
 
 		$ticket = $this->getAccessibleTicket( $ticket_no );
@@ -567,21 +534,21 @@ class WooCommerceAccountHelpdesk {
 				'type'    => 'error',
 				'message' => __( 'Request not found or you do not have permission to reply.', 'wp-helpdesk' ),
 			);
-			return false;
+			return;
 		}
 
-		$body = sanitize_textarea_field( (string) ( $_POST['hd_helpdesk_reply_body'] ?? '' ) );
-		if ( '' === trim( $body ) ) {
+		if ( '' === trim( $this->reply_body_draft ) ) {
 			$this->notice = array(
 				'type'    => 'error',
 				'message' => __( 'Please enter a reply before sending.', 'wp-helpdesk' ),
 			);
-			return false;
+			return;
 		}
 
+		$reply_body = $this->reply_body_draft;
 		$message_id = $this->message_service->postReply(
 			(int) $ticket['id'],
-			$body,
+			$reply_body,
 			'member',
 			get_current_user_id(),
 			false
@@ -592,10 +559,11 @@ class WooCommerceAccountHelpdesk {
 				'type'    => 'error',
 				'message' => __( 'Your reply could not be saved. Please try again.', 'wp-helpdesk' ),
 			);
-			return false;
+			return;
 		}
 
-		$upload_error = $this->uploadAttachments( (int) $ticket['id'], $message_id );
+		$this->reply_body_draft = '';
+		$upload_results         = $this->saveReplyAttachments( (int) $ticket['id'], $message_id );
 
 		$message = $this->message_service->getMessage( $message_id );
 		do_action(
@@ -606,65 +574,69 @@ class WooCommerceAccountHelpdesk {
 				'ticket_id'      => (int) $ticket['id'],
 				'author_user_id' => get_current_user_id(),
 				'author_type'    => 'member',
-				'body'           => $body,
+				'body'           => $reply_body,
 				'is_internal'    => 0,
 			)
 		);
 
-		$redirect_url = $this->buildAccountUrl( 'request/' . $ticket_no );
-		$separator    = false !== strpos( $redirect_url, '?' ) ? '&' : '?';
-		$status       = $upload_error instanceof \WP_Error ? 'sent_with_attachment_error' : 'sent';
-
-		return $this->redirectTo( $redirect_url . $separator . 'hd_reply_status=' . rawurlencode( $status ) );
-	}
-
-	/**
-	 * Hydrate a one-time reply notice from URL status.
-	 *
-	 * @param string $view Active subview key.
-	 * @return void
-	 */
-	protected function maybeHydrateReplyStatusNotice( string $view ): void {
-		if ( null !== $this->notice || 'request' !== $view ) {
-			return;
-		}
-
-		$status = sanitize_key( (string) ( $_GET['hd_reply_status'] ?? '' ) );
-		if ( 'sent' === $status ) {
-			$this->notice = array(
-				'type'    => 'success',
-				'message' => __( 'Your reply was sent.', 'wp-helpdesk' ),
-			);
-			return;
-		}
-
-		if ( 'sent_with_attachment_error' === $status ) {
+		if ( $upload_results['failed'] > 0 ) {
 			$this->notice = array(
 				'type'    => 'error',
 				'message' => __( 'Your reply was sent, but one or more attachments could not be uploaded.', 'wp-helpdesk' ),
 			);
+			return;
 		}
+
+		$this->notice = array(
+			'type'    => 'success',
+			'message' => __( 'Your reply was sent.', 'wp-helpdesk' ),
+		);
 	}
 
 	/**
-	 * Upload reply attachments from $_FILES to the ticket and message.
-	 *
-	 * Handles the array-indexed format produced by a multiple-file input
-	 * (name="hd_helpdesk_attachment[]"). Files with UPLOAD_ERR_NO_FILE are
-	 * silently skipped. Upload errors do not abort the reply; the last error
-	 * is returned so the caller can surface it in the redirect status flag.
+	 * Save reply attachments after the reply message has been persisted.
 	 *
 	 * @param int $ticket_id  Ticket ID to associate attachments with.
 	 * @param int $message_id Message ID to associate attachments with.
-	 * @return \WP_Error|null WP_Error when any upload fails, null on success or when no files are present.
+	 * @return array{uploaded:int,failed:int}
 	 */
-	protected function uploadAttachments( int $ticket_id, int $message_id ): ?\WP_Error {
+	protected function saveReplyAttachments( int $ticket_id, int $message_id ): array {
+		$results = array(
+			'uploaded' => 0,
+			'failed'   => 0,
+		);
+
+		foreach ( $this->normalizeReplyAttachmentFiles() as $file ) {
+			$upload = $this->attachment_service->handleUpload(
+				$file,
+				$ticket_id,
+				$message_id,
+				get_current_user_id()
+			);
+
+			if ( $upload instanceof \WP_Error ) {
+				$results['failed']++;
+				continue;
+			}
+
+			$results['uploaded']++;
+		}
+
+		return $results;
+	}
+
+	/**
+	 * Normalize uploaded reply files from $_FILES.
+	 *
+	 * @return array<int, array{name:mixed,type:mixed,tmp_name:mixed,error:mixed,size:mixed}>
+	 */
+	protected function normalizeReplyAttachmentFiles(): array {
 		if ( empty( $_FILES['hd_helpdesk_attachment'] ) ) {
-			return null;
+			return array();
 		}
 
 		$files      = $_FILES['hd_helpdesk_attachment'];
-		$last_error = null;
+		$normalized = array();
 
 		if ( is_array( $files['name'] ) ) {
 			foreach ( array_keys( $files['name'] ) as $index ) {
@@ -679,37 +651,18 @@ class WooCommerceAccountHelpdesk {
 					'error'    => $files['error'][ $index ],
 					'size'     => $files['size'][ $index ],
 				);
-
-				$result = $this->attachment_service->handleUpload(
-					$file,
-					$ticket_id,
-					$message_id,
-					get_current_user_id()
-				);
-
-				if ( $result instanceof \WP_Error ) {
-					$last_error = $result;
-				}
+				$normalized[] = $file;
 			}
 
-			return $last_error;
+			return $normalized;
 		}
 
 		// Flat single-file fallback (name="hd_helpdesk_attachment").
 		if ( ! empty( $files['name'] ) ) {
-			$result = $this->attachment_service->handleUpload(
-				$files,
-				$ticket_id,
-				$message_id,
-				get_current_user_id()
-			);
-
-			if ( $result instanceof \WP_Error ) {
-				return $result;
-			}
+			$normalized[] = $files;
 		}
 
-		return null;
+		return $normalized;
 	}
 
 	/**
