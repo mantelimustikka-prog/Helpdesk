@@ -59,10 +59,13 @@ trait RendersAttachmentsTrait {
 				echo '<span class="hd-attachment__meta">' . esc_html( $date ) . '</span>';
 			}
 
-			echo '<div class="hd-attachment__actions">'
-				. '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener" class="hd-btn hd-btn--xs hd-btn--secondary">' . esc_html__( 'Open', 'wp-helpdesk' ) . '</a>'
-				. '<a href="' . esc_url( $url ) . '" download="' . esc_attr( $name ) . '" class="hd-btn hd-btn--xs hd-btn--secondary">' . esc_html__( 'Download', 'wp-helpdesk' ) . '</a>'
-				. '</div>'
+			echo '<div class="hd-attachment__actions">';
+			if ( '' !== $url ) {
+				echo '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener" class="hd-btn hd-btn--xs hd-btn--secondary">' . esc_html__( 'Open', 'wp-helpdesk' ) . '</a>'
+					. ' '
+					. '<a href="' . esc_url( $url ) . '" download="' . esc_attr( $name ) . '" class="hd-btn hd-btn--xs hd-btn--secondary">' . esc_html__( 'Download', 'wp-helpdesk' ) . '</a>';
+			}
+			echo '</div>'
 				. '</div>'
 				. '</div>';
 		}

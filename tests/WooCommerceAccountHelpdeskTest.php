@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
+use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Domain\Message\MessageService;
 use WPHelpdesk\Domain\Ticket\TicketRepository;
 use WPHelpdesk\Interfaces\Frontend\WooCommerceAccountHelpdesk;
@@ -12,14 +13,16 @@ require_once __DIR__ . '/bootstrap.php';
 final class WooCommerceAccountHelpdeskTest extends TestCase {
 	private TicketRepositoryDouble $ticket_repository;
 	private MessageServiceDouble $message_service;
+	private AttachmentServiceDouble $attachment_service;
 	private WooCommerceAccountHelpdesk $integration;
 
 	protected function setUp(): void {
 		wp_helpdesk_test_reset_state();
 		$GLOBALS['wp_current_user_caps']['hd_manage_tickets'] = false;
-		$this->ticket_repository = new TicketRepositoryDouble();
-		$this->message_service   = new MessageServiceDouble();
-		$this->integration       = new WooCommerceAccountHelpdesk( $this->ticket_repository, $this->message_service );
+		$this->ticket_repository  = new TicketRepositoryDouble();
+		$this->message_service    = new MessageServiceDouble();
+		$this->attachment_service = new AttachmentServiceDouble();
+		$this->integration        = new WooCommerceAccountHelpdesk( $this->ticket_repository, $this->message_service, $this->attachment_service );
 	}
 
 	public function testMenuIncludesHelpdeskBeforeLogout(): void {
@@ -321,6 +324,74 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertStringContainsString( 'Request not found', $output );
 	}
 
+	public function testRenderDetailShowsAttachmentsInMemberView(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		$this->attachment_service->attachments = array(
+			array(
+				'id'               => 1,
+				'ticket_id'        => 11,
+				'message_id'       => null,
+				'wp_attachment_id' => 77,
+				'mime_type'        => 'image/jpeg',
+				'file_size'        => 2048,
+				'file_name'        => 'screenshot.jpg',
+				'created_at'       => '2026-01-05 12:00:00',
+				'url'              => 'https://example.test/uploads/screenshot.jpg',
+			),
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'hd-attachments', $output, 'Attachment gallery must be rendered in member ticket detail view' );
+		self::assertStringContainsString( 'screenshot.jpg', $output, 'Attachment filename must appear' );
+		self::assertStringContainsString( 'hd-attachment--image', $output, 'Image attachment must use image class' );
+	}
+
+	public function testRenderDetailDocumentAttachmentHasSpacedOpenDownload(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		$this->attachment_service->attachments = array(
+			array(
+				'id'               => 2,
+				'ticket_id'        => 11,
+				'message_id'       => null,
+				'wp_attachment_id' => 88,
+				'mime_type'        => 'application/pdf',
+				'file_size'        => 4096,
+				'file_name'        => 'invoice.pdf',
+				'created_at'       => '2026-01-05 13:00:00',
+				'url'              => 'https://example.test/uploads/invoice.pdf',
+			),
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'invoice.pdf', $output );
+		self::assertStringContainsString( 'Open', $output );
+		self::assertStringContainsString( 'Download', $output );
+		// Verify a space separates the Open and Download links.
+		self::assertRegExp( '/Open<\/a>\s+<a[^>]+download=/', $output, 'A space must separate the Open and Download action links' );
+	}
+
 	public function testReplySubmissionPostsMemberMessageAndRedirects(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
 		$this->ticket_repository->ticket      = array(
@@ -438,5 +509,14 @@ final class WooCommerceDoingInitDouble extends WooCommerceAccountHelpdesk {
 		$GLOBALS['wp_doing_action']['init'] = true;
 		parent::register();
 		$GLOBALS['wp_doing_action']['init'] = false;
+	}
+}
+
+final class AttachmentServiceDouble extends AttachmentService {
+	/** @var array<int, array<string, mixed>> */
+	public array $attachments = array();
+
+	public function getForTicket( int $ticket_id ): array {
+		return $this->attachments;
 	}
 }

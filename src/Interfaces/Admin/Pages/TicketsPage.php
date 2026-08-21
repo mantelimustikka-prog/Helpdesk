@@ -492,6 +492,8 @@ class TicketsPage {
 	 *
 	 * When the ticket has a numeric order_relation (a WC order ID) and WooCommerce
 	 * is active, a direct clickable link to that order is shown.
+	 * In a multisite network, the order lookup and URL generation run in the
+	 * context of the originating site (ticket's site_id).
 	 *
 	 * @param array<string, mixed> $ticket Ticket row.
 	 * @return void
@@ -507,10 +509,25 @@ class TicketsPage {
 		if ( 'not_any_existing_order_related' === $order_rel ) {
 			echo esc_html__( 'Not any existing order related', 'wp-helpdesk' );
 		} elseif ( ctype_digit( $order_rel ) && function_exists( 'wc_get_order' ) ) {
-			$order = $this->getWooCommerceOrder( (int) $order_rel );
+			$site_id       = isset( $ticket['site_id'] ) ? (int) $ticket['site_id'] : null;
+			$should_switch = null !== $site_id
+				&& function_exists( 'is_multisite' ) && is_multisite()
+				&& function_exists( 'switch_to_blog' );
+
+			if ( $should_switch ) {
+				switch_to_blog( $site_id );
+			}
+
+			$order    = $this->getWooCommerceOrder( (int) $order_rel );
+			$edit_url = $order ? $order->get_edit_order_url() : '';
+			$order_no = $order ? (string) $order->get_order_number() : '';
+
+			if ( $should_switch ) {
+				restore_current_blog();
+			}
+
 			if ( $order ) {
-				$edit_url = $order->get_edit_order_url();
-				echo '<a href="' . esc_url( $edit_url ) . '" target="_blank">#' . esc_html( (string) $order->get_order_number() ) . '</a>';
+				echo '<a href="' . esc_url( $edit_url ) . '" target="_blank">#' . esc_html( $order_no ) . '</a>';
 			} else {
 				echo '#' . esc_html( $order_rel );
 			}

@@ -5,25 +5,32 @@
 
 namespace WPHelpdesk\Interfaces\Frontend;
 
+use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Domain\Message\MessageService;
 use WPHelpdesk\Domain\Ticket\TicketRepository;
 use WPHelpdesk\Support\Helpers;
+use WPHelpdesk\Support\RendersAttachmentsTrait;
 
 class WooCommerceAccountHelpdesk {
+	use RendersAttachmentsTrait;
+
 	public const ENDPOINT = 'helpdesk';
 
 	protected TicketRepository $ticket_repository;
 	protected MessageService $message_service;
+	protected AttachmentService $attachment_service;
 
 	/** @var array{type:string,message:string}|null */
 	protected ?array $notice = null;
 
 	public function __construct(
 		?TicketRepository $ticket_repository = null,
-		?MessageService $message_service = null
+		?MessageService $message_service = null,
+		?AttachmentService $attachment_service = null
 	) {
 		$this->ticket_repository = $ticket_repository ?: new TicketRepository();
 		$this->message_service   = $message_service ?: new MessageService();
+		$this->attachment_service = $attachment_service ?: new AttachmentService();
 	}
 
 	/**
@@ -328,6 +335,7 @@ class WooCommerceAccountHelpdesk {
 				'is_internal' => 0,
 			)
 		);
+		$attachments = $this->attachment_service->getForTicket( (int) $ticket['id'] );
 		?>
 		<div class="hd-account-helpdesk__section">
 			<h3><?php echo esc_html( (string) $ticket['subject'] ); ?></h3>
@@ -359,6 +367,13 @@ class WooCommerceAccountHelpdesk {
 				</ul>
 			<?php endif; ?>
 		</div>
+
+		<?php if ( ! empty( $attachments ) ) : ?>
+		<div class="hd-account-helpdesk__section">
+			<h4><?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?></h4>
+			<?php $this->renderAttachments( $attachments ); ?>
+		</div>
+		<?php endif; ?>
 
 		<div class="hd-account-helpdesk__section">
 			<h4><?php esc_html_e( 'Send a reply', 'wp-helpdesk' ); ?></h4>
