@@ -22,7 +22,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$this->ticket_repository  = new TicketRepositoryDouble();
 		$this->message_service    = new MessageServiceDouble();
 		$this->attachment_service = new AttachmentServiceDouble();
-		$this->integration        = new WooCommerceAccountHelpdesk( $this->ticket_repository, $this->message_service, $this->attachment_service );
+		$this->integration        = new WooCommerceAccountHelpdeskTestable( $this->ticket_repository, $this->message_service, $this->attachment_service );
 	}
 
 	public function testMenuIncludesHelpdeskBeforeLogout(): void {
@@ -411,15 +411,27 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		);
 		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
 
-		ob_start();
+		// POST phase: render() should redirect, not render the page.
 		$this->integration->render();
-		$output = (string) ob_get_clean();
 
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertSame( 'member', $this->message_service->posted_author_type );
 		self::assertSame( 'Here is my extra detail.', $this->message_service->posted_body );
+		self::assertStringContainsString(
+			'request/HD-10011',
+			(string) $GLOBALS['wp_safe_redirect_to'],
+			'A redirect to the request detail page must be issued after a successful reply'
+		);
+
+		// GET phase: a fresh render() should show the persisted notice.
+		$_SERVER['REQUEST_METHOD'] = 'GET';
+		$_POST                     = array();
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
 		self::assertStringContainsString( 'Your reply was sent.', $output );
-		self::assertNull( $GLOBALS['wp_safe_redirect_to'] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -560,6 +572,11 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertSame( 'second.jpg', $this->attachment_service->upload_calls[1]['file_name'] );
 		self::assertSame( 11, $this->attachment_service->upload_calls[0]['ticket_id'] );
 		self::assertSame( 101, $this->attachment_service->upload_calls[0]['message_id'] );
+		self::assertStringContainsString(
+			'request/HD-10011',
+			(string) $GLOBALS['wp_safe_redirect_to'],
+			'A redirect must be issued after a successful reply with attachments'
+		);
 	}
 
 	// -------------------------------------------------------------------------
@@ -588,6 +605,11 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$this->integration->render();
 
 		self::assertEmpty( $this->attachment_service->upload_calls, 'handleUpload must not be called when no file is submitted' );
+		self::assertStringContainsString(
+			'request/HD-10011',
+			(string) $GLOBALS['wp_safe_redirect_to'],
+			'A redirect must be issued after a successful reply with no attachments'
+		);
 	}
 
 	public function testReplySubmissionShowsAttachmentWarningWhenAnyUploadFails(): void {
@@ -617,15 +639,38 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 			'size'     => array( 1024, 2048 ),
 		);
 
-		ob_start();
+		// POST phase: should redirect with error notice in transient.
 		$this->integration->render();
-		$output = (string) ob_get_clean();
 
 		unset( $_FILES['hd_helpdesk_attachment'] );
 
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertCount( 2, $this->attachment_service->upload_calls );
+		self::assertStringContainsString(
+			'request/HD-10011',
+			(string) $GLOBALS['wp_safe_redirect_to'],
+			'A redirect must be issued even when attachment upload partially fails'
+		);
+
+		// GET phase: notice must appear on the subsequent page load.
+		$_SERVER['REQUEST_METHOD'] = 'GET';
+		$_POST                     = array();
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
 		self::assertStringContainsString( 'Your reply was sent, but one or more attachments could not be uploaded.', $output );
+	}
+}
+
+/**
+ * Overrides doExit() so that wp_safe_redirect() + exit does not terminate
+ * the PHPUnit process during POST→Redirect→GET tests.
+ */
+final class WooCommerceAccountHelpdeskTestable extends WooCommerceAccountHelpdesk {
+	protected function doExit(): void {
+		// No-op in tests; the redirect URL is captured in $GLOBALS['wp_safe_redirect_to'].
 	}
 }
 

@@ -199,6 +199,16 @@ class WooCommerceAccountHelpdesk {
 			$this->handleReplySubmission( $route['ticket_no'] );
 		}
 
+		// Restore a notice persisted across the POST→Redirect→GET cycle.
+		if ( null === $this->notice ) {
+			$transient_key = 'hd_reply_notice_' . get_current_user_id();
+			$stored        = get_transient( $transient_key );
+			if ( is_array( $stored ) ) {
+				$this->notice = $stored;
+				delete_transient( $transient_key );
+			}
+		}
+
 		$active_nav = 'request' === $route['view'] ? 'requests' : $route['view'];
 		$links      = $this->getNavigationLinks( $active_nav );
 
@@ -580,17 +590,44 @@ class WooCommerceAccountHelpdesk {
 		);
 
 		if ( $upload_results['failed'] > 0 ) {
-			$this->notice = array(
+			$notice = array(
 				'type'    => 'error',
 				'message' => __( 'Your reply was sent, but one or more attachments could not be uploaded.', 'wp-helpdesk' ),
 			);
+			$this->storeNoticeAndRedirect( $notice, $this->buildAccountUrl( 'request/' . $ticket_no ) );
 			return;
 		}
 
-		$this->notice = array(
+		$notice = array(
 			'type'    => 'success',
 			'message' => __( 'Your reply was sent.', 'wp-helpdesk' ),
 		);
+		$this->storeNoticeAndRedirect( $notice, $this->buildAccountUrl( 'request/' . $ticket_no ) );
+	}
+
+	/**
+	 * Persist a notice in a short-lived user-scoped transient and redirect.
+	 *
+	 * @param array{type:string,message:string} $notice  Notice data.
+	 * @param string                            $url     Redirect destination.
+	 * @return void
+	 */
+	protected function storeNoticeAndRedirect( array $notice, string $url ): void {
+		set_transient( 'hd_reply_notice_' . get_current_user_id(), $notice, 60 );
+		wp_safe_redirect( $url );
+		$this->doExit();
+	}
+
+	/**
+	 * Terminate the current request after a redirect.
+	 *
+	 * Extracted into a protected method so that test subclasses can override it
+	 * without killing the test runner process.
+	 *
+	 * @return void
+	 */
+	protected function doExit(): void {
+		exit; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
 	/**
@@ -607,6 +644,11 @@ class WooCommerceAccountHelpdesk {
 		);
 
 		foreach ( $this->normalizeReplyAttachmentFiles() as $file ) {
+			if ( UPLOAD_ERR_OK !== (int) ( $file['error'] ?? UPLOAD_ERR_NO_FILE ) ) {
+				$results['failed']++;
+				continue;
+			}
+
 			$upload = $this->attachment_service->handleUpload(
 				$file,
 				$ticket_id,

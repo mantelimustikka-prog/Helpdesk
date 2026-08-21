@@ -59,6 +59,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_inline_scripts'] = array();
 		$GLOBALS['wp_localized_scripts'] = array();
 		$GLOBALS['wp_safe_redirect_to'] = null;
+		$GLOBALS['wp_transients']       = array();
 		$GLOBALS['wp_filters'] = array();
 		$GLOBALS['wp_doing_action'] = array();
 		$GLOBALS['wp_query_vars'] = array();
@@ -572,6 +573,26 @@ if ( ! function_exists( 'wp_enqueue_style' ) ) {
 if ( ! function_exists( 'wp_safe_redirect' ) ) {
 	function wp_safe_redirect( string $location ): void {
 		$GLOBALS['wp_safe_redirect_to'] = $location;
+	}
+}
+
+if ( ! function_exists( 'set_transient' ) ) {
+	function set_transient( string $transient, mixed $value, int $expiration = 0 ): bool {
+		$GLOBALS['wp_transients'][ $transient ] = $value;
+		return true;
+	}
+}
+
+if ( ! function_exists( 'get_transient' ) ) {
+	function get_transient( string $transient ): mixed {
+		return $GLOBALS['wp_transients'][ $transient ] ?? false;
+	}
+}
+
+if ( ! function_exists( 'delete_transient' ) ) {
+	function delete_transient( string $transient ): bool {
+		unset( $GLOBALS['wp_transients'][ $transient ] );
+		return true;
 	}
 }
 
