@@ -1116,8 +1116,40 @@
 				.then( function ( res ) { return res.json().then( function ( data ) { return { status: res.status, data: data }; } ); } )
 				.then( function ( r ) {
 					if ( r.status < 300 ) {
+						var successMsg  = r.data.message || 'Your reply has been sent.';
+						var fileInput   = form.querySelector( 'input[type="file"]' );
+						var ticketId    = r.data.ticket_id;
+						if ( fileInput && fileInput.files && fileInput.files.length > 0 && ticketId ) {
+							var fd = new FormData();
+							fd.append( 'file', fileInput.files[0] );
+							fd.append( 'guest_token', guestToken );
+							fetch( restBase + 'tickets/' + ticketId + '/attachments', {
+								method: 'POST',
+								headers: { 'X-WP-Nonce': restNonce },
+								body: fd
+							} )
+								.then( function () {
+									bodyField.value  = '';
+									fileInput.value  = '';
+									successEl.textContent = successMsg;
+									successEl.classList.remove( 'hd-success-message--hidden' );
+									submitBtn.disabled    = false;
+									submitBtn.textContent = 'Send reply';
+								} )
+								.catch( function () {
+									bodyField.value  = '';
+									fileInput.value  = '';
+									successEl.textContent = successMsg;
+									successEl.classList.remove( 'hd-success-message--hidden' );
+									showError( 'Your reply was sent but the attachment could not be uploaded.' );
+									submitBtn.disabled    = false;
+									submitBtn.textContent = 'Send reply';
+								} );
+							return;
+						}
 						bodyField.value = '';
-						successEl.textContent = r.data.message || 'Your reply has been sent.';
+						if ( fileInput ) { fileInput.value = ''; }
+						successEl.textContent = successMsg;
 						successEl.classList.remove( 'hd-success-message--hidden' );
 					} else {
 						showError( ( r.data && r.data.message ) || 'Could not send your reply. Please try again.' );

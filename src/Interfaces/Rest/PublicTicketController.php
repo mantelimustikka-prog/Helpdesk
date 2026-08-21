@@ -1152,7 +1152,10 @@ class PublicTicketController {
 		do_action( 'hd_ticket_replied', $ticket, $inserted_msg ?: array() );
 
 		return new WP_REST_Response(
-			array( 'message' => __( 'Your reply has been added.', 'wp-helpdesk' ) ),
+			array(
+				'message'   => __( 'Your reply has been added.', 'wp-helpdesk' ),
+				'ticket_id' => (int) $ticket['id'],
+			),
 			201
 		);
 	}

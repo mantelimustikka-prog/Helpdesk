@@ -546,4 +546,109 @@ final class AttachmentUploadAndDisplayTest extends TestCase {
 		self::assertSame( 20, $upload_calls[0]['message_id'] );
 		self::assertSame( 'doc.pdf', $upload_calls[0]['file_name'] );
 	}
+
+	// -------------------------------------------------------------------------
+	// GuestTicketView reply form includes a file input
+	// -------------------------------------------------------------------------
+
+	public function testGuestTicketViewReplyFormIncludesFileInput(): void {
+		$view = new class extends GuestTicketView {
+			protected function findTicket( string $ticket_no, string $guest_token ): ?array {
+				return array(
+					'id'        => 12,
+					'ticket_no' => $ticket_no,
+					'subject'   => 'Test subject',
+					'status'    => 'open',
+				);
+			}
+
+			protected function getMessages( int $ticket_id ): array {
+				return array();
+			}
+		};
+
+		$stub_attachment_service = new class extends AttachmentService {
+			public function getForTicket( int $ticket_id ): array {
+				return array();
+			}
+		};
+
+		$view_with_service = new class( $stub_attachment_service ) extends GuestTicketView {
+			public function __construct( AttachmentService $attachment_service ) {
+				parent::__construct( $attachment_service );
+			}
+
+			protected function findTicket( string $ticket_no, string $guest_token ): ?array {
+				return array(
+					'id'        => 12,
+					'ticket_no' => $ticket_no,
+					'subject'   => 'Test subject',
+					'status'    => 'open',
+				);
+			}
+
+			protected function getMessages( int $ticket_id ): array {
+				return array();
+			}
+		};
+
+		ob_start();
+		$view_with_service->renderForTicket( 'HD-0012', 'sometoken' );
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'type="file"', $output, 'Guest reply form must include a file input' );
+		self::assertStringContainsString( 'hd-guest-reply-attachment', $output, 'File input id must be hd-guest-reply-attachment' );
+		self::assertStringContainsString( 'data-ticket-id', $output, 'Reply form must carry data-ticket-id for JS upload' );
+	}
+
+	// -------------------------------------------------------------------------
+	// submitGuestReply REST response includes ticket_id
+	// -------------------------------------------------------------------------
+
+	public function testSubmitGuestReplyResponseIncludesTicketId(): void {
+		global $wpdb;
+		$wpdb = new class {
+			public string $base_prefix = 'wp_';
+			public string $sitemeta    = 'wp_sitemeta';
+			public int    $insert_id   = 99;
+
+			public function prepare( string $query, ...$args ): string {
+				return $query;
+			}
+			public function query( string $query ): int {
+				return 1;
+			}
+			public function get_var( string $query ) {
+				return 2001;
+			}
+			public function insert( string $table, array $data, array $format = array() ): int {
+				$this->insert_id = 99;
+				return 1;
+			}
+			public function get_row( string $query, string $output = OBJECT ): ?array {
+				return array( 'id' => 99, 'ticket_no' => 'HD-0099' );
+			}
+		};
+
+		$GLOBALS['wp_valid_nonces']['wp_rest'] = 'valid_nonce';
+
+		$controller = new class extends PublicTicketController {
+			public function findTicketByTokenAndNo( string $ticket_no, string $guest_token ): ?array {
+				return array( 'id' => 55, 'ticket_no' => $ticket_no, 'status' => 'open' );
+			}
+		};
+
+		$request = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid_nonce' );
+		$request->set_param( 'ticket_no', 'HD-0055' );
+		$request->set_param( 'guest_token', 'sometoken' );
+		$request->set_param( 'message', 'Hello, I need help.' );
+
+		$response = $controller->submitGuestReply( $request );
+
+		self::assertInstanceOf( WP_REST_Response::class, $response );
+		self::assertSame( 201, $response->status );
+		self::assertArrayHasKey( 'ticket_id', $response->data, 'submitGuestReply response must include ticket_id for attachment upload' );
+		self::assertSame( 55, $response->data['ticket_id'] );
+	}
 }

@@ -121,6 +121,7 @@ class GuestTicketView extends HelpdeskPage {
 				<h2 class="hd-section-title"><?php esc_html_e( 'Add a Reply', 'wp-helpdesk' ); ?></h2>
 				<div class="hd-reply-form" id="hd-guest-reply-form"
 					data-ticket-no="<?php echo esc_attr( (string) $ticket['ticket_no'] ); ?>"
+					data-ticket-id="<?php echo esc_attr( (string) (int) $ticket['id'] ); ?>"
 					data-guest-token="<?php echo esc_attr( $guest_token ); ?>">
 					<div class="hd-field">
 						<label for="hd-guest-reply-body" class="hd-label">
@@ -128,6 +129,18 @@ class GuestTicketView extends HelpdeskPage {
 							<span class="hd-required" aria-hidden="true">*</span>
 						</label>
 						<textarea id="hd-guest-reply-body" class="hd-textarea" rows="5" required aria-required="true"></textarea>
+					</div>
+					<div class="hd-field">
+						<label for="hd-guest-reply-attachment" class="hd-label">
+							<?php esc_html_e( 'Attachment', 'wp-helpdesk' ); ?>
+						</label>
+						<input
+							type="file"
+							id="hd-guest-reply-attachment"
+							name="hd-guest-reply-attachment"
+							accept="<?php echo esc_attr( implode( ',', \WPHelpdesk\Domain\Attachment\AttachmentService::ALLOWED_MIME_TYPES ) ); ?>"
+						>
+						<span class="hd-description"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB.', 'wp-helpdesk' ); ?></span>
 					</div>
 					<div class="hd-form-actions">
 						<button type="button" class="hd-btn hd-btn--primary" id="hd-guest-reply-submit">
