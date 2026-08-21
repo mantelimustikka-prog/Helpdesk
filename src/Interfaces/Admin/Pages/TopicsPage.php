@@ -685,7 +685,18 @@ class TopicsPage {
 		}
 
 		$topic_id = $this->topic_service->createTopic( $payload );
-		$this->redirectToList( $topic_id > 0 ? 'created' : 'error' );
+		if ( $topic_id > 0 ) {
+			$this->redirectToList( 'created' );
+			return;
+		}
+
+		$error_detail = sanitize_text_field( $this->topic_service->getLastSaveError() );
+		if ( '' !== $error_detail ) {
+			error_log( '[WP Helpdesk] Topic save failed: ' . $error_detail ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		}
+
+		$this->storeLastSaveErrorDetail( $error_detail );
+		$this->redirectToList( 'error' );
 	}
 
 	/**
@@ -713,7 +724,18 @@ class TopicsPage {
 		}
 
 		$updated = $this->topic_service->updateTopic( $topic_id, $payload );
-		$this->redirectToList( $updated ? 'updated' : 'error' );
+		if ( $updated ) {
+			$this->redirectToList( 'updated' );
+			return;
+		}
+
+		$error_detail = sanitize_text_field( $this->topic_service->getLastSaveError() );
+		if ( '' !== $error_detail ) {
+			error_log( '[WP Helpdesk] Topic save failed: ' . $error_detail ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		}
+
+		$this->storeLastSaveErrorDetail( $error_detail );
+		$this->redirectToList( 'error' );
 	}
 
 	/**
@@ -875,8 +897,17 @@ class TopicsPage {
 		}
 
 		list( $type, $message ) = $messages[ $msg ];
+		$error_detail = '';
+		if ( 'error' === $msg ) {
+			$error_detail = $this->consumeLastSaveErrorDetail();
+		}
 		?>
-		<div class="notice notice-<?php echo esc_attr( $type ); ?> is-dismissible"><p><?php echo esc_html( $message ); ?></p></div>
+		<div class="notice notice-<?php echo esc_attr( $type ); ?> is-dismissible">
+			<p><?php echo esc_html( $message ); ?></p>
+			<?php if ( '' !== $error_detail ) : ?>
+				<p><code><?php echo esc_html( $error_detail ); ?></code></p>
+			<?php endif; ?>
+		</div>
 		<?php
 	}
 
@@ -901,6 +932,38 @@ class TopicsPage {
 	protected function redirectToList( string $message ): void {
 		wp_safe_redirect( $this->getListUrl( array( 'msg' => $message ) ) );
 		exit;
+	}
+
+	/**
+	 * Persist last save error detail for the current admin user.
+	 *
+	 * @param string $error_detail Error detail.
+	 * @return void
+	 */
+	protected function storeLastSaveErrorDetail( string $error_detail ): void {
+		$user_id = (int) get_current_user_id();
+		if ( $user_id <= 0 ) {
+			return;
+		}
+
+		update_user_meta( $user_id, 'hd_topics_last_save_error_detail', $error_detail );
+	}
+
+	/**
+	 * Read-and-clear the last save error detail for the current admin user.
+	 *
+	 * @return string
+	 */
+	protected function consumeLastSaveErrorDetail(): string {
+		$user_id = (int) get_current_user_id();
+		if ( $user_id <= 0 ) {
+			return '';
+		}
+
+		$error_detail = sanitize_text_field( (string) get_user_meta( $user_id, 'hd_topics_last_save_error_detail', true ) );
+		update_user_meta( $user_id, 'hd_topics_last_save_error_detail', '' );
+
+		return $error_detail;
 	}
 
 	/**

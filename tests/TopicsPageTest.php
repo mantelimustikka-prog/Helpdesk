@@ -203,6 +203,37 @@ final class TopicsPageTest extends TestCase {
 		self::assertStringContainsString( 'msg=created', (string) $page->redirect_target );
 	}
 
+	public function testHandlePostIncludesUnderlyingErrorDetailsWhenSaveFails(): void {
+		$topic_service = new class extends TopicService {
+			public function createTopic( array $data ): int {
+				return 0;
+			}
+
+			public function getLastSaveError(): string {
+				return "Unknown column 'type' in 'INSERT INTO'";
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		$_GET['page'] = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'create',
+			'name'            => 'General',
+			'topic_type'      => 'ROOT',
+		);
+
+		$page->handlePost();
+
+		self::assertStringContainsString( 'msg=error', (string) $page->redirect_target );
+		self::assertSame(
+			"Unknown column 'type' in 'INSERT INTO'",
+			(string) ( $GLOBALS['wp_user_meta'][7]['hd_topics_last_save_error_detail'] ?? '' )
+		);
+	}
+
 	public function testRenderListViewDefaultsToTreeModeAndShowsHierarchyActions(): void {
 		$topic_service = new class extends TopicService {
 			public function countTopics( array $args = array() ): int {
@@ -360,6 +391,24 @@ final class TopicsPageTest extends TestCase {
 		self::assertNull( $topic_service->updated_payload['parent_id'] );
 		self::assertStringContainsString( 'msg=updated', (string) $page->redirect_target );
 	}
+
+	public function testRenderNoticeShowsUnderlyingSaveErrorDetails(): void {
+		$page = new TopicsPageTestDouble(
+			new class extends TopicService {},
+			new class extends TopicTransitionService {}
+		);
+
+		$_GET['msg'] = 'error';
+		$GLOBALS['wp_user_meta'][7]['hd_topics_last_save_error_detail'] = "Unknown column 'type' in 'INSERT INTO'";
+
+		ob_start();
+		$page->renderNoticeForTest();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Unable to save the topic.', $output );
+		self::assertStringContainsString( "Unknown column &#039;type&#039; in &#039;INSERT INTO&#039;", $output );
+		self::assertSame( '', (string) ( $GLOBALS['wp_user_meta'][7]['hd_topics_last_save_error_detail'] ?? '' ) );
+	}
 }
 
 final class TopicsPageTestDouble extends TopicsPage {
@@ -371,6 +420,10 @@ final class TopicsPageTestDouble extends TopicsPage {
 
 	public function renderForm( string $action ): void {
 		$this->renderFormView( $action );
+	}
+
+	public function renderNoticeForTest(): void {
+		$this->renderNotice();
 	}
 
 	protected function redirectToList( string $message ): void {
