@@ -23,6 +23,9 @@ class WooCommerceAccountHelpdesk {
 	/** @var array{type:string,message:string}|null */
 	protected ?array $notice = null;
 
+	/** Set to true by handleFormPost() so render() skips a duplicate call. */
+	protected bool $post_handled = false;
+
 	public function __construct(
 		?TicketRepository $ticket_repository = null,
 		?MessageService $message_service = null,
@@ -62,6 +65,7 @@ class WooCommerceAccountHelpdesk {
 		// the priority-9999 callback guarantees Helpdesk is still present in the
 		// final array handed to the template.
 		add_filter( 'woocommerce_account_menu_items', array( $this, 'addMenuItem' ), 9999 );
+		add_action( 'template_redirect', array( $this, 'handleFormPost' ) );
 		add_action( 'woocommerce_account_' . self::ENDPOINT . '_endpoint', array( $this, 'render' ) );
 	}
 
@@ -177,6 +181,34 @@ class WooCommerceAccountHelpdesk {
 	}
 
 	/**
+	 * Handle a POST submission early (template_redirect), before any output is
+	 * sent, so that wp_safe_redirect() can set HTTP headers successfully.
+	 *
+	 * On success the handler redirects and exits. On failure it sets
+	 * $this->notice and sets $this->post_handled so render() skips the
+	 * duplicate call.
+	 *
+	 * @return void
+	 */
+	public function handleFormPost(): void {
+		if ( 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
+			return;
+		}
+
+		if ( ! is_user_logged_in() ) {
+			return;
+		}
+
+		$route = $this->parseEndpointRequest();
+		if ( 'request' !== $route['view'] ) {
+			return;
+		}
+
+		$this->post_handled = true;
+		$this->handleReplySubmission( $route['ticket_no'] );
+	}
+
+	/**
 	 * Render the account endpoint content.
 	 *
 	 * @return void
@@ -193,7 +225,7 @@ class WooCommerceAccountHelpdesk {
 
 		$route = $this->parseEndpointRequest();
 
-		if ( 'POST' === strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) && 'request' === $route['view'] ) {
+		if ( ! $this->post_handled && 'POST' === strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) && 'request' === $route['view'] ) {
 			if ( $this->handleReplySubmission( $route['ticket_no'] ) ) {
 				return;
 			}

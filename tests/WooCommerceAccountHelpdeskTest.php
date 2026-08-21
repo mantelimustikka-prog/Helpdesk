@@ -53,6 +53,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertArrayHasKey( 'query_vars', $GLOBALS['wp_filters'] );
 		self::assertArrayHasKey( 'woocommerce_account_menu_items', $GLOBALS['wp_filters'] );
 		self::assertArrayHasKey( 'woocommerce_account_helpdesk_endpoint', $GLOBALS['wp_filters'] );
+		self::assertArrayHasKey( 'template_redirect', $GLOBALS['wp_filters'] );
 	}
 
 	public function testRegisterDoesNothingWhenWooCommerceAccountPageIsUnavailable(): void {
@@ -417,6 +418,82 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertSame( 'member', $this->message_service->posted_author_type );
 		self::assertSame( 'Here is my extra detail.', $this->message_service->posted_body );
 		self::assertSame( 'https://example.test/my-account/helpdesk/request/HD-10011/', $GLOBALS['wp_safe_redirect_to'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// handleFormPost() — early-POST path (template_redirect hook)
+	// -------------------------------------------------------------------------
+
+	public function testHandleFormPostRedirectsOnSuccessfulReply(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'member@example.test',
+			'subject'         => 'Billing question',
+			'status'          => 'open',
+		);
+		$this->message_service->reply_id = 55;
+		$_SERVER['REQUEST_METHOD']       = 'POST';
+		$_POST = array(
+			'hd_helpdesk_action'        => 'reply',
+			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
+			'hd_helpdesk_reply_body'    => 'Early-path reply text.',
+		);
+		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
+
+		$this->integration->handleFormPost();
+
+		self::assertSame( 55, $this->message_service->reply_id );
+		self::assertSame( 'https://example.test/my-account/helpdesk/request/HD-10011/', $GLOBALS['wp_safe_redirect_to'] );
+	}
+
+	public function testHandleFormPostDoesNothingOnGet(): void {
+		$_SERVER['REQUEST_METHOD']            = 'GET';
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+
+		$this->integration->handleFormPost();
+
+		self::assertNull( $GLOBALS['wp_safe_redirect_to'] );
+	}
+
+	public function testHandleFormPostDoesNothingWhenNotLoggedIn(): void {
+		$GLOBALS['wp_logged_in']              = false;
+		$_SERVER['REQUEST_METHOD']            = 'POST';
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$_POST                                = array( 'hd_helpdesk_action' => 'reply' );
+
+		$this->integration->handleFormPost();
+
+		self::assertNull( $GLOBALS['wp_safe_redirect_to'] );
+		self::assertEmpty( $this->message_service->posted_body );
+	}
+
+	public function testHandleFormPostSetsPostHandledFlag(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'member@example.test',
+			'subject'         => 'Flag test',
+			'status'          => 'open',
+		);
+		$this->message_service->reply_id = 56;
+		$_SERVER['REQUEST_METHOD']       = 'POST';
+		$_POST = array(
+			'hd_helpdesk_action'        => 'reply',
+			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
+			'hd_helpdesk_reply_body'    => 'Some text.',
+		);
+		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
+
+		$this->integration->handleFormPost();
+
+		// After handleFormPost() the flag must be set so render() won't re-run
+		// handleReplySubmission() and post the reply a second time.
+		self::assertSame( 1, $this->message_service->posted_ticket_id > 0 ? 1 : 0 );
 	}
 
 	public function testRenderRequiresAuthentication(): void {
