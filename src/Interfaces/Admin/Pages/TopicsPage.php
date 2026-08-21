@@ -685,6 +685,9 @@ class TopicsPage {
 		}
 
 		$topic_id = $this->topic_service->createTopic( $payload );
+		if ( $topic_id <= 0 ) {
+			$this->logSaveError( $this->topic_service->getLastDbError() );
+		}
 		$this->redirectToList( $topic_id > 0 ? 'created' : 'error' );
 	}
 
@@ -713,6 +716,9 @@ class TopicsPage {
 		}
 
 		$updated = $this->topic_service->updateTopic( $topic_id, $payload );
+		if ( ! $updated ) {
+			$this->logSaveError( $this->topic_service->getLastDbError() );
+		}
 		$this->redirectToList( $updated ? 'updated' : 'error' );
 	}
 
@@ -875,9 +881,36 @@ class TopicsPage {
 		}
 
 		list( $type, $message ) = $messages[ $msg ];
+
+		$db_error_detail = '';
+		if ( 'error' === $msg ) {
+			$transient_key   = 'hd_topic_save_error_' . get_current_user_id();
+			$db_error_detail = (string) get_transient( $transient_key );
+			delete_transient( $transient_key );
+		}
 		?>
-		<div class="notice notice-<?php echo esc_attr( $type ); ?> is-dismissible"><p><?php echo esc_html( $message ); ?></p></div>
+		<div class="notice notice-<?php echo esc_attr( $type ); ?> is-dismissible">
+			<p><?php echo esc_html( $message ); ?></p>
+			<?php if ( '' !== $db_error_detail ) : ?>
+			<p><code><?php echo esc_html( $db_error_detail ); ?></code></p>
+			<?php endif; ?>
+		</div>
 		<?php
+	}
+
+	/**
+	 * Log a topic save error and store the detail so it can be surfaced in the
+	 * next admin page render.
+	 *
+	 * @param string $db_error Raw database error string (may be empty).
+	 * @return void
+	 */
+	protected function logSaveError( string $db_error ): void {
+		if ( '' !== $db_error ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( '[WP Helpdesk] Topic save failed: ' . $db_error );
+			set_transient( 'hd_topic_save_error_' . get_current_user_id(), $db_error, 60 );
+		}
 	}
 
 	/**

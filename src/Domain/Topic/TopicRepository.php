@@ -9,6 +9,9 @@ use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
 
 class TopicRepository {
+	/** @var array<string, array<int, string>> Per-request schema column cache keyed by table name. */
+	private array $column_cache = array();
+
 	/**
 	 * List topics for a network with optional filters/pagination.
 	 *
@@ -144,6 +147,10 @@ class TopicRepository {
 	/**
 	 * Insert a new topic row.
 	 *
+	 * Filters $data to only the columns that actually exist in the table so
+	 * that installs whose schema pre-dates newer columns (e.g. `type`,
+	 * `parent_id`, `is_final`) do not fail with an "Unknown column" error.
+	 *
 	 * @param array<string, mixed> $data Column data.
 	 * @return int Inserted id or 0 on failure.
 	 */
@@ -151,35 +158,53 @@ class TopicRepository {
 		global $wpdb;
 
 		$table  = Schema::table( Constants::TABLE_TOPICS );
+		$data   = $this->filterToExistingColumns( $table, $data );
 		$result = $wpdb->insert( $table, $data );
+
 		if ( $result ) {
 			return (int) $wpdb->insert_id;
 		}
 
-		$legacy_payload = $data;
-		for ( $retry = 0; $retry < 2; $retry++ ) {
-			$last_error = isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
-			$matches    = array();
-			$did_match  = preg_match( "/Unknown column '(type|parent_id)' in 'field list'/i", $last_error, $matches );
+		return 0;
+	}
 
-			if ( 1 !== $did_match ) {
-				return 0;
-			}
+	/**
+	 * Return the last database error string recorded by wpdb.
+	 *
+	 * @return string Empty string when there is no error.
+	 */
+	public function getLastDbError(): string {
+		global $wpdb;
 
-			$missing_column = strtolower( (string) ( $matches[1] ?? '' ) );
-			if ( '' === $missing_column || ! array_key_exists( $missing_column, $legacy_payload ) ) {
-				return 0;
-			}
+		return isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
+	}
 
-			unset( $legacy_payload[ $missing_column ] );
-			$retry_result = $wpdb->insert( $table, $legacy_payload );
+	/**
+	 * Filter an associative data array to only keys that correspond to actual
+	 * columns in the given table.
+	 *
+	 * Falls back to the original array when the schema cannot be retrieved so
+	 * that the insert attempt still proceeds normally.
+	 *
+	 * @param string               $table Fully-qualified table name.
+	 * @param array<string, mixed> $data  Payload to filter.
+	 * @return array<string, mixed>
+	 */
+	protected function filterToExistingColumns( string $table, array $data ): array {
+		global $wpdb;
 
-			if ( $retry_result ) {
-				return (int) $wpdb->insert_id;
-			}
+		if ( ! isset( $this->column_cache[ $table ] ) ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$this->column_cache[ $table ] = $wpdb->get_col( "DESCRIBE {$table}", 0 );
 		}
 
-		return 0;
+		$columns = $this->column_cache[ $table ];
+
+		if ( empty( $columns ) ) {
+			return $data;
+		}
+
+		return array_intersect_key( $data, array_flip( (array) $columns ) );
 	}
 
 	/**

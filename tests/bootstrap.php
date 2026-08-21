@@ -72,6 +72,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 			'user_email'   => 'agent@example.test',
 		);
 		$GLOBALS['wp_user_meta'] = array();
+		$GLOBALS['wp_transients'] = array();
 		$GLOBALS['wp_remote_post_response'] = array( 'response' => array( 'code' => 200 ) );
 		$GLOBALS['wp_posts_index'] = array();
 		$GLOBALS['wc_page_permalinks'] = array(
@@ -702,6 +703,26 @@ if ( ! function_exists( 'wp_check_filetype_and_ext' ) ) {
 if ( ! function_exists( 'sanitize_file_name' ) ) {
 	function sanitize_file_name( string $name ): string {
 		return preg_replace( '/[^a-zA-Z0-9._-]/', '-', $name );
+	}
+}
+
+if ( ! function_exists( 'set_transient' ) ) {
+	function set_transient( string $transient, $value, int $expiration = 0 ): bool {
+		$GLOBALS['wp_transients'][ $transient ] = $value;
+		return true;
+	}
+}
+
+if ( ! function_exists( 'get_transient' ) ) {
+	function get_transient( string $transient ) {
+		return $GLOBALS['wp_transients'][ $transient ] ?? false;
+	}
+}
+
+if ( ! function_exists( 'delete_transient' ) ) {
+	function delete_transient( string $transient ): bool {
+		unset( $GLOBALS['wp_transients'][ $transient ] );
+		return true;
 	}
 }
 

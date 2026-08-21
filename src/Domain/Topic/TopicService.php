@@ -456,6 +456,18 @@ class TopicService {
 	}
 
 	/**
+	 * Return the last database error recorded by wpdb.
+	 *
+	 * Delegates to the underlying repository so callers can surface the real
+	 * MySQL error when a create/update operation returns a failure indicator.
+	 *
+	 * @return string Empty string when there is no error.
+	 */
+	public function getLastDbError(): string {
+		return $this->repository->getLastDbError();
+	}
+
+	/**
 	 * Determine whether a topic is currently top-level.
 	 *
 	 * @param int $id Topic id.

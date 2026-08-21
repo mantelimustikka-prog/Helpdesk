@@ -360,6 +360,57 @@ final class TopicsPageTest extends TestCase {
 		self::assertNull( $topic_service->updated_payload['parent_id'] );
 		self::assertStringContainsString( 'msg=updated', (string) $page->redirect_target );
 	}
+	public function testHandlePostCreateFailureLogsDbErrorAndSetsTransient(): void {
+		$topic_service = new class extends TopicService {
+			public function createTopic( array $data ): int {
+				return 0;
+			}
+
+			public function getLastDbError(): string {
+				return "Unknown column 'is_final' in 'field list'";
+			}
+		};
+
+		$page = new TopicsPageTestDouble( $topic_service, new class extends TopicTransitionService {} );
+
+		$_GET['page'] = 'wp-helpdesk-topics';
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST = array(
+			'hd_topic_nonce'  => 'valid-topic-nonce',
+			'hd_topic_action' => 'create',
+			'name'            => 'General',
+			'topic_type'      => 'ROOT',
+		);
+
+		$page->handlePost();
+
+		self::assertStringContainsString( 'msg=error', (string) $page->redirect_target );
+		self::assertSame(
+			"Unknown column 'is_final' in 'field list'",
+			get_transient( 'hd_topic_save_error_7' )
+		);
+	}
+
+	public function testRenderNoticeShowsDbErrorDetailOnSaveFailure(): void {
+		set_transient( 'hd_topic_save_error_7', "Table 'wp_helpdesk_topics' doesn't exist", 60 );
+
+		$page = new TopicsPageTestDouble(
+			new class extends TopicService {},
+			new class extends TopicTransitionService {}
+		);
+
+		$_GET['msg'] = 'error';
+
+		ob_start();
+		// Access protected method via a public wrapper defined on the test double.
+		$page->renderNoticePublic();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Unable to save the topic.', $output );
+		self::assertStringContainsString( 'wp_helpdesk_topics', $output );
+		// Transient must be consumed (deleted) after display.
+		self::assertFalse( get_transient( 'hd_topic_save_error_7' ) );
+	}
 }
 
 final class TopicsPageTestDouble extends TopicsPage {
@@ -371,6 +422,10 @@ final class TopicsPageTestDouble extends TopicsPage {
 
 	public function renderForm( string $action ): void {
 		$this->renderFormView( $action );
+	}
+
+	public function renderNoticePublic(): void {
+		$this->renderNotice();
 	}
 
 	protected function redirectToList( string $message ): void {
