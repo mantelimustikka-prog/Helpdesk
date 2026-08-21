@@ -452,6 +452,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertStringContainsString( 'multipart/form-data', $output, 'Reply form must use multipart/form-data encoding' );
 		self::assertStringContainsString( 'type="file"', $output, 'Reply form must include a file input' );
 		self::assertStringContainsString( 'hd_helpdesk_attachment', $output, 'File input must be named hd_helpdesk_attachment' );
+		self::assertStringContainsString( 'Browse…', $output, 'Reply form must render a visible browse button label' );
 	}
 
 	// -------------------------------------------------------------------------
