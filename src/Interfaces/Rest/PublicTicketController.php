@@ -124,6 +124,21 @@ class PublicTicketController {
 
 		register_rest_route(
 			$namespace,
+			'/tickets/guest-reply',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'submitGuestReply' ),
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'ticket_no'   => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),
+					'guest_token' => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),
+					'message'     => array( 'required' => true, 'type' => 'string', 'minLength' => 1 ),
+				),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
 			'/kb/search',
 			array(
 				'methods'             => 'GET',
@@ -477,31 +492,36 @@ class PublicTicketController {
 			}
 		}
 
-		$ticket_no  = Helpers::generateTicketNo();
-		$network_id = Helpers::getNetworkId();
-		$site_id    = Helpers::getCurrentSiteId();
-		$table      = Schema::table( Constants::TABLE_TICKETS );
-		$msg_table  = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+		$ticket_no   = Helpers::generateTicketNo();
+		$network_id  = Helpers::getNetworkId();
+		$site_id     = Helpers::getCurrentSiteId();
+		$table       = Schema::table( Constants::TABLE_TICKETS );
+		$msg_table   = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+		$guest_token = 'guest' === ( $data['form_type'] ?? '' ) ? $this->generateGuestToken() : null;
 
-		$inserted = $wpdb->insert(
-			$table,
-			array(
-				'network_id'      => $network_id,
-				'site_id'         => $site_id,
-				'ticket_no'       => $ticket_no,
-				'requester_name'  => $data['requester_name'],
-				'requester_email' => $data['requester_email'],
-				'requester_phone' => $data['requester_phone'],
-				'user_id'         => $data['user_id'],
-				'subject'         => $data['subject'],
-				'topic_path_json' => wp_json_encode( $topic_path ),
-				'order_relation'  => $order_relation,
-				'status'          => 'new',
-				'created_at'      => current_time( 'mysql' ),
-				'updated_at'      => current_time( 'mysql' ),
-			),
-			array( '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
+		$insert_data   = array(
+			'network_id'      => $network_id,
+			'site_id'         => $site_id,
+			'ticket_no'       => $ticket_no,
+			'requester_name'  => $data['requester_name'],
+			'requester_email' => $data['requester_email'],
+			'requester_phone' => $data['requester_phone'],
+			'user_id'         => $data['user_id'],
+			'subject'         => $data['subject'],
+			'topic_path_json' => wp_json_encode( $topic_path ),
+			'order_relation'  => $order_relation,
+			'status'          => 'new',
+			'created_at'      => current_time( 'mysql' ),
+			'updated_at'      => current_time( 'mysql' ),
 		);
+		$insert_format = array( '%d', '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s' );
+
+		if ( null !== $guest_token ) {
+			$insert_data['guest_token']  = $guest_token;
+			$insert_format[]             = '%s';
+		}
+
+		$inserted = $wpdb->insert( $table, $insert_data, $insert_format );
 
 		if ( ! $inserted ) {
 			return new WP_Error( 'hd_db_error', __( 'Could not save your request. Please try again.', 'wp-helpdesk' ), array( 'status' => 500 ) );
@@ -526,7 +546,7 @@ class PublicTicketController {
 			return new WP_Error( 'hd_db_error', __( 'Could not save your request. Please try again.', 'wp-helpdesk' ), array( 'status' => 500 ) );
 		}
 
-		$ticket = array_merge( $data, array( 'id' => $ticket_id, 'ticket_no' => $ticket_no ) );
+		$ticket = array_merge( $data, array( 'id' => $ticket_id, 'ticket_no' => $ticket_no, 'guest_token' => $guest_token ) );
 
 		do_action( 'hd_ticket_created', $ticket );
 
@@ -534,13 +554,16 @@ class PublicTicketController {
 			$this->deleteFormSession( (string) $data['session_token'] );
 		}
 
-		return new WP_REST_Response(
-			array(
-				'ticket_no' => $ticket_no,
-				'message'   => __( 'Your support request has been submitted.', 'wp-helpdesk' ),
-			),
-			201
+		$response_data = array(
+			'ticket_no' => $ticket_no,
+			'message'   => __( 'Your support request has been submitted.', 'wp-helpdesk' ),
 		);
+
+		if ( null !== $guest_token ) {
+			$response_data['ticket_link'] = home_url( '/helpdesk/ticket/' . rawurlencode( $ticket_no ) . '/' . rawurlencode( $guest_token ) . '/' );
+		}
+
+		return new WP_REST_Response( $response_data, 201 );
 	}
 
 	/**
@@ -935,5 +958,99 @@ class PublicTicketController {
 			$remote = (string) $request->get_header( 'X-Real-IP' );
 		}
 		return sanitize_text_field( $remote );
+	}
+
+	/**
+	 * Generate a cryptographically random token for guest ticket access.
+	 *
+	 * @return string 64-character hex token.
+	 */
+	protected function generateGuestToken(): string {
+		return bin2hex( random_bytes( 32 ) );
+	}
+
+	/**
+	 * POST /tickets/guest-reply – add a reply to a guest ticket using its token.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function submitGuestReply( WP_REST_Request $request ) {
+		$nonce = $request->get_header( 'X-WP-Nonce' );
+		if ( empty( $nonce ) ) {
+			$nonce = $request->get_param( '_wpnonce' );
+		}
+		if ( empty( $nonce ) || ! wp_verify_nonce( (string) $nonce, 'wp_rest' ) ) {
+			return new WP_Error( 'hd_invalid_nonce', __( 'Invalid or missing nonce.', 'wp-helpdesk' ), array( 'status' => 403 ) );
+		}
+
+		$ticket_no   = sanitize_text_field( (string) $request->get_param( 'ticket_no' ) );
+		$guest_token = sanitize_text_field( (string) $request->get_param( 'guest_token' ) );
+		$message     = sanitize_textarea_field( (string) $request->get_param( 'message' ) );
+
+		if ( '' === trim( $message ) ) {
+			return new WP_Error( 'hd_missing_message', __( 'Message cannot be empty.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		}
+
+		$ticket = $this->findTicketByTokenAndNo( $ticket_no, $guest_token );
+		if ( null === $ticket ) {
+			return new WP_Error( 'hd_not_found', __( 'Ticket not found.', 'wp-helpdesk' ), array( 'status' => 404 ) );
+		}
+
+		global $wpdb;
+		$msg_table = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+		$wpdb->insert(
+			$msg_table,
+			array(
+				'ticket_id'      => (int) $ticket['id'],
+				'author_user_id' => 0,
+				'author_type'    => 'guest',
+				'body'           => $message,
+				'is_internal'    => 0,
+				'created_at'     => current_time( 'mysql' ),
+			),
+			array( '%d', '%d', '%s', '%s', '%d', '%s' )
+		);
+
+		$inserted_msg = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$msg_table} WHERE id = %d LIMIT 1",
+				(int) $wpdb->insert_id
+			),
+			ARRAY_A
+		);
+
+		do_action( 'hd_ticket_replied', $ticket, $inserted_msg ?: array() );
+
+		return new WP_REST_Response(
+			array( 'message' => __( 'Your reply has been added.', 'wp-helpdesk' ) ),
+			201
+		);
+	}
+
+	/**
+	 * Fetch a ticket row that matches both ticket_no and guest_token.
+	 *
+	 * @param string $ticket_no   Ticket number.
+	 * @param string $guest_token Guest access token.
+	 * @return array<string, mixed>|null
+	 */
+	public function findTicketByTokenAndNo( string $ticket_no, string $guest_token ): ?array {
+		if ( '' === $ticket_no || '' === $guest_token ) {
+			return null;
+		}
+
+		global $wpdb;
+		$table = Schema::table( Constants::TABLE_TICKETS );
+		$row   = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE ticket_no = %s AND guest_token = %s LIMIT 1",
+				$ticket_no,
+				$guest_token
+			),
+			ARRAY_A
+		);
+
+		return $row ?: null;
 	}
 }

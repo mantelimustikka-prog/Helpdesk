@@ -8,6 +8,7 @@ namespace WPHelpdesk\Interfaces\Frontend;
 use WPHelpdesk\Support\Helpers;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Interfaces\Frontend\FormDefinitionFactory;
+use WPHelpdesk\Interfaces\Frontend\GuestTicketView;
 
 /**
  * Registers WordPress rewrite rules for the customer-facing helpdesk pages
@@ -23,15 +24,18 @@ class FrontendRouter {
 	protected HelpdeskPage $helpdesk_page;
 	protected GuestTicketForm $guest_form;
 	protected MemberTicketForm $member_form;
+	protected GuestTicketView $ticket_view;
 
 	public function __construct(
 		?HelpdeskPage $helpdesk_page = null,
 		?GuestTicketForm $guest_form = null,
-		?MemberTicketForm $member_form = null
+		?MemberTicketForm $member_form = null,
+		?GuestTicketView $ticket_view = null
 	) {
 		$this->helpdesk_page = $helpdesk_page ?: new HelpdeskPage();
 		$this->guest_form    = $guest_form    ?: new GuestTicketForm();
 		$this->member_form   = $member_form   ?: new MemberTicketForm();
+		$this->ticket_view   = $ticket_view   ?: new GuestTicketView();
 	}
 
 	/**
@@ -69,6 +73,7 @@ class FrontendRouter {
 	public function addRewriteRules(): void {
 		add_rewrite_rule( '^helpdesk/member/new/?$', 'index.php?hd_page=member_new', 'top' );
 		add_rewrite_rule( '^helpdesk/new/?$', 'index.php?hd_page=new', 'top' );
+		add_rewrite_rule( '^helpdesk/ticket/([^/]+)/([^/]+)/?$', 'index.php?hd_page=ticket_view&hd_ticket_no=$matches[1]&hd_guest_token=$matches[2]', 'top' );
 		add_rewrite_rule( '^helpdesk/?$', 'index.php?hd_page=index', 'top' );
 	}
 
@@ -80,6 +85,8 @@ class FrontendRouter {
 	 */
 	public function addQueryVars( array $vars ): array {
 		$vars[] = 'hd_page';
+		$vars[] = 'hd_ticket_no';
+		$vars[] = 'hd_guest_token';
 		return $vars;
 	}
 
@@ -122,6 +129,12 @@ class FrontendRouter {
 				}
 				$this->member_form->render();
 				exit;
+
+			case 'ticket_view':
+				$ticket_no   = sanitize_text_field( (string) get_query_var( 'hd_ticket_no', '' ) );
+				$guest_token = sanitize_text_field( (string) get_query_var( 'hd_guest_token', '' ) );
+				$this->ticket_view->renderForTicket( $ticket_no, $guest_token );
+				exit;
 		}
 	}
 
@@ -157,6 +170,13 @@ class FrontendRouter {
 
 		if ( '/helpdesk/' === $path ) {
 			return 'index';
+		}
+
+		// /helpdesk/ticket/{ticket_no}/{guest_token}/
+		if ( 1 === preg_match( '#^/helpdesk/ticket/([^/]+)/([^/]+)/$#', $path, $m ) ) {
+			set_query_var( 'hd_ticket_no', rawurldecode( $m[1] ) );
+			set_query_var( 'hd_guest_token', rawurldecode( $m[2] ) );
+			return 'ticket_view';
 		}
 
 		return '';

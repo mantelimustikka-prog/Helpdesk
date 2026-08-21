@@ -57,7 +57,7 @@ class Constants {
 	public const OPTION_PAGE_MEMBER_NEW = 'hd_page_id_member_new';
 
 	// Rewrite flush version — bump to trigger a one-time flush.
-	public const REWRITE_VERSION        = '2';
+	public const REWRITE_VERSION        = '3';
 	public const OPTION_REWRITE_VERSION = 'hd_rewrite_version';
 	public const TABLE_TOPICS              = 'topics';
 	public const TABLE_TOPIC_TRANSITIONS   = 'topic_transitions';

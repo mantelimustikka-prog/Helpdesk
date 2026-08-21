@@ -5,11 +5,20 @@
 
 namespace WPHelpdesk\Interfaces\Admin\Pages;
 
+use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
+use WPHelpdesk\Support\RendersAttachmentsTrait;
 
 class TicketsPage {
+	use RendersAttachmentsTrait;
+	protected AttachmentService $attachment_service;
+
+	public function __construct( ?AttachmentService $attachment_service = null ) {
+		$this->attachment_service = $attachment_service ?: new AttachmentService();
+	}
+
 	/**
 	 * Render the tickets queue and a basic ticket thread view.
 	 *
@@ -142,6 +151,14 @@ class TicketsPage {
 						</ul>
 					<?php endif; ?>
 
+					<?php
+					$attachments = $this->attachment_service->getForTicket( (int) $selected_ticket['id'] );
+					if ( ! empty( $attachments ) ) :
+					?>
+					<h3><?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?></h3>
+					<?php $this->renderAttachments( $attachments ); ?>
+					<?php endif; ?>
+
 					<?php if ( current_user_can( 'hd_reply_tickets' ) || current_user_can( 'hd_manage_tickets' ) ) : ?>
 						<form method="post" style="margin-top: 16px;">
 							<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
@@ -182,6 +199,48 @@ class TicketsPage {
 				</div>
 			<?php endif; ?>
 		</div>
+
+		<!-- Lightbox modal for attachment image previews -->
+		<div class="hd-lightbox" id="hd-lightbox" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e( 'Image viewer', 'wp-helpdesk' ); ?>" hidden style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100000;align-items:center;justify-content:center;">
+			<button class="hd-lightbox__close" id="hd-lightbox-close" aria-label="<?php esc_attr_e( 'Close', 'wp-helpdesk' ); ?>" style="position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:2rem;cursor:pointer;line-height:1;">&times;</button>
+			<img class="hd-lightbox__img" id="hd-lightbox-img" src="" alt="" style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:4px;">
+		</div>
+		<script>
+		(function () {
+			var lightbox = document.getElementById('hd-lightbox');
+			var lightboxImg = document.getElementById('hd-lightbox-img');
+			var lightboxClose = document.getElementById('hd-lightbox-close');
+			if (!lightbox || !lightboxImg || !lightboxClose) { return; }
+			document.addEventListener('click', function (e) {
+				var btn = e.target.closest('.hd-attachment__thumb-btn');
+				if (!btn) { return; }
+				lightboxImg.src = btn.dataset.lightboxSrc || '';
+				lightboxImg.alt = btn.dataset.lightboxAlt || '';
+				lightbox.hidden = false;
+				lightbox.style.display = 'flex';
+				lightboxClose.focus();
+			});
+			lightboxClose.addEventListener('click', function () {
+				lightbox.hidden = true;
+				lightbox.style.display = 'none';
+				lightboxImg.src = '';
+			});
+			lightbox.addEventListener('click', function (e) {
+				if (e.target === lightbox) {
+					lightbox.hidden = true;
+					lightbox.style.display = 'none';
+					lightboxImg.src = '';
+				}
+			});
+			document.addEventListener('keydown', function (e) {
+				if ('Escape' === e.key && !lightbox.hidden) {
+					lightbox.hidden = true;
+					lightbox.style.display = 'none';
+					lightboxImg.src = '';
+				}
+			});
+		})();
+		</script>
 		<?php
 	}
 

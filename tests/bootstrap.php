@@ -286,6 +286,27 @@ if ( ! function_exists( 'wp_kses_post' ) ) {
 	}
 }
 
+if ( ! function_exists( 'wpautop' ) ) {
+	function wpautop( string $pee ): string {
+		if ( '' === trim( $pee ) ) {
+			return '';
+		}
+		return '<p>' . nl2br( $pee ) . '</p>';
+	}
+}
+
+if ( ! function_exists( 'size_format' ) ) {
+	function size_format( int $bytes, int $decimals = 0 ): string {
+		if ( $bytes >= 1048576 ) {
+			return round( $bytes / 1048576, $decimals ) . ' MB';
+		}
+		if ( $bytes >= 1024 ) {
+			return round( $bytes / 1024, $decimals ) . ' KB';
+		}
+		return $bytes . ' B';
+	}
+}
+
 if ( ! function_exists( 'wp_kses' ) ) {
 	function wp_kses( string $html, array $allowed_html ): string {
 		return strip_tags( $html, '<code>' );

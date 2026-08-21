@@ -911,3 +911,116 @@
 	} );
 
 }( window, document ) );
+
+/* =========================================================================
+ * Guest Ticket View – lightbox + reply form
+ * ====================================================================== */
+( function ( window, document ) {
+	'use strict';
+
+	function initLightbox() {
+		var lightbox = document.getElementById( 'hd-lightbox' );
+		var img      = document.getElementById( 'hd-lightbox-img' );
+		var closeBtn = document.getElementById( 'hd-lightbox-close' );
+		if ( ! lightbox || ! img || ! closeBtn ) { return; }
+
+		function openLightbox( src, alt ) {
+			img.src = src;
+			img.alt = alt || '';
+			lightbox.hidden = false;
+			lightbox.style.display = 'flex';
+			closeBtn.focus();
+		}
+
+		function closeLightbox() {
+			lightbox.hidden = true;
+			lightbox.style.display = 'none';
+			img.src = '';
+		}
+
+		document.addEventListener( 'click', function ( e ) {
+			var btn = e.target.closest( '.hd-attachment__thumb-btn' );
+			if ( btn ) { openLightbox( btn.dataset.lightboxSrc || '', btn.dataset.lightboxAlt || '' ); }
+		} );
+
+		closeBtn.addEventListener( 'click', closeLightbox );
+		lightbox.addEventListener( 'click', function ( e ) {
+			if ( e.target === lightbox ) { closeLightbox(); }
+		} );
+		document.addEventListener( 'keydown', function ( e ) {
+			if ( 'Escape' === e.key && ! lightbox.hidden ) { closeLightbox(); }
+		} );
+	}
+
+	function initGuestReplyForm() {
+		var form        = document.getElementById( 'hd-guest-reply-form' );
+		if ( ! form ) { return; }
+
+		var submitBtn   = document.getElementById( 'hd-guest-reply-submit' );
+		var bodyField   = document.getElementById( 'hd-guest-reply-body' );
+		var errorEl     = document.getElementById( 'hd-guest-reply-error' );
+		var successEl   = document.getElementById( 'hd-guest-reply-success' );
+		var ticketNo    = form.dataset.ticketNo || '';
+		var guestToken  = form.dataset.guestToken || '';
+		var restBase    = ( window.WPHelpdesk && window.WPHelpdesk.restBase ) ? window.WPHelpdesk.restBase : '';
+		var restNonce   = ( window.WPHelpdesk && window.WPHelpdesk.restNonce ) ? window.WPHelpdesk.restNonce : '';
+
+		if ( ! submitBtn || ! bodyField || ! errorEl || ! successEl ) { return; }
+
+		function showError( msg ) {
+			errorEl.textContent = msg;
+		}
+		function clearError() {
+			errorEl.textContent = '';
+		}
+
+		submitBtn.addEventListener( 'click', function () {
+			clearError();
+			var body = bodyField.value.trim();
+			if ( '' === body ) {
+				showError( 'Please enter a message.' );
+				bodyField.focus();
+				return;
+			}
+
+			submitBtn.disabled = true;
+			submitBtn.textContent = 'Sending…';
+
+			fetch( restBase + 'tickets/guest-reply', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-WP-Nonce': restNonce
+				},
+				body: JSON.stringify( {
+					ticket_no:   ticketNo,
+					guest_token: guestToken,
+					message:     body
+				} )
+			} )
+				.then( function ( res ) { return res.json().then( function ( data ) { return { status: res.status, data: data }; } ); } )
+				.then( function ( r ) {
+					if ( r.status < 300 ) {
+						bodyField.value = '';
+						successEl.textContent = r.data.message || 'Your reply has been sent.';
+						successEl.classList.remove( 'hd-success-message--hidden' );
+					} else {
+						showError( ( r.data && r.data.message ) || 'Could not send your reply. Please try again.' );
+					}
+					submitBtn.disabled = false;
+					submitBtn.textContent = 'Send reply';
+				} )
+				.catch( function () {
+					showError( 'A network error occurred. Please try again.' );
+					submitBtn.disabled = false;
+					submitBtn.textContent = 'Send reply';
+				} );
+		} );
+	}
+
+	document.addEventListener( 'DOMContentLoaded', function () {
+		initLightbox();
+		initGuestReplyForm();
+	} );
+
+}( window, document ) );
