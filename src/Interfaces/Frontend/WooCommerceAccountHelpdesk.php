@@ -196,6 +196,7 @@ class WooCommerceAccountHelpdesk {
 		$route = $this->parseEndpointRequest();
 
 		if ( 'request' === $route['view'] ) {
+			$this->loadPendingNotice();
 			$this->handleReplySubmission( $route['ticket_no'] );
 		}
 
@@ -580,17 +581,19 @@ class WooCommerceAccountHelpdesk {
 		);
 
 		if ( $upload_results['failed'] > 0 ) {
-			$this->notice = array(
+			$notice = array(
 				'type'    => 'error',
 				'message' => __( 'Your reply was sent, but one or more attachments could not be uploaded.', 'wp-helpdesk' ),
 			);
-			return;
+		} else {
+			$notice = array(
+				'type'    => 'success',
+				'message' => __( 'Your reply was sent.', 'wp-helpdesk' ),
+			);
 		}
 
-		$this->notice = array(
-			'type'    => 'success',
-			'message' => __( 'Your reply was sent.', 'wp-helpdesk' ),
-		);
+		$this->storePendingNotice( $notice );
+		$this->redirectTo( $this->buildAccountUrl( 'request/' . rawurlencode( $ticket_no ) ) );
 	}
 
 	/**
@@ -607,6 +610,11 @@ class WooCommerceAccountHelpdesk {
 		);
 
 		foreach ( $this->normalizeReplyAttachmentFiles() as $file ) {
+			if ( UPLOAD_ERR_OK !== (int) $file['error'] ) {
+				$results['failed']++;
+				continue;
+			}
+
 			$upload = $this->attachment_service->handleUpload(
 				$file,
 				$ticket_id,
@@ -912,6 +920,36 @@ class WooCommerceAccountHelpdesk {
 		}
 
 		exit;
+	}
+
+	/**
+	 * Store a pending notice in a short-lived user-scoped transient for POST→Redirect→GET.
+	 *
+	 * @param array{type:string,message:string} $notice Notice to persist.
+	 * @return void
+	 */
+	protected function storePendingNotice( array $notice ): void {
+		$key = 'hd_pending_notice_' . get_current_user_id();
+		set_transient( $key, $notice, 60 );
+	}
+
+	/**
+	 * Load and consume any pending notice stored for the current user.
+	 *
+	 * @return void
+	 */
+	protected function loadPendingNotice(): void {
+		$user_id = get_current_user_id();
+		if ( ! $user_id ) {
+			return;
+		}
+
+		$key    = 'hd_pending_notice_' . $user_id;
+		$notice = get_transient( $key );
+		if ( is_array( $notice ) ) {
+			delete_transient( $key );
+			$this->notice = $notice;
+		}
 	}
 
 	/**

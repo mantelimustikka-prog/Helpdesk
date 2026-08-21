@@ -59,6 +59,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_inline_scripts'] = array();
 		$GLOBALS['wp_localized_scripts'] = array();
 		$GLOBALS['wp_safe_redirect_to'] = null;
+		$GLOBALS['wp_transients'] = array();
 		$GLOBALS['wp_filters'] = array();
 		$GLOBALS['wp_doing_action'] = array();
 		$GLOBALS['wp_query_vars'] = array();
@@ -745,6 +746,26 @@ if ( ! function_exists( 'wp_check_filetype_and_ext' ) ) {
 if ( ! function_exists( 'sanitize_file_name' ) ) {
 	function sanitize_file_name( string $name ): string {
 		return preg_replace( '/[^a-zA-Z0-9._-]/', '-', $name );
+	}
+}
+
+if ( ! function_exists( 'set_transient' ) ) {
+	function set_transient( string $transient, $value, int $expiration = 0 ): bool {
+		$GLOBALS['wp_transients'][ $transient ] = $value;
+		return true;
+	}
+}
+
+if ( ! function_exists( 'get_transient' ) ) {
+	function get_transient( string $transient ) {
+		return $GLOBALS['wp_transients'][ $transient ] ?? false;
+	}
+}
+
+if ( ! function_exists( 'delete_transient' ) ) {
+	function delete_transient( string $transient ): bool {
+		unset( $GLOBALS['wp_transients'][ $transient ] );
+		return true;
 	}
 }
 

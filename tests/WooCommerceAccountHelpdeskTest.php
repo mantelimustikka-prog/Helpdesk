@@ -392,7 +392,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertRegExp( '/Open<\/a>\s+<a[^>]+download=/', $output, 'A space must separate the Open and Download action links' );
 	}
 
-	public function testReplySubmissionPostsMemberMessageAndShowsSuccessNotice(): void {
+	public function testReplySubmissionRedirectsWithSuccessNoticeAfterPost(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
 		$this->ticket_repository->ticket      = array(
 			'id'              => 11,
@@ -411,15 +411,39 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		);
 		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
 
-		ob_start();
 		$this->integration->render();
-		$output = (string) ob_get_clean();
 
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertSame( 'member', $this->message_service->posted_author_type );
 		self::assertSame( 'Here is my extra detail.', $this->message_service->posted_body );
+		self::assertStringContainsString( 'request/HD-10011', (string) $GLOBALS['wp_safe_redirect_to'], 'Must redirect back to the request detail page' );
+		$pending = $GLOBALS['wp_transients']['hd_pending_notice_7'] ?? null;
+		self::assertSame( 'success', $pending['type'] ?? null );
+		self::assertStringContainsString( 'Your reply was sent.', $pending['message'] ?? '' );
+	}
+
+	public function testSuccessNoticeAppearsOnSubsequentGetAfterReplyPost(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		// Pre-populate transient as if a prior POST→redirect just occurred.
+		$GLOBALS['wp_transients']['hd_pending_notice_7'] = array(
+			'type'    => 'success',
+			'message' => __( 'Your reply was sent.', 'wp-helpdesk' ),
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
 		self::assertStringContainsString( 'Your reply was sent.', $output );
-		self::assertNull( $GLOBALS['wp_safe_redirect_to'] );
+		self::assertArrayNotHasKey( 'hd_pending_notice_7', $GLOBALS['wp_transients'], 'Transient must be consumed after being loaded' );
 	}
 
 	// -------------------------------------------------------------------------
@@ -590,7 +614,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertEmpty( $this->attachment_service->upload_calls, 'handleUpload must not be called when no file is submitted' );
 	}
 
-	public function testReplySubmissionShowsAttachmentWarningWhenAnyUploadFails(): void {
+	public function testReplySubmissionRedirectsWithAttachmentWarningWhenAnyUploadFails(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
 		$this->ticket_repository->ticket      = array(
 			'id'              => 11,
@@ -617,15 +641,51 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 			'size'     => array( 1024, 2048 ),
 		);
 
-		ob_start();
 		$this->integration->render();
-		$output = (string) ob_get_clean();
 
 		unset( $_FILES['hd_helpdesk_attachment'] );
 
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertCount( 2, $this->attachment_service->upload_calls );
-		self::assertStringContainsString( 'Your reply was sent, but one or more attachments could not be uploaded.', $output );
+		self::assertStringContainsString( 'request/HD-10011', (string) $GLOBALS['wp_safe_redirect_to'], 'Must redirect back to the request detail page' );
+		$pending = $GLOBALS['wp_transients']['hd_pending_notice_7'] ?? null;
+		self::assertSame( 'error', $pending['type'] ?? null );
+		self::assertStringContainsString( 'Your reply was sent, but one or more attachments could not be uploaded.', $pending['message'] ?? '' );
+	}
+	public function testFilesWithNonOkUploadErrorAreSkippedWithoutCallingUploadService(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		$this->message_service->reply_id = 120;
+		$_SERVER['REQUEST_METHOD']       = 'POST';
+		$_POST = array(
+			'hd_helpdesk_action'        => 'submit_member_reply',
+			'hd_my_account_reply_nonce' => 'valid-reply-nonce',
+			'hd_helpdesk_reply_body'    => 'File with PHP upload error.',
+		);
+		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
+		$_FILES['hd_helpdesk_attachment'] = array(
+			'name'     => array( 'toolarge.pdf', 'good.jpg' ),
+			'type'     => array( 'application/pdf', 'image/jpeg' ),
+			'tmp_name' => array( '', '/tmp/phpOK' ),
+			'error'    => array( UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_OK ),
+			'size'     => array( 0, 2048 ),
+		);
+
+		$this->integration->render();
+
+		unset( $_FILES['hd_helpdesk_attachment'] );
+
+		self::assertCount( 1, $this->attachment_service->upload_calls, 'handleUpload must only be called for files with UPLOAD_ERR_OK' );
+		self::assertSame( 'good.jpg', $this->attachment_service->upload_calls[0]['file_name'] );
+		$pending = $GLOBALS['wp_transients']['hd_pending_notice_7'] ?? null;
+		self::assertSame( 'error', $pending['type'] ?? null, 'Failed PHP upload must result in an error notice' );
 	}
 }
 
