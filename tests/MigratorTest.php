@@ -89,4 +89,19 @@ PHP;
 		$stored = get_site_option( Constants::OPTION_DB_VERSION, '' );
 		self::assertSame( HD_VERSION, $stored, 'DB version option must be updated to current plugin version after migration run.' );
 	}
+
+	public function testHasPendingMigrationsInDirectoryReturnsTrueWhenUnappliedExists(): void {
+		$name = '004_pending.php';
+		$this->createMigrationFile( $name );
+
+		self::assertTrue( Migrator::hasPendingMigrationsInDirectory( $this->tmp_migrations_dir ) );
+	}
+
+	public function testHasPendingMigrationsInDirectoryReturnsFalseWhenAllApplied(): void {
+		$name = '005_applied.php';
+		$this->createMigrationFile( $name );
+		update_site_option( Constants::OPTION_APPLIED_MIGRATIONS, array( $name ) );
+
+		self::assertFalse( Migrator::hasPendingMigrationsInDirectory( $this->tmp_migrations_dir ) );
+	}
 }

@@ -93,6 +93,37 @@ final class NotificationServiceTest extends TestCase {
 		self::assertSame( 1, preg_match( '#/helpdesk/ticket/HD-900002/[0-9a-f]{64}/#', $mail ) );
 	}
 
+	public function testSendTicketReplyGeneratesGuestLinkForGuestWithoutStoredHash(): void {
+		global $wpdb;
+		$wpdb = new class {
+			public string $base_prefix = 'wp_';
+			/** @var array<string, mixed> */
+			public array $updated_data = array();
+
+			public function update( string $table, array $data, array $where, array $format = array(), array $where_format = array() ): int {
+				$this->updated_data = $data;
+				return 1;
+			}
+		};
+
+		$service = new NotificationService();
+		$service->sendTicketReply(
+			array(
+				'id'        => 56,
+				'user_id'   => 0,
+				'ticket_no' => 'HD-900004',
+				'subject'   => 'Guest follow-up',
+			),
+			array( 'body' => 'Agent reply' ),
+			'guest@example.test'
+		);
+
+		self::assertArrayHasKey( 'guest_token_hash', $wpdb->updated_data );
+		$mail = $GLOBALS['wp_mail_calls'][0]['message'] ?? '';
+		self::assertStringContainsString( 'View and continue this ticket', $mail );
+		self::assertSame( 1, preg_match( '#/helpdesk/ticket/HD-900004/[0-9a-f]{64}/#', $mail ) );
+	}
+
 	public function testSendTicketReplyKeepsLoggedInFlowUnchangedWithoutTicketLink(): void {
 		$service = new NotificationService();
 
