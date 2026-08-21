@@ -10,6 +10,22 @@ use WPHelpdesk\Support\Constants;
 
 class TopicRepository {
 	/**
+	 * Last low-level database error captured during create/update.
+	 *
+	 * @var string
+	 */
+	protected string $last_error = '';
+
+	/**
+	 * Get last low-level database error captured by this repository.
+	 *
+	 * @return string
+	 */
+	public function getLastError(): string {
+		return $this->last_error;
+	}
+
+	/**
 	 * List topics for a network with optional filters/pagination.
 	 *
 	 * @param int   $network_id Network id.
@@ -150,35 +166,53 @@ class TopicRepository {
 	public function create( array $data ): int {
 		global $wpdb;
 
-		$table  = Schema::table( Constants::TABLE_TOPICS );
-		$result = $wpdb->insert( $table, $data );
+		$this->last_error = '';
+		$table            = Schema::table( Constants::TABLE_TOPICS );
+		$columns          = $this->getSupportedColumns( $table );
+		$insert_payload   = $this->filterPayloadBySupportedColumns( $data, $columns );
+		if ( empty( $insert_payload ) ) {
+			$this->last_error = 'No compatible topic columns were found for insert.';
+			return 0;
+		}
+
+		$result = $wpdb->insert( $table, $insert_payload );
 		if ( $result ) {
+			$this->last_error = '';
 			return (int) $wpdb->insert_id;
 		}
 
-		$legacy_payload = $data;
-		for ( $retry = 0; $retry < 2; $retry++ ) {
+		$legacy_payload = $insert_payload;
+		for ( $retry = 0; $retry < 8; $retry++ ) {
 			$last_error = isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
 			$matches    = array();
-			$did_match  = preg_match( "/Unknown column '(type|parent_id)' in 'field list'/i", $last_error, $matches );
+			$did_match  = preg_match( "/Unknown column '([^']+)' in 'field list'/i", $last_error, $matches );
 
 			if ( 1 !== $did_match ) {
+				$this->last_error = $last_error;
 				return 0;
 			}
 
 			$missing_column = strtolower( (string) ( $matches[1] ?? '' ) );
 			if ( '' === $missing_column || ! array_key_exists( $missing_column, $legacy_payload ) ) {
+				$this->last_error = $last_error;
 				return 0;
 			}
 
 			unset( $legacy_payload[ $missing_column ] );
+			if ( empty( $legacy_payload ) ) {
+				$this->last_error = $last_error;
+				return 0;
+			}
+
 			$retry_result = $wpdb->insert( $table, $legacy_payload );
 
 			if ( $retry_result ) {
+				$this->last_error = '';
 				return (int) $wpdb->insert_id;
 			}
 		}
 
+		$this->last_error = isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
 		return 0;
 	}
 
@@ -193,7 +227,15 @@ class TopicRepository {
 	public function update( int $id, array $data, int $network_id ): bool {
 		global $wpdb;
 
-		$table  = Schema::table( Constants::TABLE_TOPICS );
+		$this->last_error = '';
+		$table            = Schema::table( Constants::TABLE_TOPICS );
+		$columns          = $this->getSupportedColumns( $table );
+		$data             = $this->filterPayloadBySupportedColumns( $data, $columns );
+
+		if ( empty( $data ) ) {
+			return null !== $this->find( $id, $network_id );
+		}
+
 		$result = $wpdb->update(
 			$table,
 			$data,
@@ -204,14 +246,66 @@ class TopicRepository {
 		);
 
 		if ( false === $result ) {
+			$this->last_error = isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
 			return false;
 		}
 
 		if ( $result > 0 ) {
+			$this->last_error = '';
 			return true;
 		}
 
 		return null !== $this->find( $id, $network_id );
+	}
+
+	/**
+	 * Get existing columns for a table.
+	 *
+	 * @param string $table Table name.
+	 * @return array<int, string>
+	 */
+	private function getSupportedColumns( string $table ): array {
+		global $wpdb;
+
+		if ( ! method_exists( $wpdb, 'get_col' ) ) {
+			return array();
+		}
+
+		$columns = $wpdb->get_col( "SHOW COLUMNS FROM {$table}", 0 ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		if ( ! is_array( $columns ) || empty( $columns ) ) {
+			return array();
+		}
+
+		return array_values(
+			array_unique(
+				array_map(
+					static fn( $column ): string => strtolower( (string) $column ),
+					$columns
+				)
+			)
+		);
+	}
+
+	/**
+	 * Filter payload fields to known existing columns when schema is available.
+	 *
+	 * @param array<string, mixed> $data Payload to write.
+	 * @param array<int, string>   $supported_columns Existing columns.
+	 * @return array<string, mixed>
+	 */
+	private function filterPayloadBySupportedColumns( array $data, array $supported_columns ): array {
+		if ( empty( $supported_columns ) ) {
+			return $data;
+		}
+
+		$filtered = array();
+		foreach ( $data as $column => $value ) {
+			if ( in_array( strtolower( (string) $column ), $supported_columns, true ) ) {
+				$filtered[ $column ] = $value;
+			}
+		}
+
+		return $filtered;
 	}
 
 	/**

@@ -10,10 +10,20 @@ use WPHelpdesk\Support\Helpers;
 class TopicService {
 	protected TopicRepository $repository;
 	protected int $network_id;
+	protected string $last_save_error = '';
 
 	public function __construct() {
 		$this->repository = new TopicRepository();
 		$this->network_id = Helpers::getNetworkId();
+	}
+
+	/**
+	 * Get the last low-level persistence error seen during create/update.
+	 *
+	 * @return string
+	 */
+	public function getLastSaveError(): string {
+		return $this->last_save_error;
 	}
 
 	/**
@@ -310,6 +320,7 @@ class TopicService {
 	 * @return int
 	 */
 	public function createTopic( array $data ): int {
+		$this->last_save_error = '';
 		$data = $this->normalizeTopicPayload( $data );
 		if ( isset( $data['error_code'] ) ) {
 			return 0;
@@ -325,7 +336,7 @@ class TopicService {
 			: sanitize_title( $name );
 		$slug      = $this->ensureUniqueSlug( $base_slug );
 
-		return $this->repository->create(
+		$topic_id = $this->repository->create(
 			array(
 				'network_id'  => $this->network_id,
 				'title'       => $name,
@@ -340,6 +351,12 @@ class TopicService {
 				'updated_at'  => current_time( 'mysql' ),
 			)
 		);
+
+		if ( $topic_id <= 0 ) {
+			$this->last_save_error = $this->repository->getLastError();
+		}
+
+		return $topic_id;
 	}
 
 	/**
@@ -350,6 +367,7 @@ class TopicService {
 	 * @return bool
 	 */
 	public function updateTopic( int $id, array $data ): bool {
+		$this->last_save_error = '';
 		$existing = $this->repository->find( $id, $this->network_id );
 		if ( ! $existing ) {
 			return false;
@@ -419,7 +437,12 @@ class TopicService {
 			$update['parent_id'] = $data['parent_id'];
 		}
 
-		return $this->repository->update( $id, $update, $this->network_id );
+		$updated = $this->repository->update( $id, $update, $this->network_id );
+		if ( ! $updated ) {
+			$this->last_save_error = $this->repository->getLastError();
+		}
+
+		return $updated;
 	}
 
 	/**

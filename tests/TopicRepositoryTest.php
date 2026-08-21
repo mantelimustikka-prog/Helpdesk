@@ -12,7 +12,7 @@ final class TopicRepositoryTest extends TestCase {
 		wp_helpdesk_test_reset_state();
 	}
 
-	public function testCreateRetriesWithoutTypeOnLegacyUnknownColumnError(): void {
+	public function testCreateFiltersUnsupportedColumnsUsingTableSchema(): void {
 		global $wpdb;
 
 		$wpdb = new class {
@@ -21,15 +21,26 @@ final class TopicRepositoryTest extends TestCase {
 			public int $insert_id = 0;
 			/** @var array<int, array<string, mixed>> */
 			public array $insert_calls = array();
+			/** @var array<int, string> */
+			public array $columns = array(
+				'id',
+				'network_id',
+				'slug',
+				'title',
+				'description',
+				'is_final',
+				'is_active',
+				'sort_order',
+				'created_at',
+				'updated_at',
+			);
 
-			public function insert( string $table, array $data, $format = null ) {
+			public function get_col( string $query, int $column = 0 ): array {
+				return $this->columns;
+			}
+
+			public function insert( string $table, array $data, $format = null ): int {
 				$this->insert_calls[] = $data;
-
-				if ( 1 === count( $this->insert_calls ) ) {
-					$this->last_error = "Unknown column 'type' in 'field list'";
-					return false;
-				}
-
 				$this->last_error = '';
 				$this->insert_id  = 55;
 				return 1;
@@ -49,14 +60,12 @@ final class TopicRepositoryTest extends TestCase {
 		);
 
 		self::assertSame( 55, $topic_id );
-		self::assertCount( 2, $wpdb->insert_calls );
-		self::assertArrayHasKey( 'type', $wpdb->insert_calls[0] );
-		self::assertArrayHasKey( 'parent_id', $wpdb->insert_calls[0] );
-		self::assertArrayNotHasKey( 'type', $wpdb->insert_calls[1] );
-		self::assertArrayHasKey( 'parent_id', $wpdb->insert_calls[1] );
+		self::assertCount( 1, $wpdb->insert_calls );
+		self::assertArrayNotHasKey( 'type', $wpdb->insert_calls[0] );
+		self::assertArrayNotHasKey( 'parent_id', $wpdb->insert_calls[0] );
 	}
 
-	public function testCreateRetriesWithoutParentIdOnLegacyUnknownColumnError(): void {
+	public function testCreateRetriesWhenSchemaLookupIsUnavailableAndUnknownColumnOccurs(): void {
 		global $wpdb;
 
 		$wpdb = new class {
@@ -101,7 +110,7 @@ final class TopicRepositoryTest extends TestCase {
 		self::assertArrayNotHasKey( 'parent_id', $wpdb->insert_calls[1] );
 	}
 
-	public function testCreateRetriesTwiceWhenBothLegacyColumnsAreMissing(): void {
+	public function testCreateExposesLastErrorWhenInsertFails(): void {
 		global $wpdb;
 
 		$wpdb = new class {
@@ -113,20 +122,8 @@ final class TopicRepositoryTest extends TestCase {
 
 			public function insert( string $table, array $data, $format = null ) {
 				$this->insert_calls[] = $data;
-
-				if ( 1 === count( $this->insert_calls ) ) {
-					$this->last_error = "Unknown column 'type' in 'field list'";
-					return false;
-				}
-
-				if ( 2 === count( $this->insert_calls ) ) {
-					$this->last_error = "Unknown column 'parent_id' in 'field list'";
-					return false;
-				}
-
-				$this->last_error = '';
-				$this->insert_id  = 91;
-				return 1;
+				$this->last_error = "Column 'title' cannot be null";
+				return false;
 			}
 		};
 
@@ -142,13 +139,7 @@ final class TopicRepositoryTest extends TestCase {
 			)
 		);
 
-		self::assertSame( 91, $topic_id );
-		self::assertCount( 3, $wpdb->insert_calls );
-		self::assertArrayHasKey( 'type', $wpdb->insert_calls[0] );
-		self::assertArrayHasKey( 'parent_id', $wpdb->insert_calls[0] );
-		self::assertArrayNotHasKey( 'type', $wpdb->insert_calls[1] );
-		self::assertArrayHasKey( 'parent_id', $wpdb->insert_calls[1] );
-		self::assertArrayNotHasKey( 'type', $wpdb->insert_calls[2] );
-		self::assertArrayNotHasKey( 'parent_id', $wpdb->insert_calls[2] );
+		self::assertSame( 0, $topic_id );
+		self::assertSame( "Column 'title' cannot be null", $repository->getLastError() );
 	}
 }
