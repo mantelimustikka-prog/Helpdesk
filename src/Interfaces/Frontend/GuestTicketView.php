@@ -8,6 +8,7 @@ namespace WPHelpdesk\Interfaces\Frontend;
 use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
+use WPHelpdesk\Support\Helpers;
 use WPHelpdesk\Support\RendersAttachmentsTrait;
 
 /**
@@ -159,7 +160,7 @@ class GuestTicketView extends HelpdeskPage {
 		if ( '' === $ticket_no || '' === $guest_token ) {
 			return null;
 		}
-		$guest_token_hash = hash( 'sha256', $guest_token );
+		$guest_token_hash = Helpers::hashGuestToken( $guest_token );
 
 		global $wpdb;
 		$table = Schema::table( Constants::TABLE_TICKETS );

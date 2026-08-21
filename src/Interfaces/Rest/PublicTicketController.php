@@ -520,7 +520,7 @@ class PublicTicketController {
 		if ( null !== $guest_token ) {
 			$insert_data['guest_token_hash'] = $this->hashGuestToken( $guest_token );
 			$insert_format[]                 = '%s';
-			$ticket_link                     = home_url( '/helpdesk/ticket/' . rawurlencode( $ticket_no ) . '/' . rawurlencode( $guest_token ) . '/' );
+			$ticket_link                     = $this->buildGuestTicketUrl( $ticket_no, $guest_token );
 		}
 
 		$inserted = $wpdb->insert( $table, $insert_data, $insert_format );
@@ -556,9 +556,6 @@ class PublicTicketController {
 				'ticket_link' => $ticket_link,
 			)
 		);
-		if ( null !== $guest_token ) {
-			$ticket['guest_token'] = $guest_token;
-		}
 
 		do_action( 'hd_ticket_created', $ticket );
 
@@ -988,7 +985,18 @@ class PublicTicketController {
 	 * @return string
 	 */
 	protected function hashGuestToken( string $guest_token ): string {
-		return hash( 'sha256', $guest_token );
+		return Helpers::hashGuestToken( $guest_token );
+	}
+
+	/**
+	 * Build a guest-access ticket URL from ticket number and token.
+	 *
+	 * @param string $ticket_no   Ticket number.
+	 * @param string $guest_token Raw guest token.
+	 * @return string
+	 */
+	protected function buildGuestTicketUrl( string $ticket_no, string $guest_token ): string {
+		return home_url( '/helpdesk/ticket/' . rawurlencode( $ticket_no ) . '/' . rawurlencode( $guest_token ) . '/' );
 	}
 
 	/**
@@ -1018,8 +1026,7 @@ class PublicTicketController {
 		if ( null === $ticket ) {
 			return new WP_Error( 'hd_not_found', __( 'Ticket not found.', 'wp-helpdesk' ), array( 'status' => 404 ) );
 		}
-		$ticket['ticket_link'] = home_url( '/helpdesk/ticket/' . rawurlencode( $ticket_no ) . '/' . rawurlencode( $guest_token ) . '/' );
-		$ticket['guest_token'] = $guest_token;
+		$ticket['ticket_link'] = $this->buildGuestTicketUrl( (string) $ticket['ticket_no'], $guest_token );
 
 		global $wpdb;
 		$msg_table = Schema::table( Constants::TABLE_TICKET_MESSAGES );

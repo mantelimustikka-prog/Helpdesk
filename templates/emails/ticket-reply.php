@@ -5,14 +5,7 @@
 /** @var array<string,mixed> $vars */
 $ticket  = $vars['ticket'] ?? array();
 $message = $vars['message'] ?? array();
-$ticket_no   = (string) ( $ticket['ticket_no'] ?? '' );
-$guest_token = (string) ( $ticket['guest_token'] ?? '' );
 $ticket_link = (string) ( $ticket['ticket_link'] ?? '' );
-if ( '' === $ticket_link ) {
-	$ticket_link = '' !== $guest_token && '' !== $ticket_no
-		? home_url( '/helpdesk/ticket/' . rawurlencode( $ticket_no ) . '/' . rawurlencode( $guest_token ) . '/' )
-		: '';
-}
 ?>
 <div style="font-family: Arial, sans-serif; color: #1d2327;">
 	<h2><?php echo esc_html( sprintf( 'New reply for %s', (string) ( $ticket['ticket_no'] ?? '' ) ) ); ?></h2>

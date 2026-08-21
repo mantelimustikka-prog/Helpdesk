@@ -123,12 +123,13 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 
 	public function testTicketCreatedEmailIncludesLinkWhenGuestTokenPresent(): void {
 		$template = dirname( __DIR__ ) . '/templates/emails/ticket-created.php';
+		$ticket_link = 'https://example.test/helpdesk/ticket/HD-002000/abc123def456abc123def456abc123def456abc123def456abc123def456ab12/';
 
 		$ticket = array(
 			'ticket_no'      => 'HD-002000',
 			'subject'        => 'My widget broke',
 			'requester_name' => 'Jane Guest',
-			'guest_token'    => 'abc123def456abc123def456abc123def456abc123def456abc123def456ab12',
+			'ticket_link'    => $ticket_link,
 		);
 
 		ob_start();
@@ -138,7 +139,7 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 
 		self::assertStringContainsString( 'View your ticket', $output );
 		self::assertStringContainsString( 'HD-002000', $output );
-		self::assertStringContainsString( $ticket['guest_token'], $output );
+		self::assertStringContainsString( $ticket_link, $output );
 		self::assertStringContainsString( '/helpdesk/ticket/', $output );
 	}
 
