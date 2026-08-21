@@ -386,6 +386,59 @@ final class PublicTicketControllerTest extends TestCase {
 
 		self::assertInstanceOf( WP_Error::class, $response );
 		self::assertSame( 'hd_missing_order_relation', $response->get_error_code() );
+		// Must ask the user to select an order, not the generic "Please select an order relation."
+		self::assertSame( 'Please select #Order.', $response->get_error_message() );
+	}
+
+	public function testSubmitMemberTicketWithExistingOrderRelationAndValidOrderSucceeds(): void {
+		wp_helpdesk_test_reset_state();
+		$GLOBALS['wp_current_user'] = (object) array(
+			'ID'           => 7,
+			'user_email'   => 'member@example.com',
+			'display_name' => 'Member User',
+		);
+		$GLOBALS['wp_user_meta'][7]['phone'] = '0407654321';
+
+		global $wpdb;
+		$wpdb = new class {
+			public string $base_prefix = 'wp_';
+			public int    $insert_id   = 99;
+
+			public function insert( string $table, array $data, array $format ): int {
+				return 1;
+			}
+
+			public function prepare( string $query, ...$args ): string {
+				return $query;
+			}
+
+			public function get_var( string $query ) {
+				return null;
+			}
+		};
+
+		$controller = new class extends PublicTicketController {
+			protected function getUserLifetimeOrders( int $user_id ): array {
+				return array( '501', '502' );
+			}
+
+			protected function createTicket( array $data ) {
+				return new \WP_REST_Response( array( 'ticket_no' => 'HD-TEST-999', 'message' => 'ok' ), 201 );
+			}
+		};
+
+		$request = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid-rest-nonce' );
+		$request->set_param( 'topic_id', 1 );
+		$request->set_param( 'subject', 'My order' );
+		$request->set_param( 'message', 'I need help with order 501' );
+		$request->set_param( 'order_relation', 'existing_order_related' );
+		$request->set_param( 'order_id', '501' );
+
+		$response = $controller->submitMemberTicket( $request );
+
+		self::assertInstanceOf( WP_REST_Response::class, $response );
+		self::assertSame( 201, $response->status );
 	}
 
 	public function testSubmitGuestTicketWithExistingOrderRelationReturnsLoginRequired(): void {

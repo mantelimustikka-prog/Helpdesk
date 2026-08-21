@@ -146,6 +146,27 @@ final class FrontendTopicDescriptionTest extends TestCase {
 		self::assertStringContainsString( 'name="order_id"', $output );
 	}
 
+	public function testMemberOrderSelectFieldIsInitiallyHiddenForDynamicLoad(): void {
+		$output = $this->captureMemberForm();
+
+		// The order-select-field must start hidden so the JS can reveal it after
+		// fetching the user's orders when "Existing order related" is selected.
+		self::assertRegExp(
+			'%hd-form-step--hidden[^"]*"\s+data-role="order-select-field"%',
+			$output,
+			'The order-select-field container must carry hd-form-step--hidden so it is hidden until JS reveals it.'
+		);
+	}
+
+	public function testMemberOrderIdSelectStartsWithoutRequiredAttributeForDynamicLoad(): void {
+		$output = $this->captureMemberForm();
+
+		// The order_id select must NOT be required in the server HTML.
+		// The JS adds required dynamically when "Existing order related" is selected.
+		self::assertStringContainsString( 'name="order_id"', $output );
+		self::assertStringContainsString( 'aria-required="false"', $output );
+	}
+
 	// -----------------------------------------------------------------------
 	// Layout width
 	// -----------------------------------------------------------------------
