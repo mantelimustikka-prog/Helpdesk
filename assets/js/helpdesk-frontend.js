@@ -1090,6 +1090,7 @@
 
 		var submitBtn   = document.getElementById( 'hd-guest-reply-submit' );
 		var bodyField   = document.getElementById( 'hd-guest-reply-body' );
+		var fileInput   = document.getElementById( 'hd-guest-reply-attachment' );
 		var errorEl     = document.getElementById( 'hd-guest-reply-error' );
 		var successEl   = document.getElementById( 'hd-guest-reply-success' );
 		var ticketNo    = form.dataset.ticketNo || '';
@@ -1106,8 +1107,11 @@
 			errorEl.textContent = '';
 		}
 
-		submitBtn.addEventListener( 'click', function () {
+		form.addEventListener( 'submit', function ( event ) {
+			event.preventDefault();
 			clearError();
+			successEl.textContent = '';
+			successEl.classList.add( 'hd-success-message--hidden' );
 			var body = bodyField.value.trim();
 			if ( '' === body ) {
 				showError( 'Please enter a message.' );
@@ -1120,6 +1124,7 @@
 
 			fetch( restBase + 'tickets/guest-reply', {
 				method: 'POST',
+				credentials: 'same-origin',
 				headers: {
 					'Content-Type': 'application/json',
 					'X-WP-Nonce': restNonce
@@ -1134,7 +1139,6 @@
 				.then( function ( r ) {
 					if ( r.status < 300 ) {
 						var successMsg  = r.data.message || 'Your reply has been sent.';
-						var fileInput   = form.querySelector( 'input[type="file"]' );
 						var ticketId    = r.data.ticket_id;
 						var selectedFiles = ( fileInput && fileInput.files ) ? Array.prototype.slice.call( fileInput.files ) : [];
 						if ( selectedFiles.length > 0 && ticketId ) {
@@ -1146,8 +1150,14 @@
 									fd.append( 'guest_token', guestToken );
 									return fetch( restBase + 'tickets/' + ticketId + '/attachments', {
 										method: 'POST',
+										credentials: 'same-origin',
 										headers: { 'X-WP-Nonce': restNonce },
 										body: fd
+									} ).then( function ( uploadResponse ) {
+										if ( ! uploadResponse.ok ) {
+											throw new Error( 'upload_failed' );
+										}
+										return uploadResponse;
 									} );
 								} );
 							} );
@@ -1187,8 +1197,30 @@
 		} );
 	}
 
+	function initFilePickers() {
+		Array.prototype.slice.call( document.querySelectorAll( '.hd-file-picker' ) ).forEach( function ( picker ) {
+			var input = picker.querySelector( 'input[type="file"]' );
+			var selection = picker.querySelector( '.hd-file-picker__selection' );
+			if ( ! input || ! selection ) {
+				return;
+			}
+
+			var emptyText = selection.getAttribute( 'data-empty-text' ) || 'No files chosen';
+			var updateSelection = function () {
+				var fileNames = Array.prototype.slice.call( input.files || [] ).map( function ( file ) {
+					return file.name;
+				} );
+				selection.textContent = fileNames.length ? fileNames.join( ', ' ) : emptyText;
+			};
+
+			input.addEventListener( 'change', updateSelection );
+			updateSelection();
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		initLightbox();
+		initFilePickers();
 		initGuestReplyForm();
 	} );
 

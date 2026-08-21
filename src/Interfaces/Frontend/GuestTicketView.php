@@ -119,7 +119,7 @@ class GuestTicketView extends HelpdeskPage {
 
 				<!-- Reply form -->
 				<h2 class="hd-section-title"><?php esc_html_e( 'Add a Reply', 'wp-helpdesk' ); ?></h2>
-				<div class="hd-reply-form" id="hd-guest-reply-form"
+				<form class="hd-reply-form" id="hd-guest-reply-form"
 					data-ticket-no="<?php echo esc_attr( (string) $ticket['ticket_no'] ); ?>"
 					data-ticket-id="<?php echo esc_attr( (string) (int) $ticket['id'] ); ?>"
 					data-guest-token="<?php echo esc_attr( $guest_token ); ?>">
@@ -134,23 +134,37 @@ class GuestTicketView extends HelpdeskPage {
 						<label for="hd-guest-reply-attachment" class="hd-label">
 							<?php esc_html_e( 'Attachments', 'wp-helpdesk' ); ?>
 						</label>
-						<input
-							type="file"
-							id="hd-guest-reply-attachment"
-							name="hd-guest-reply-attachment"
-							multiple
-							accept="<?php echo esc_attr( implode( ',', \WPHelpdesk\Domain\Attachment\AttachmentService::ALLOWED_MIME_TYPES ) ); ?>"
-						>
-						<span class="hd-description"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB per file.', 'wp-helpdesk' ); ?></span>
+						<div class="hd-file-picker">
+							<input
+								type="file"
+								id="hd-guest-reply-attachment"
+								name="hd_guest_reply_attachment[]"
+								class="hd-file-picker__input"
+								multiple
+								accept="<?php echo esc_attr( implode( ',', \WPHelpdesk\Domain\Attachment\AttachmentService::ALLOWED_MIME_TYPES ) ); ?>"
+								aria-describedby="hd-guest-reply-attachment-selection hd-guest-reply-attachment-help"
+							>
+							<div class="hd-file-picker__controls">
+								<label for="hd-guest-reply-attachment" class="hd-btn hd-btn--secondary hd-file-picker__button">
+									<?php esc_html_e( 'Browse…', 'wp-helpdesk' ); ?>
+								</label>
+								<span
+									class="hd-file-picker__selection"
+									id="hd-guest-reply-attachment-selection"
+									data-empty-text="<?php echo esc_attr( __( 'No files chosen', 'wp-helpdesk' ) ); ?>"
+								><?php esc_html_e( 'No files chosen', 'wp-helpdesk' ); ?></span>
+							</div>
+							<span class="hd-description" id="hd-guest-reply-attachment-help"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB per file.', 'wp-helpdesk' ); ?></span>
+						</div>
 					</div>
 					<div class="hd-form-actions">
-						<button type="button" class="hd-btn hd-btn--primary" id="hd-guest-reply-submit">
+						<button type="submit" class="hd-btn hd-btn--primary" id="hd-guest-reply-submit">
 							<?php esc_html_e( 'Send reply', 'wp-helpdesk' ); ?>
 						</button>
 					</div>
 					<p class="hd-error-message" id="hd-guest-reply-error" aria-live="assertive" role="alert"></p>
 					<p class="hd-success-message hd-success-message--hidden" id="hd-guest-reply-success" aria-live="polite"></p>
-				</div>
+				</form>
 			</div>
 		</div>
 

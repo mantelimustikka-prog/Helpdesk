@@ -205,6 +205,48 @@
 	min-height: 1.2em;
 }
 
+.hd-file-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.hd-file-picker__input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	clip-path: inset(50%);
+	border: 0;
+	white-space: nowrap;
+}
+
+.hd-file-picker__controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+.hd-file-picker__button {
+	cursor: pointer;
+}
+
+.hd-file-picker__selection {
+	font-size: 0.9rem;
+	color: #1d2327;
+	word-break: break-word;
+}
+
+.hd-file-picker__input:focus + .hd-file-picker__controls .hd-file-picker__button,
+.hd-file-picker__input:focus-visible + .hd-file-picker__controls .hd-file-picker__button {
+	outline: 2px solid #0073aa;
+	outline-offset: 2px;
+}
+
 /* Form actions */
 .hd-form-actions {
 	margin-top: 24px;

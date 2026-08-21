@@ -598,6 +598,8 @@ final class AttachmentUploadAndDisplayTest extends TestCase {
 
 		self::assertStringContainsString( 'type="file"', $output, 'Guest reply form must include a file input' );
 		self::assertStringContainsString( 'hd-guest-reply-attachment', $output, 'File input id must be hd-guest-reply-attachment' );
+		self::assertStringContainsString( 'Browse…', $output, 'Guest reply form must render a visible browse button label' );
+		self::assertStringContainsString( 'type="submit"', $output, 'Guest reply form must use a real submit button' );
 		self::assertStringContainsString( 'data-ticket-id', $output, 'Reply form must carry data-ticket-id for JS upload' );
 	}
 
