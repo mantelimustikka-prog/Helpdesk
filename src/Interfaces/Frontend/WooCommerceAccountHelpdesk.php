@@ -377,12 +377,22 @@ class WooCommerceAccountHelpdesk {
 
 		<div class="hd-account-helpdesk__section">
 			<h4><?php esc_html_e( 'Send a reply', 'wp-helpdesk' ); ?></h4>
-			<form method="post">
+			<form method="post" enctype="multipart/form-data">
 				<?php wp_nonce_field( 'hd_my_account_reply', 'hd_my_account_reply_nonce' ); ?>
 				<input type="hidden" name="hd_helpdesk_action" value="reply">
 				<p>
 					<label for="hd-helpdesk-reply-body"><?php esc_html_e( 'Message', 'wp-helpdesk' ); ?></label><br>
 					<textarea id="hd-helpdesk-reply-body" name="hd_helpdesk_reply_body" rows="6" style="width:100%;"></textarea>
+				</p>
+				<p>
+					<label for="hd-helpdesk-reply-attachment"><?php esc_html_e( 'Attachment', 'wp-helpdesk' ); ?></label><br>
+					<input
+						type="file"
+						id="hd-helpdesk-reply-attachment"
+						name="hd_helpdesk_attachment"
+						accept="image/jpeg,image/png,image/gif,application/pdf,text/plain,application/zip"
+					>
+					<span style="font-size:0.875em;"><?php esc_html_e( 'Optional. JPEG, PNG, GIF, PDF, TXT, ZIP. Max 10 MB.', 'wp-helpdesk' ); ?></span>
 				</p>
 				<p><button type="submit"><?php esc_html_e( 'Send reply', 'wp-helpdesk' ); ?></button></p>
 			</form>
@@ -515,6 +525,9 @@ class WooCommerceAccountHelpdesk {
 			return false;
 		}
 
+		// Handle optional file attachment on the reply.
+		$this->maybeUploadReplyAttachment( (int) $ticket['id'], $message_id );
+
 		$message = $this->message_service->getMessage( $message_id );
 		do_action(
 			'hd_ticket_replied',
@@ -530,6 +543,31 @@ class WooCommerceAccountHelpdesk {
 		);
 
 		return $this->redirectTo( $this->buildAccountUrl( 'request/' . $ticket_no ) );
+	}
+
+	/**
+	 * Upload a reply attachment from $_FILES if one was submitted.
+	 *
+	 * Looks for a file under the 'hd_helpdesk_attachment' key. Silently skips
+	 * when no file is present. Errors are not fatal to the reply submission.
+	 *
+	 * @param int      $ticket_id  Ticket ID.
+	 * @param int|null $message_id Message ID, or null.
+	 * @return \WP_Error|null WP_Error on failure, null on success or no file.
+	 */
+	protected function maybeUploadReplyAttachment( int $ticket_id, ?int $message_id ): ?\WP_Error {
+		if ( ! empty( $_FILES['hd_helpdesk_attachment'] ) && ! empty( $_FILES['hd_helpdesk_attachment']['name'] ) ) {
+			$result = $this->attachment_service->handleUpload(
+				$_FILES['hd_helpdesk_attachment'],
+				$ticket_id,
+				$message_id,
+				get_current_user_id()
+			);
+			if ( $result instanceof \WP_Error ) {
+				return $result;
+			}
+		}
+		return null;
 	}
 
 	/**
