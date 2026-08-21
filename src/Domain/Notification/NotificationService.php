@@ -5,6 +5,7 @@
 
 namespace WPHelpdesk\Domain\Notification;
 
+use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
 
@@ -91,6 +92,7 @@ class NotificationService {
 	 * @return void
 	 */
 	public function sendTicketReply( array $ticket, array $message, string $recipient_email ): void {
+		$ticket  = $this->ensureGuestTicketLink( $ticket );
 		$content = $this->renderTemplate(
 			Helpers::pluginPath( 'templates/emails/ticket-reply.php' ),
 			array(
@@ -104,6 +106,63 @@ class NotificationService {
 			sprintf( 'Ticket reply: %s', (string) ( $ticket['ticket_no'] ?? '' ) ),
 			$content
 		);
+	}
+
+	/**
+	 * Ensure a guest-access ticket link exists for guest reply notifications.
+	 *
+	 * @param array<string, mixed> $ticket Ticket payload.
+	 * @return array<string, mixed>
+	 */
+	protected function ensureGuestTicketLink( array $ticket ): array {
+		if ( ! empty( $ticket['ticket_link'] ) || empty( $ticket['ticket_no'] ) ) {
+			return $ticket;
+		}
+
+		$ticket_no = (string) $ticket['ticket_no'];
+
+		if ( ! empty( $ticket['guest_token'] ) ) {
+			$ticket['ticket_link'] = $this->buildGuestTicketUrl( $ticket_no, (string) $ticket['guest_token'] );
+			return $ticket;
+		}
+
+		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+		if ( ! empty( $ticket['user_id'] ) || empty( $ticket['guest_token_hash'] ) || $ticket_id <= 0 ) {
+			return $ticket;
+		}
+
+		try {
+			$guest_token = bin2hex( random_bytes( 32 ) );
+		} catch ( \Exception $e ) {
+			return $ticket;
+		}
+
+		global $wpdb;
+		$table   = Schema::table( Constants::TABLE_TICKETS );
+		$updated = $wpdb->update(
+			$table,
+			array( 'guest_token_hash' => Helpers::hashGuestToken( $guest_token ) ),
+			array( 'id' => $ticket_id ),
+			array( '%s' ),
+			array( '%d' )
+		);
+
+		if ( $updated > 0 ) {
+			$ticket['ticket_link'] = $this->buildGuestTicketUrl( $ticket_no, $guest_token );
+		}
+
+		return $ticket;
+	}
+
+	/**
+	 * Build a guest ticket URL from ticket number and token.
+	 *
+	 * @param string $ticket_no   Ticket number.
+	 * @param string $guest_token Guest token.
+	 * @return string
+	 */
+	protected function buildGuestTicketUrl( string $ticket_no, string $guest_token ): string {
+		return home_url( '/helpdesk/ticket/' . rawurlencode( $ticket_no ) . '/' . rawurlencode( $guest_token ) . '/' );
 	}
 
 	/**
