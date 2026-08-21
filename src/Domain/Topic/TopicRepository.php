@@ -152,8 +152,34 @@ class TopicRepository {
 
 		$table  = Schema::table( Constants::TABLE_TOPICS );
 		$result = $wpdb->insert( $table, $data );
+		if ( $result ) {
+			return (int) $wpdb->insert_id;
+		}
 
-		return $result ? (int) $wpdb->insert_id : 0;
+		$legacy_payload = $data;
+		for ( $retry = 0; $retry < 2; $retry++ ) {
+			$last_error = isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
+			$matches    = array();
+			$did_match  = preg_match( "/Unknown column '(type|parent_id)' in 'field list'/i", $last_error, $matches );
+
+			if ( 1 !== $did_match ) {
+				return 0;
+			}
+
+			$missing_column = strtolower( (string) ( $matches[1] ?? '' ) );
+			if ( '' === $missing_column || ! array_key_exists( $missing_column, $legacy_payload ) ) {
+				return 0;
+			}
+
+			unset( $legacy_payload[ $missing_column ] );
+			$retry_result = $wpdb->insert( $table, $legacy_payload );
+
+			if ( $retry_result ) {
+				return (int) $wpdb->insert_id;
+			}
+		}
+
+		return 0;
 	}
 
 	/**
