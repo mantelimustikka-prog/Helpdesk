@@ -132,4 +132,14 @@ class Helpers {
 	public static function restNamespace(): string {
 		return Constants::REST_NAMESPACE;
 	}
+
+	/**
+	 * Hash a guest access token for persistent storage and lookup.
+	 *
+	 * @param string $guest_token Raw guest access token.
+	 * @return string
+	 */
+	public static function hashGuestToken( string $guest_token ): string {
+		return hash( 'sha256', $guest_token );
+	}
 }

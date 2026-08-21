@@ -4,11 +4,8 @@
  */
 /** @var array<string,mixed> $vars */
 $ticket      = $vars['ticket'] ?? array();
-$guest_token = (string) ( $ticket['guest_token'] ?? '' );
 $ticket_no   = (string) ( $ticket['ticket_no'] ?? '' );
-$ticket_link = '' !== $guest_token && '' !== $ticket_no
-	? home_url( '/helpdesk/ticket/' . rawurlencode( $ticket_no ) . '/' . rawurlencode( $guest_token ) . '/' )
-	: '';
+$ticket_link = (string) ( $ticket['ticket_link'] ?? '' );
 ?>
 <div style="font-family: Arial, sans-serif; color: #1d2327;">
 	<h2><?php echo esc_html( sprintf( 'Ticket %s created', $ticket_no ) ); ?></h2>
