@@ -156,19 +156,28 @@ class TopicRepository {
 			return (int) $wpdb->insert_id;
 		}
 
-		$last_error = isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
-		$matches_legacy_unknown_column = preg_match( "/Unknown column '(?:type|parent_id)' in 'field list'/i", $last_error );
-		$is_legacy_unknown_column_error = false !== $matches_legacy_unknown_column && 1 === $matches_legacy_unknown_column;
-
-		if ( ! $is_legacy_unknown_column_error ) {
-			return 0;
-		}
-
 		$legacy_payload = $data;
-		unset( $legacy_payload['type'], $legacy_payload['parent_id'] );
-		$retry_result = $wpdb->insert( $table, $legacy_payload );
+		while ( true ) {
+			$last_error = isset( $wpdb->last_error ) ? (string) $wpdb->last_error : '';
+			$matches    = array();
+			$did_match  = preg_match( "/Unknown column '(type|parent_id)' in 'field list'/i", $last_error, $matches );
 
-		return $retry_result ? (int) $wpdb->insert_id : 0;
+			if ( false === $did_match || 1 !== $did_match ) {
+				return 0;
+			}
+
+			$missing_column = strtolower( (string) ( $matches[1] ?? '' ) );
+			if ( '' === $missing_column || ! array_key_exists( $missing_column, $legacy_payload ) ) {
+				return 0;
+			}
+
+			unset( $legacy_payload[ $missing_column ] );
+			$retry_result = $wpdb->insert( $table, $legacy_payload );
+
+			if ( $retry_result ) {
+				return (int) $wpdb->insert_id;
+			}
+		}
 	}
 
 	/**
