@@ -127,7 +127,7 @@ class NotificationService {
 		}
 
 		$ticket_id = (int) ( $ticket['id'] ?? 0 );
-		if ( ! empty( $ticket['user_id'] ) || empty( $ticket['guest_token_hash'] ) || $ticket_id <= 0 ) {
+		if ( ! empty( $ticket['user_id'] ) || $ticket_id <= 0 ) {
 			return $ticket;
 		}
 

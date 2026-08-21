@@ -46,7 +46,7 @@ add_action(
 		// the current plugin version (e.g. after a code-only update that bypasses
 		// the activation hook).
 		$stored_version = get_site_option( \WPHelpdesk\Support\Constants::OPTION_DB_VERSION, '' );
-		if ( $stored_version !== HD_VERSION ) {
+		if ( $stored_version !== HD_VERSION || \WPHelpdesk\Infrastructure\Database\Migrator::hasPendingMigrations() ) {
 			\WPHelpdesk\Infrastructure\Database\Migrator::runAll();
 		}
 
