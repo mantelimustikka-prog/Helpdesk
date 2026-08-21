@@ -42,6 +42,14 @@ if ( file_exists( HD_PATH . 'vendor/autoload.php' ) ) {
 add_action(
 	'plugins_loaded',
 	static function (): void {
+		// Run any pending schema migrations when the stored DB version is behind
+		// the current plugin version (e.g. after a code-only update that bypasses
+		// the activation hook).
+		$stored_version = get_site_option( \WPHelpdesk\Support\Constants::OPTION_DB_VERSION, '' );
+		if ( $stored_version !== HD_VERSION ) {
+			\WPHelpdesk\Infrastructure\Database\Migrator::runAll();
+		}
+
 		$plugin = new \WPHelpdesk\Bootstrap\Plugin();
 		$plugin->boot();
 	}
