@@ -304,7 +304,12 @@ private fun TicketDetailSection(
                 )
             }
 
-            if (!uiState.isDetailLoading && uiState.ticketDetail == null && uiState.detailErrorMessage == null) {
+            if (
+                uiState.selectedTicketId != null &&
+                !uiState.isDetailLoading &&
+                uiState.ticketDetail == null &&
+                uiState.detailErrorMessage == null
+            ) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("No ticket detail returned yet.", style = MaterialTheme.typography.bodySmall)
             }
