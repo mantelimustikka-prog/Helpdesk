@@ -13,6 +13,61 @@
 	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
+.hd-admin-wrap .hd-ticket-nav {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px 16px;
+	margin-top: 20px;
+	padding: 12px 16px;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.hd-admin-wrap .hd-ticket-nav__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.hd-admin-wrap .hd-ticket-nav__summary {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 240px;
+}
+
+.hd-admin-wrap .hd-ticket-nav__title {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: baseline;
+}
+
+.hd-admin-wrap .hd-ticket-nav__meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 12px;
+	color: #50575e;
+}
+
+.hd-admin-wrap .hd-status-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 12px;
+	background: #f0f0f1;
+	color: #1d2327;
+}
+
+.hd-admin-wrap .hd-ticket-nav .button[disabled] {
+	cursor: default;
+	opacity: 0.55;
+}
+
 .hd-admin-wrap form.is-submitting {
 	opacity: 0.7;
 }

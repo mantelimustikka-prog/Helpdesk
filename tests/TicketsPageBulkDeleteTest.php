@@ -12,7 +12,7 @@ require_once __DIR__ . '/bootstrap.php';
 /**
  * Test double that intercepts DB calls and lets us inject a TicketService stub.
  */
-final class TicketsPageTestDouble extends TicketsPage {
+class TicketsPageTestDouble extends TicketsPage {
 	public ?string $redirect_target = null;
 
 	/** @var array<int, int> */
@@ -211,9 +211,84 @@ final class TicketsPageBulkDeleteTest extends TestCase {
 		unset( $_GET['ticket_id'] );
 
 		self::assertStringContainsString( 'Ticket HD-00001', $output );
+		self::assertStringContainsString( 'Back to Queue', $output );
+		self::assertStringContainsString( 'Previous Ticket', $output );
+		self::assertStringContainsString( 'Next Ticket', $output );
 		self::assertStringNotContainsString( '<h2>Queue</h2>', $output );
 		self::assertStringNotContainsString( 'id="hd-bulk-form"', $output );
 		self::assertStringNotContainsString( 'id="hd-status-filter"', $output );
+	}
+
+	public function testRenderSingleTicketViewNavigationPreservesQueueFilter(): void {
+		$attachment_service = new class extends AttachmentService {
+			public function getForTicket( int $ticket_id ): array {
+				return array();
+			}
+		};
+		$page = new class ( $attachment_service ) extends TicketsPageTestDouble {
+			protected function listTickets( int $limit, string $status_filter = '' ): array {
+				return array(
+					array(
+						'id'        => 1,
+						'ticket_no' => 'HD-00001',
+						'subject'   => 'First issue',
+						'status'    => 'new',
+					),
+					array(
+						'id'        => 2,
+						'ticket_no' => 'HD-00002',
+						'subject'   => 'Second issue',
+						'status'    => 'new',
+					),
+					array(
+						'id'        => 3,
+						'ticket_no' => 'HD-00003',
+						'subject'   => 'Third issue',
+						'status'    => 'new',
+					),
+				);
+			}
+		};
+		$page->tickets_by_id[2] = array(
+			'id'              => 2,
+			'ticket_no'       => 'HD-00002',
+			'subject'         => 'Second issue',
+			'requester_name'  => 'Bob',
+			'requester_email' => 'bob@example.test',
+			'requester_phone' => '',
+			'status'          => 'new',
+		);
+
+		$_GET['page']          = 'wp-helpdesk-tickets';
+		$_GET['ticket_id']     = '2';
+		$_GET['status_filter'] = 'new';
+
+		ob_start();
+		$page->render();
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['ticket_id'], $_GET['status_filter'] );
+
+		self::assertStringContainsString( 'admin.php?page=wp-helpdesk-tickets&status_filter=new', $output );
+		self::assertStringContainsString( 'ticket_id=1&status_filter=new', $output );
+		self::assertStringContainsString( 'ticket_id=3&status_filter=new', $output );
+		self::assertStringContainsString( 'Filtered by New', $output );
+	}
+
+	public function testRenderQueueTicketLinksPreserveStatusFilter(): void {
+		$page = new TicketsPageTestDouble();
+
+		$_GET['page']          = 'wp-helpdesk-tickets';
+		$_GET['status_filter'] = 'pending_agent_reply';
+
+		ob_start();
+		$page->render();
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['status_filter'] );
+
+		self::assertStringContainsString( 'ticket_id=1&status_filter=pending_agent_reply', $output );
+		self::assertStringContainsString( 'ticket_id=2&status_filter=pending_agent_reply', $output );
 	}
 
 	public function testBulkStatusCallsUpdateTicketForEachSelectedId(): void {
