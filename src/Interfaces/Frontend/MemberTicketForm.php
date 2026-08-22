@@ -29,7 +29,7 @@ class MemberTicketForm extends GuestTicketForm {
 		<div class="hd-wrap">
 			<h1 class="hd-title"><?php esc_html_e( 'Submit a Support Request', 'wp-helpdesk' ); ?></h1>
 			<p class="hd-back-link">
-				<a href="<?php echo esc_url( home_url( '/my-account/helpdesk/' ) ); ?>">
+				<a href="<?php echo esc_url( home_url( '/helpdesk/' ) ); ?>">
 					&larr; <?php esc_html_e( 'Back to Support Centre', 'wp-helpdesk' ); ?>
 				</a>
 			</p>
@@ -246,7 +246,7 @@ class MemberTicketForm extends GuestTicketForm {
 					<p class="hd-confirmation__message" id="hd-member-confirm-msg">
 						<?php esc_html_e( 'Thank you. We have received your request and will be in touch via email.', 'wp-helpdesk' ); ?>
 					</p>
-					<a href="<?php echo esc_url( home_url( '/my-account/helpdesk/' ) ); ?>" class="hd-btn hd-btn--secondary">
+					<a href="<?php echo esc_url( home_url( '/helpdesk/' ) ); ?>" class="hd-btn hd-btn--secondary">
 						<?php esc_html_e( 'Back to Support Centre', 'wp-helpdesk' ); ?>
 					</a>
 				</div>

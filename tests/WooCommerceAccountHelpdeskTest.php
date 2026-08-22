@@ -52,7 +52,9 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertArrayHasKey( 'init', $GLOBALS['wp_filters'] );
 		self::assertArrayHasKey( 'query_vars', $GLOBALS['wp_filters'] );
 		self::assertArrayHasKey( 'woocommerce_account_menu_items', $GLOBALS['wp_filters'] );
+		self::assertArrayHasKey( 'woocommerce_get_endpoint_url', $GLOBALS['wp_filters'] );
 		self::assertArrayHasKey( 'woocommerce_account_helpdesk_endpoint', $GLOBALS['wp_filters'] );
+		self::assertArrayHasKey( 'template_redirect', $GLOBALS['wp_filters'] );
 	}
 
 	public function testRegisterDoesNothingWhenWooCommerceAccountPageIsUnavailable(): void {
@@ -274,7 +276,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 
 		self::assertStringContainsString( 'Need billing help', $output );
 		self::assertStringContainsString( 'in_progress', $output );
-		self::assertStringContainsString( '/my-account/helpdesk/request/HD-10011/', $output );
+		self::assertStringContainsString( '/helpdesk/request/HD-10011/', $output );
 	}
 
 	public function testRenderDetailShowsMessagesAndReplyFormForOwnedTicket(): void {
@@ -419,7 +421,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertSame( 'member', $this->message_service->posted_author_type );
 		self::assertSame( 'Here is my extra detail.', $this->message_service->posted_body );
 		self::assertSame(
-			'https://example.test/my-account/helpdesk/request/HD-10011/?hd_reply_notice=reply_sent&hd_reply_notice_nonce=nonce-hd_reply_notice_reply_sent',
+			'https://example.test/helpdesk/request/HD-10011/?hd_reply_notice=reply_sent&hd_reply_notice_nonce=nonce-hd_reply_notice_reply_sent',
 			$GLOBALS['wp_safe_redirect_to']
 		);
 	}
@@ -497,7 +499,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 
 		self::assertStringContainsString( 'multipart/form-data', $output, 'Reply form must use multipart/form-data encoding' );
 		self::assertStringContainsString( 'method="post"', $output, 'Reply form must submit with POST' );
-		self::assertStringContainsString( 'action="https://example.test/my-account/helpdesk/request/HD-10011/"', $output, 'Reply form must post back to the request detail URL' );
+		self::assertStringContainsString( 'action="https://example.test/helpdesk/request/HD-10011/"', $output, 'Reply form must post back to the request detail URL' );
 		self::assertStringContainsString( 'type="file"', $output, 'Reply form must include a file input' );
 		self::assertStringContainsString( 'hd_helpdesk_attachment', $output, 'File input must be named hd_helpdesk_attachment' );
 		self::assertStringContainsString( 'hd-file-input', $output, 'File input must use the hd-file-input class for visibility' );
@@ -650,9 +652,38 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertCount( 2, $this->attachment_service->upload_calls );
 		self::assertSame(
-			'https://example.test/my-account/helpdesk/request/HD-10011/?hd_reply_notice=reply_attachment_error&hd_reply_notice_nonce=nonce-hd_reply_notice_reply_attachment_error',
+			'https://example.test/helpdesk/request/HD-10011/?hd_reply_notice=reply_attachment_error&hd_reply_notice_nonce=nonce-hd_reply_notice_reply_attachment_error',
 			$GLOBALS['wp_safe_redirect_to']
 		);
+	}
+
+	public function testMapEndpointUrlToHelpdeskReturnsCanonicalStandaloneUrl(): void {
+		$result = $this->integration->mapEndpointUrlToHelpdesk(
+			'https://example.test/my-account/helpdesk/requests/',
+			'helpdesk',
+			'requests',
+			'https://example.test/my-account/'
+		);
+
+		self::assertSame( 'https://example.test/helpdesk/requests/', $result );
+	}
+
+	public function testLegacyEndpointRequestRedirectsGetToCanonicalStandaloneRoute(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$_SERVER['REQUEST_METHOD']            = 'GET';
+
+		$this->integration->redirectLegacyEndpointRequest();
+
+		self::assertSame( 'https://example.test/helpdesk/request/HD-10011/', $GLOBALS['wp_safe_redirect_to'] );
+	}
+
+	public function testTemplateRedirectMovesLegacyMyAccountPathToCanonicalHelpdeskPath(): void {
+		$_SERVER['REQUEST_METHOD'] = 'GET';
+		$_SERVER['REQUEST_URI']    = '/my-account/helpdesk/requests/';
+
+		$this->integration->redirectLegacyAccountRoute();
+
+		self::assertSame( 'https://example.test/helpdesk/requests/', $GLOBALS['wp_safe_redirect_to'] );
 	}
 }
 

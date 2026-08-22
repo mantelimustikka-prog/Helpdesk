@@ -18,6 +18,8 @@ use WPHelpdesk\Interfaces\Frontend\GuestTicketView;
  *  /helpdesk/                – main landing page
  *  /helpdesk/new/            – guest (non-logged-in) ticket submission form
  *  /helpdesk/member/new/     – member (logged-in) ticket submission form
+ *  /helpdesk/requests/       – member request listing
+ *  /helpdesk/request/{no}/   – member request detail/reply
  */
 class FrontendRouter {
 
@@ -25,17 +27,20 @@ class FrontendRouter {
 	protected GuestTicketForm $guest_form;
 	protected MemberTicketForm $member_form;
 	protected GuestTicketView $ticket_view;
+	protected WooCommerceAccountHelpdesk $member_helpdesk;
 
 	public function __construct(
 		?HelpdeskPage $helpdesk_page = null,
 		?GuestTicketForm $guest_form = null,
 		?MemberTicketForm $member_form = null,
-		?GuestTicketView $ticket_view = null
+		?GuestTicketView $ticket_view = null,
+		?WooCommerceAccountHelpdesk $member_helpdesk = null
 	) {
 		$this->helpdesk_page = $helpdesk_page ?: new HelpdeskPage();
 		$this->guest_form    = $guest_form    ?: new GuestTicketForm();
 		$this->member_form   = $member_form   ?: new MemberTicketForm();
 		$this->ticket_view   = $ticket_view   ?: new GuestTicketView();
+		$this->member_helpdesk = $member_helpdesk ?: new WooCommerceAccountHelpdesk();
 	}
 
 	/**
@@ -73,6 +78,8 @@ class FrontendRouter {
 	public function addRewriteRules(): void {
 		add_rewrite_rule( '^helpdesk/member/new/?$', 'index.php?hd_page=member_new', 'top' );
 		add_rewrite_rule( '^helpdesk/new/?$', 'index.php?hd_page=new', 'top' );
+		add_rewrite_rule( '^helpdesk/requests/?$', 'index.php?hd_page=member_requests', 'top' );
+		add_rewrite_rule( '^helpdesk/request/([^/]+)/?$', 'index.php?hd_page=member_request&hd_ticket_no=$matches[1]', 'top' );
 		add_rewrite_rule( '^helpdesk/ticket/([^/]+)/([^/]+)/?$', 'index.php?hd_page=ticket_view&hd_ticket_no=$matches[1]&hd_guest_token=$matches[2]', 'top' );
 		add_rewrite_rule( '^helpdesk/?$', 'index.php?hd_page=index', 'top' );
 	}
@@ -130,6 +137,15 @@ class FrontendRouter {
 				$this->member_form->render();
 				exit;
 
+			case 'member_requests':
+				$this->member_helpdesk->renderStandalone( 'requests' );
+				exit;
+
+			case 'member_request':
+				$ticket_no = rawurldecode( (string) get_query_var( 'hd_ticket_no', '' ) );
+				$this->member_helpdesk->renderStandalone( 'request/' . $ticket_no );
+				exit;
+
 			case 'ticket_view':
 				$ticket_no   = sanitize_text_field( (string) get_query_var( 'hd_ticket_no', '' ) );
 				$guest_token = sanitize_text_field( (string) get_query_var( 'hd_guest_token', '' ) );
@@ -142,7 +158,7 @@ class FrontendRouter {
 	 * Derive the hd_page value from the current request path when the rewrite
 	 * query var is absent (e.g. rule not yet flushed, or mapped-page context).
 	 *
-	 * @return string One of 'index'|'new'|'member_new', or '' when not matched.
+	 * @return string One of 'index'|'new'|'member_new'|'member_requests'|'member_request'|'ticket_view', or '' when not matched.
 	 */
 	protected function resolveFromPath(): string {
 		// Only run on front-end singular/page contexts or raw path checks.
@@ -168,14 +184,24 @@ class FrontendRouter {
 			return 'new';
 		}
 
+		if ( '/helpdesk/requests/' === $path ) {
+			return 'member_requests';
+		}
+
 		if ( '/helpdesk/' === $path ) {
 			return 'index';
 		}
 
+		// /helpdesk/request/{ticket_no}/
+		if ( 1 === preg_match( '#^/helpdesk/request/([^/]+)/$#', $path, $m ) ) {
+			$this->setRuntimeQueryVar( 'hd_ticket_no', rawurldecode( $m[1] ) );
+			return 'member_request';
+		}
+
 		// /helpdesk/ticket/{ticket_no}/{guest_token}/
 		if ( 1 === preg_match( '#^/helpdesk/ticket/([^/]+)/([^/]+)/$#', $path, $m ) ) {
-			set_query_var( 'hd_ticket_no', rawurldecode( $m[1] ) );
-			set_query_var( 'hd_guest_token', rawurldecode( $m[2] ) );
+			$this->setRuntimeQueryVar( 'hd_ticket_no', rawurldecode( $m[1] ) );
+			$this->setRuntimeQueryVar( 'hd_guest_token', rawurldecode( $m[2] ) );
 			return 'ticket_view';
 		}
 
@@ -233,5 +259,21 @@ class FrontendRouter {
 				),
 			)
 		);
+	}
+
+	/**
+	 * Set a query var for the current request in both runtime and tests.
+	 *
+	 * @param string $key   Query var key.
+	 * @param string $value Query var value.
+	 * @return void
+	 */
+	protected function setRuntimeQueryVar( string $key, string $value ): void {
+		if ( function_exists( 'set_query_var' ) ) {
+			set_query_var( $key, $value );
+			return;
+		}
+
+		$GLOBALS['wp_query_vars'][ $key ] = $value;
 	}
 }
