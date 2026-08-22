@@ -83,7 +83,7 @@ class NetworkMenu {
 		add_action( 'load-' . $tickets_hook, array( $this, 'bootstrapPages' ) );
 		add_action( 'load-' . $topics_hook, array( $this, 'bootstrapPages' ) );
 		add_action( 'load-' . $settings_hook, array( $this, 'bootstrapPages' ) );
-		add_action( 'network_admin_enqueue_scripts', array( $this, 'enqueueAssets' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueueAssets' ) );
 	}
 
 	/**
