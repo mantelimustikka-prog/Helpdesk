@@ -9,7 +9,9 @@ use WPHelpdesk\Interfaces\Admin\Pages\DashboardPage;
 use WPHelpdesk\Interfaces\Admin\Pages\SettingsPage;
 use WPHelpdesk\Interfaces\Admin\Pages\TicketsPage;
 use WPHelpdesk\Interfaces\Admin\Pages\TopicsPage;
+use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 
 class NetworkMenu {
 	protected DashboardPage $dashboard_page;
@@ -111,6 +113,24 @@ class NetworkMenu {
 			array(),
 			HD_VERSION
 		);
+
+		$status_option_map = array(
+			TicketStatus::CANONICAL_NEW                  => Constants::OPTION_APPEARANCE_STATUS_NEW_COLOR,
+			TicketStatus::CANONICAL_PENDING_AGENT_REPLY  => Constants::OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR,
+			TicketStatus::CANONICAL_PENDING_CLIENT_REPLY => Constants::OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR,
+			TicketStatus::CANONICAL_RESOLVED             => Constants::OPTION_APPEARANCE_STATUS_RESOLVED_COLOR,
+			TicketStatus::CANONICAL_CLOSED               => Constants::OPTION_APPEARANCE_STATUS_CLOSED_COLOR,
+		);
+		$inline_css = '';
+		foreach ( $status_option_map as $canonical => $option_key ) {
+			$color = sanitize_hex_color( (string) get_site_option( $option_key, '' ) );
+			if ( $color ) {
+				$inline_css .= '.hd-status-badge--' . $canonical . '{background-color:' . $color . ';}';
+			}
+		}
+		if ( $inline_css ) {
+			wp_add_inline_style( 'wp-helpdesk-admin', $inline_css );
+		}
 
 		wp_enqueue_script(
 			'wp-helpdesk-admin',

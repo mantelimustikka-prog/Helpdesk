@@ -64,8 +64,13 @@ class Constants {
 	public const OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY    = 'hd_email_tpl_ticket_created_admin_body';
 
 	// Appearance tab option keys.
-	public const OPTION_APPEARANCE_ADMIN_REPLY_COLOR  = 'hd_appearance_admin_reply_color';
-	public const OPTION_APPEARANCE_CLIENT_REPLY_COLOR = 'hd_appearance_client_reply_color';
+	public const OPTION_APPEARANCE_ADMIN_REPLY_COLOR          = 'hd_appearance_admin_reply_color';
+	public const OPTION_APPEARANCE_CLIENT_REPLY_COLOR         = 'hd_appearance_client_reply_color';
+	public const OPTION_APPEARANCE_STATUS_NEW_COLOR           = 'hd_appearance_status_new_color';
+	public const OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR = 'hd_appearance_status_pending_agent_reply_color';
+	public const OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR = 'hd_appearance_status_pending_client_reply_color';
+	public const OPTION_APPEARANCE_STATUS_RESOLVED_COLOR      = 'hd_appearance_status_resolved_color';
+	public const OPTION_APPEARANCE_STATUS_CLOSED_COLOR        = 'hd_appearance_status_closed_color';
 
 	// Frontend page option keys (per-site, stored in blog options).
 	public const OPTION_PAGE_INDEX      = 'hd_page_id_index';
@@ -144,6 +149,11 @@ class Constants {
 			// Appearance tab.
 			self::OPTION_APPEARANCE_ADMIN_REPLY_COLOR,
 			self::OPTION_APPEARANCE_CLIENT_REPLY_COLOR,
+			self::OPTION_APPEARANCE_STATUS_NEW_COLOR,
+			self::OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR,
+			self::OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR,
+			self::OPTION_APPEARANCE_STATUS_RESOLVED_COLOR,
+			self::OPTION_APPEARANCE_STATUS_CLOSED_COLOR,
 		);
 	}
 

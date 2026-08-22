@@ -371,7 +371,7 @@ class WooCommerceAccountHelpdesk {
 				<?php echo esc_html( (string) $ticket['ticket_no'] ); ?>
 				<br>
 				<strong><?php esc_html_e( 'Status:', 'wp-helpdesk' ); ?></strong>
-				<?php echo esc_html( TicketStatus::label( $ticket_status ) ); ?>
+				<span class="hd-status-badge hd-status-badge--<?php echo esc_attr( $ticket_status ); ?>"><?php echo esc_html( TicketStatus::label( $ticket_status ) ); ?></span>
 			</p>
 			<p><a href="<?php echo esc_url( $this->buildAccountUrl( 'requests' ) ); ?>">&larr; <?php esc_html_e( 'Back to my requests', 'wp-helpdesk' ); ?></a></p>
 		</div>
@@ -495,7 +495,10 @@ class WooCommerceAccountHelpdesk {
 						<td><input type="checkbox" name="hd_ticket_nos[]" value="<?php echo esc_attr( (string) $ticket['ticket_no'] ); ?>"></td>
 						<td><a href="<?php echo esc_url( $this->buildAccountUrl( 'request/' . rawurlencode( (string) $ticket['ticket_no'] ) ) ); ?>"><?php echo esc_html( (string) $ticket['ticket_no'] ); ?></a></td>
 						<td><?php echo esc_html( (string) $ticket['subject'] ); ?></td>
-						<td><?php echo esc_html( TicketStatus::label( (string) $ticket['status'] ) ); ?></td>
+						<td><?php
+						$canonical_status = TicketStatus::toCanonical( (string) $ticket['status'] );
+						echo '<span class="hd-status-badge hd-status-badge--' . esc_attr( $canonical_status ) . '">' . esc_html( TicketStatus::label( $canonical_status ) ) . '</span>';
+					?></td>
 						<td><?php echo esc_html( (string) ( $ticket['updated_at'] ?? $ticket['created_at'] ?? '' ) ); ?></td>
 					</tr>
 				<?php endforeach; ?>
