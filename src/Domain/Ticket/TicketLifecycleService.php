@@ -54,15 +54,24 @@ class TicketLifecycleService {
 	}
 
 	/**
-	 * Sync ticket status after a cross-party reply.
+	 * Sync ticket status after a reply based solely on the reply author's role.
 	 *
-	 * @param array<string, mixed> $ticket Ticket data.
+	 * - Agent/admin reply  → Pending Client reply
+	 * - Client reply       → Pending Agent reply
+	 * - Internal notes and replies on closed tickets are skipped.
+	 *
+	 * @param array<string, mixed> $ticket  Ticket data.
 	 * @param array<string, mixed> $message Reply message.
 	 * @return void
 	 */
 	public function syncStatusAfterReply( array $ticket, array $message ): void {
 		$ticket_id = isset( $ticket['id'] ) ? (int) $ticket['id'] : 0;
 		if ( $ticket_id <= 0 ) {
+			return;
+		}
+
+		// Internal notes do not drive status transitions.
+		if ( ! empty( $message['is_internal'] ) ) {
 			return;
 		}
 
@@ -76,46 +85,15 @@ class TicketLifecycleService {
 			return;
 		}
 
-		$opener_author = $this->resolveOpenerAuthorType( $ticket_id, $ticket );
-		if ( '' === $opener_author ) {
-			return;
-		}
-
-		$reply_is_client  = $this->isClientAuthorType( $reply_author );
-		$opener_is_client = $this->isClientAuthorType( $opener_author );
-		if ( $reply_is_client === $opener_is_client ) {
-			return;
-		}
-
-		$target_status = $reply_is_client
+		$target_status = $this->isClientAuthorType( $reply_author )
 			? TicketStatus::CANONICAL_PENDING_AGENT_REPLY
 			: TicketStatus::CANONICAL_PENDING_CLIENT_REPLY;
+
 		if ( $current_status === $target_status ) {
 			return;
 		}
 
 		$this->updateStatus( $ticket_id, $target_status );
-	}
-
-	/**
-	 * @param int                  $ticket_id Ticket id.
-	 * @param array<string, mixed> $ticket Ticket data.
-	 * @return string
-	 */
-	protected function resolveOpenerAuthorType( int $ticket_id, array $ticket ): string {
-		global $wpdb;
-		$table  = Schema::table( Constants::TABLE_TICKET_MESSAGES );
-		$author = (string) $wpdb->get_var(
-			$wpdb->prepare(
-				"SELECT author_type FROM {$table} WHERE ticket_id = %d ORDER BY id ASC LIMIT 1",
-				$ticket_id
-			)
-		);
-		if ( '' !== $author ) {
-			return sanitize_key( $author );
-		}
-
-		return ! empty( $ticket['user_id'] ) ? 'member' : 'guest';
 	}
 
 	/**
