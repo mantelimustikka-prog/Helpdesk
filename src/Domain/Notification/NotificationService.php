@@ -6,6 +6,7 @@
 namespace WPHelpdesk\Domain\Notification;
 
 use WPHelpdesk\Infrastructure\Database\Schema;
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
 
@@ -71,15 +72,14 @@ class NotificationService {
 	 * @return void
 	 */
 	public function sendTicketCreated( array $ticket, string $recipient_email ): void {
-		$content = $this->renderTemplate(
-			Helpers::pluginPath( 'templates/emails/ticket-created.php' ),
-			array( 'ticket' => $ticket )
-		);
-
-		$this->send(
+		$this->sendTemplateEmail(
 			$recipient_email,
-			sprintf( 'Ticket created: %s', (string) ( $ticket['ticket_no'] ?? '' ) ),
-			$content
+			Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_SUBJECT,
+			'Ticket created: {ticket_no}',
+			Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_BODY,
+			Helpers::pluginPath( 'templates/emails/ticket-created.php' ),
+			array( 'ticket' => $ticket ),
+			$this->buildTokens( $ticket )
 		);
 	}
 
@@ -93,18 +93,17 @@ class NotificationService {
 	 */
 	public function sendTicketReply( array $ticket, array $message, string $recipient_email ): void {
 		$ticket  = $this->ensureGuestTicketLink( $ticket );
-		$content = $this->renderTemplate(
+		$this->sendTemplateEmail(
+			$recipient_email,
+			Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_SUBJECT,
+			'Ticket reply: {ticket_no}',
+			Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_BODY,
 			Helpers::pluginPath( 'templates/emails/ticket-reply.php' ),
 			array(
 				'ticket'  => $ticket,
 				'message' => $message,
-			)
-		);
-
-		$this->send(
-			$recipient_email,
-			sprintf( 'Ticket reply: %s', (string) ( $ticket['ticket_no'] ?? '' ) ),
-			$content
+			),
+			$this->buildTokens( $ticket, $message )
 		);
 	}
 
@@ -175,19 +174,18 @@ class NotificationService {
 	 * @return void
 	 */
 	public function sendStatusChanged( array $ticket, string $old_status, string $new_status, string $recipient_email ): void {
-		$content = $this->renderTemplate(
+		$this->sendTemplateEmail(
+			$recipient_email,
+			Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_SUBJECT,
+			'Ticket status updated: {ticket_no}',
+			Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_BODY,
 			Helpers::pluginPath( 'templates/emails/status-changed.php' ),
 			array(
 				'ticket'     => $ticket,
-				'oldStatus'  => $old_status,
-				'newStatus'  => $new_status,
-			)
-		);
-
-		$this->send(
-			$recipient_email,
-			sprintf( 'Ticket status updated: %s', (string) ( $ticket['ticket_no'] ?? '' ) ),
-			$content
+				'oldStatus'  => TicketStatus::label( $old_status ),
+				'newStatus'  => TicketStatus::label( $new_status ),
+			),
+			$this->buildTokens( $ticket, array(), $old_status, $new_status )
 		);
 	}
 
@@ -203,16 +201,74 @@ class NotificationService {
 			return;
 		}
 
-		$content = $this->renderTemplate(
-			Helpers::pluginPath( 'templates/emails/ticket-created.php' ),
-			array( 'ticket' => $ticket )
-		);
-
-		$this->send(
+		$this->sendTemplateEmail(
 			$recipient,
-			sprintf( 'New helpdesk ticket: %s', (string) ( $ticket['ticket_no'] ?? '' ) ),
-			$content
+			Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT,
+			'New helpdesk ticket: {ticket_no}',
+			Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY,
+			Helpers::pluginPath( 'templates/emails/ticket-created.php' ),
+			array( 'ticket' => $ticket ),
+			$this->buildTokens( $ticket )
 		);
+	}
+
+	/**
+	 * Send email with template overrides from settings.
+	 *
+	 * @param string               $recipient       Recipient email.
+	 * @param string               $subject_option  Subject option key.
+	 * @param string               $default_subject Default subject.
+	 * @param string               $body_option     Body option key.
+	 * @param string               $default_tpl     Default template path.
+	 * @param array<string, mixed> $template_vars   Default template vars.
+	 * @param array<string, string> $tokens         Replacement tokens.
+	 * @return void
+	 */
+	private function sendTemplateEmail( string $recipient, string $subject_option, string $default_subject, string $body_option, string $default_tpl, array $template_vars, array $tokens ): void {
+		$subject = (string) get_site_option( $subject_option, $default_subject );
+		if ( '' === trim( $subject ) ) {
+			$subject = $default_subject;
+		}
+
+		$subject = $this->replaceTokens( $subject, $tokens );
+		$body    = (string) get_site_option( $body_option, '' );
+		if ( '' === trim( $body ) ) {
+			$body = $this->renderTemplate( $default_tpl, $template_vars );
+		} else {
+			$body = $this->replaceTokens( $body, $tokens );
+		}
+
+		$this->send( $recipient, $subject, $body );
+	}
+
+	/**
+	 * @param array<string, mixed> $ticket Ticket data.
+	 * @param array<string, mixed> $message Optional message data.
+	 * @param string               $old_status Optional old status.
+	 * @param string               $new_status Optional new status.
+	 * @return array<string, string>
+	 */
+	private function buildTokens( array $ticket, array $message = array(), string $old_status = '', string $new_status = '' ): array {
+		return array(
+			'{ticket_no}'       => (string) ( $ticket['ticket_no'] ?? '' ),
+			'{ticket_subject}'  => (string) ( $ticket['subject'] ?? '' ),
+			'{ticket_status}'   => TicketStatus::label( (string) ( $ticket['status'] ?? '' ) ),
+			'{old_status}'      => '' !== $old_status ? TicketStatus::label( $old_status ) : '',
+			'{new_status}'      => '' !== $new_status ? TicketStatus::label( $new_status ) : '',
+			'{message_body}'    => (string) ( $message['body'] ?? '' ),
+			'{requester_name}'  => (string) ( $ticket['requester_name'] ?? '' ),
+			'{requester_email}' => (string) ( $ticket['requester_email'] ?? '' ),
+			'{ticket_link}'     => (string) ( $ticket['ticket_link'] ?? '' ),
+		);
+	}
+
+	/**
+	 * @param string               $content Content with tokens.
+	 * @param array<string, string> $tokens Token map.
+	 * @return string
+	 */
+	private function replaceTokens( string $content, array $tokens ): string {
+		return strtr( $content, $tokens );
 	}
 
 	/**

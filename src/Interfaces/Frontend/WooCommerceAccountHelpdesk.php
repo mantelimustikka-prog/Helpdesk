@@ -7,6 +7,7 @@ namespace WPHelpdesk\Interfaces\Frontend;
 
 use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Domain\Message\MessageService;
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Domain\Ticket\TicketRepository;
 use WPHelpdesk\Support\Helpers;
 use WPHelpdesk\Support\RendersAttachmentsTrait;
@@ -199,6 +200,11 @@ class WooCommerceAccountHelpdesk {
 
 		if ( 'request' === $route['view'] ) {
 			$this->handleReplySubmission( $route['ticket_no'] );
+			$this->handleCloseSingleSubmission( $route['ticket_no'] );
+		}
+
+		if ( 'requests' === $route['view'] ) {
+			$this->handleBulkCloseSubmission();
 		}
 
 		$this->hydrateReplyNoticeFromRequest();
@@ -356,6 +362,7 @@ class WooCommerceAccountHelpdesk {
 			)
 		);
 		$attachments = $this->attachment_service->getForTicket( (int) $ticket['id'] );
+		$ticket_status = TicketStatus::toCanonical( (string) ( $ticket['status'] ?? '' ) );
 		?>
 		<div class="hd-account-helpdesk__section">
 			<h3><?php echo esc_html( (string) $ticket['subject'] ); ?></h3>
@@ -364,7 +371,7 @@ class WooCommerceAccountHelpdesk {
 				<?php echo esc_html( (string) $ticket['ticket_no'] ); ?>
 				<br>
 				<strong><?php esc_html_e( 'Status:', 'wp-helpdesk' ); ?></strong>
-				<?php echo esc_html( (string) $ticket['status'] ); ?>
+				<?php echo esc_html( TicketStatus::label( $ticket_status ) ); ?>
 			</p>
 			<p><a href="<?php echo esc_url( $this->buildAccountUrl( 'requests' ) ); ?>">&larr; <?php esc_html_e( 'Back to my requests', 'wp-helpdesk' ); ?></a></p>
 		</div>
@@ -396,6 +403,7 @@ class WooCommerceAccountHelpdesk {
 		<?php endif; ?>
 
 		<div class="hd-account-helpdesk__section hd-reply-section">
+			<?php if ( TicketStatus::CANONICAL_CLOSED !== $ticket_status ) : ?>
 			<h4><?php esc_html_e( 'Send a reply', 'wp-helpdesk' ); ?></h4>
 			<form
 				method="post"
@@ -447,6 +455,14 @@ class WooCommerceAccountHelpdesk {
 					</button>
 				</div>
 			</form>
+			<form method="post" action="<?php echo esc_url( $this->buildAccountUrl( 'request/' . $ticket_no ) ); ?>" style="margin-top:12px;">
+				<?php wp_nonce_field( 'hd_my_account_close', 'hd_my_account_close_nonce' ); ?>
+				<input type="hidden" name="hd_helpdesk_action" value="close_member_ticket">
+				<button type="submit" class="hd-btn hd-btn--secondary"><?php esc_html_e( 'Close Ticket', 'wp-helpdesk' ); ?></button>
+			</form>
+			<?php else : ?>
+				<p><?php esc_html_e( 'This ticket is closed and cannot be replied to.', 'wp-helpdesk' ); ?></p>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -459,9 +475,14 @@ class WooCommerceAccountHelpdesk {
 	 */
 	protected function renderRequestsTable( array $tickets ): void {
 		?>
+		<form method="post" action="<?php echo esc_url( $this->buildAccountUrl( 'requests' ) ); ?>">
+			<?php wp_nonce_field( 'hd_my_account_bulk_close', 'hd_my_account_bulk_close_nonce' ); ?>
+			<input type="hidden" name="hd_helpdesk_action" value="close_member_tickets_bulk">
+			<p><button type="submit" class="hd-btn hd-btn--secondary"><?php esc_html_e( 'Close selected', 'wp-helpdesk' ); ?></button></p>
 		<table class="shop_table shop_table_responsive my_account_orders widefat striped">
 			<thead>
 				<tr>
+					<th><?php esc_html_e( 'Select', 'wp-helpdesk' ); ?></th>
 					<th><?php esc_html_e( 'Request', 'wp-helpdesk' ); ?></th>
 					<th><?php esc_html_e( 'Subject', 'wp-helpdesk' ); ?></th>
 					<th><?php esc_html_e( 'Status', 'wp-helpdesk' ); ?></th>
@@ -471,14 +492,16 @@ class WooCommerceAccountHelpdesk {
 			<tbody>
 				<?php foreach ( $tickets as $ticket ) : ?>
 					<tr>
+						<td><input type="checkbox" name="hd_ticket_nos[]" value="<?php echo esc_attr( (string) $ticket['ticket_no'] ); ?>"></td>
 						<td><a href="<?php echo esc_url( $this->buildAccountUrl( 'request/' . rawurlencode( (string) $ticket['ticket_no'] ) ) ); ?>"><?php echo esc_html( (string) $ticket['ticket_no'] ); ?></a></td>
 						<td><?php echo esc_html( (string) $ticket['subject'] ); ?></td>
-						<td><?php echo esc_html( (string) $ticket['status'] ); ?></td>
+						<td><?php echo esc_html( TicketStatus::label( (string) $ticket['status'] ) ); ?></td>
 						<td><?php echo esc_html( (string) ( $ticket['updated_at'] ?? $ticket['created_at'] ?? '' ) ); ?></td>
 					</tr>
 				<?php endforeach; ?>
 			</tbody>
 		</table>
+		</form>
 		<?php
 	}
 
@@ -556,6 +579,13 @@ class WooCommerceAccountHelpdesk {
 			);
 			return;
 		}
+		if ( TicketStatus::CANONICAL_CLOSED === TicketStatus::toCanonical( (string) ( $ticket['status'] ?? '' ) ) ) {
+			$this->notice = array(
+				'type'    => 'error',
+				'message' => __( 'This ticket is closed and cannot be replied to.', 'wp-helpdesk' ),
+			);
+			return;
+		}
 
 		if ( '' === trim( $this->reply_body_draft ) ) {
 			$this->notice = array(
@@ -608,6 +638,91 @@ class WooCommerceAccountHelpdesk {
 	}
 
 	/**
+	 * Handle closing a single request from detail view.
+	 *
+	 * @param string $ticket_no Ticket number.
+	 * @return void
+	 */
+	protected function handleCloseSingleSubmission( string $ticket_no ): void {
+		if ( 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
+			return;
+		}
+		$action = sanitize_key( (string) ( $_POST['hd_helpdesk_action'] ?? '' ) );
+		if ( 'close_member_ticket' !== $action ) {
+			return;
+		}
+
+		$nonce = sanitize_text_field( (string) ( $_POST['hd_my_account_close_nonce'] ?? '' ) );
+		if ( '' === $nonce || ! wp_verify_nonce( $nonce, 'hd_my_account_close' ) ) {
+			$this->notice = array( 'type' => 'error', 'message' => __( 'Security check failed. Please try again.', 'wp-helpdesk' ) );
+			return;
+		}
+
+		$ticket = $this->getAccessibleTicket( $ticket_no );
+		if ( null === $ticket ) {
+			$this->notice = array( 'type' => 'error', 'message' => __( 'Request not found.', 'wp-helpdesk' ) );
+			return;
+		}
+
+		$this->closeTicketForCustomer( $ticket );
+		$this->redirectToReplyNotice( $ticket_no, 'ticket_closed' );
+	}
+
+	/**
+	 * Handle bulk close requests on My Requests list.
+	 *
+	 * @return void
+	 */
+	protected function handleBulkCloseSubmission(): void {
+		if ( 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
+			return;
+		}
+		$action = sanitize_key( (string) ( $_POST['hd_helpdesk_action'] ?? '' ) );
+		if ( 'close_member_tickets_bulk' !== $action ) {
+			return;
+		}
+		$nonce = sanitize_text_field( (string) ( $_POST['hd_my_account_bulk_close_nonce'] ?? '' ) );
+		if ( '' === $nonce || ! wp_verify_nonce( $nonce, 'hd_my_account_bulk_close' ) ) {
+			$this->notice = array( 'type' => 'error', 'message' => __( 'Security check failed. Please try again.', 'wp-helpdesk' ) );
+			return;
+		}
+
+		$ticket_nos = isset( $_POST['hd_ticket_nos'] ) && is_array( $_POST['hd_ticket_nos'] ) ? array_map( 'sanitize_text_field', wp_unslash( $_POST['hd_ticket_nos'] ) ) : array();
+		foreach ( $ticket_nos as $ticket_no ) {
+			$ticket = $this->getAccessibleTicket( (string) $ticket_no );
+			if ( null !== $ticket ) {
+				$this->closeTicketForCustomer( $ticket );
+			}
+		}
+		$this->notice = array( 'type' => 'success', 'message' => __( 'Selected tickets were closed.', 'wp-helpdesk' ) );
+	}
+
+	/**
+	 * @param array<string, mixed> $ticket Ticket row.
+	 * @return void
+	 */
+	protected function closeTicketForCustomer( array $ticket ): void {
+		global $wpdb;
+		$old_status = TicketStatus::toCanonical( (string) ( $ticket['status'] ?? '' ) );
+		if ( TicketStatus::CANONICAL_CLOSED === $old_status ) {
+			return;
+		}
+		$table = \WPHelpdesk\Infrastructure\Database\Schema::table( \WPHelpdesk\Support\Constants::TABLE_TICKETS );
+		$wpdb->update(
+			$table,
+			array(
+				'status'     => TicketStatus::toStorage( TicketStatus::CANONICAL_CLOSED ),
+				'updated_at' => current_time( 'mysql' ),
+				'closed_at'  => current_time( 'mysql' ),
+			),
+			array( 'id' => (int) $ticket['id'] ),
+			array( '%s', '%s', '%s' ),
+			array( '%d' )
+		);
+		do_action( 'hd_ticket_status_changed', $ticket, $old_status, TicketStatus::CANONICAL_CLOSED );
+	}
+
+	/**
 	 * Hydrate request-detail notices after a redirect.
 	 *
 	 * @return void
@@ -638,6 +753,10 @@ class WooCommerceAccountHelpdesk {
 			'reply_attachment_error' => array(
 				'type'    => 'error',
 				'message' => __( 'Your reply was sent, but one or more attachments could not be uploaded.', 'wp-helpdesk' ),
+			),
+			'ticket_closed'          => array(
+				'type'    => 'success',
+				'message' => __( 'Ticket was closed.', 'wp-helpdesk' ),
 			),
 		);
 

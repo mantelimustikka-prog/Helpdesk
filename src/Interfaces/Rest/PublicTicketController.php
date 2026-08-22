@@ -10,6 +10,7 @@ use WP_REST_Request;
 use WP_REST_Response;
 use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseService;
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Infrastructure\Logger;
 use WPHelpdesk\Infrastructure\Security\RateLimiter;
@@ -1272,6 +1273,9 @@ class PublicTicketController {
 		$ticket = $this->findTicketByTokenAndNo( $ticket_no, $guest_token );
 		if ( null === $ticket ) {
 			return new WP_Error( 'hd_not_found', __( 'Ticket not found.', 'wp-helpdesk' ), array( 'status' => 404 ) );
+		}
+		if ( TicketStatus::CANONICAL_CLOSED === TicketStatus::toCanonical( (string) ( $ticket['status'] ?? '' ) ) ) {
+			return new WP_Error( 'hd_ticket_closed', __( 'This ticket is closed and cannot be replied to.', 'wp-helpdesk' ), array( 'status' => 403 ) );
 		}
 		$ticket['ticket_link'] = $this->buildGuestTicketUrl( (string) $ticket['ticket_no'], $guest_token );
 

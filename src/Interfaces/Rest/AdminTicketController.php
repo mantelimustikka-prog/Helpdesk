@@ -7,6 +7,7 @@ namespace WPHelpdesk\Interfaces\Rest;
 
 use WP_REST_Request;
 use WP_REST_Response;
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
@@ -26,16 +27,14 @@ class AdminTicketController {
 		$page       = max( 1, (int) $request->get_param( 'page' ) );
 		$per_page   = max( 1, min( 100, (int) $request->get_param( 'per_page' ) ?: 20 ) );
 		$offset     = ( $page - 1 ) * $per_page;
-		$status     = sanitize_key( (string) $request->get_param( 'status' ) );
+		$status = TicketStatus::tryCanonical( sanitize_key( (string) $request->get_param( 'status' ) ) );
 
-		if ( '' !== $status ) {
-			$sql = $wpdb->prepare(
-				"SELECT * FROM {$table} WHERE network_id = %d AND status = %s ORDER BY created_at DESC LIMIT %d OFFSET %d",
-				$network_id,
-				$status,
-				$per_page,
-				$offset
-			);
+		if ( null !== $status ) {
+			$statuses      = TicketStatus::storageValuesForCanonical( $status );
+			$placeholders  = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+			$query         = "SELECT * FROM {$table} WHERE network_id = %d AND status IN ({$placeholders}) ORDER BY created_at DESC LIMIT %d OFFSET %d";
+			$prepare_args  = array_merge( array( $network_id ), $statuses, array( $per_page, $offset ) );
+			$sql           = $wpdb->prepare( $query, ...$prepare_args ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		} else {
 			$sql = $wpdb->prepare(
 				"SELECT * FROM {$table} WHERE network_id = %d ORDER BY created_at DESC LIMIT %d OFFSET %d",
@@ -45,7 +44,7 @@ class AdminTicketController {
 			);
 		}
 
-		$tickets = $wpdb->get_results( $sql, ARRAY_A );
+		$tickets = array_map( array( $this, 'normalizeTicketForResponse' ), $wpdb->get_results( $sql, ARRAY_A ) ?: array() );
 
 		return new WP_REST_Response(
 			array(
@@ -69,7 +68,7 @@ class AdminTicketController {
 			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
 		}
 
-		return new WP_REST_Response( $ticket );
+		return new WP_REST_Response( $this->normalizeTicketForResponse( $ticket ) );
 	}
 
 	/**
@@ -161,18 +160,17 @@ class AdminTicketController {
 			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
 		}
 
-		$new_status = sanitize_key( (string) $request->get_param( 'status' ) );
-		$allowed    = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
-
-		if ( ! in_array( $new_status, $allowed, true ) ) {
+		$new_status = TicketStatus::tryCanonical( sanitize_key( (string) $request->get_param( 'status' ) ) );
+		if ( null === $new_status ) {
 			return new WP_REST_Response( array( 'message' => 'Invalid status value.' ), 400 );
 		}
 
 		$table       = Schema::table( Constants::TABLE_TICKETS );
-		$old_status  = (string) $ticket['status'];
-		$closed_at   = 'closed' === $new_status ? current_time( 'mysql', true ) : null;
+		$old_status  = TicketStatus::toCanonical( (string) $ticket['status'] );
+		$storage_new = TicketStatus::toStorage( $new_status );
+		$closed_at   = TicketStatus::CANONICAL_CLOSED === $new_status ? current_time( 'mysql', true ) : null;
 		$update_data = array(
-			'status'     => $new_status,
+			'status'     => $storage_new,
 			'updated_at' => current_time( 'mysql', true ),
 			'closed_at'  => $closed_at,
 		);
@@ -190,9 +188,9 @@ class AdminTicketController {
 		/**
 		 * Fires when a helpdesk ticket status changes.
 		 */
-		do_action( 'hd_ticket_status_changed', $updated, $old_status, $new_status );
+		do_action( 'hd_ticket_status_changed', $this->normalizeTicketForResponse( $updated ?: $ticket ), $old_status, $new_status );
 
-		return new WP_REST_Response( $updated );
+		return new WP_REST_Response( $this->normalizeTicketForResponse( $updated ?: $ticket ) );
 	}
 
 	/**
@@ -254,5 +252,19 @@ class AdminTicketController {
 		);
 
 		return $ticket ?: null;
+	}
+
+	/**
+	 * Normalize ticket status in REST payloads.
+	 *
+	 * @param array<string, mixed>|null $ticket Ticket row.
+	 * @return array<string, mixed>
+	 */
+	protected function normalizeTicketForResponse( ?array $ticket ): array {
+		if ( empty( $ticket ) ) {
+			return array();
+		}
+		$ticket['status'] = TicketStatus::toCanonical( (string) ( $ticket['status'] ?? '' ) );
+		return $ticket;
 	}
 }

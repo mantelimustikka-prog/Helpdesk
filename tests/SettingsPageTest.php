@@ -24,7 +24,7 @@ final class SettingsPageTest extends TestCase {
 			array(
 				'hd_general_ticket_number_start'     => '2000',
 				'hd_general_ticket_number_increment' => '5',
-				'hd_general_default_status'          => 'open',
+				'hd_general_default_status'          => 'new',
 				'hd_general_default_priority'        => 'urgent',
 				'hd_general_allow_guest_tickets'     => '1',
 				'hd_general_require_topic'           => '1',

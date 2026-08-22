@@ -5,13 +5,14 @@
 
 namespace WPHelpdesk\Interfaces\Admin\Pages;
 
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
 
 class SettingsPage {
 	private const SECRET_PLACEHOLDER = '••••••••';
 
-	private const VALID_STATUSES       = array( 'open', 'pending', 'resolved', 'closed' );
+	private const VALID_STATUSES       = array( 'new', 'pending_agent_reply', 'pending_client_reply', 'resolved', 'closed' );
 	private const VALID_PRIORITIES     = array( 'low', 'normal', 'high', 'urgent' );
 	private const VALID_ASSIGN_MODES   = array( 'none', 'round_robin', 'least_open' );
 	private const VALID_TIMEZONE_MODES = array( 'network', 'site', 'utc' );
@@ -48,6 +49,9 @@ class SettingsPage {
 			case 'email-layout':
 				$this->saveEmailLayout();
 				break;
+			case 'email-templates':
+				$this->saveEmailTemplates();
+				break;
 			case 'integrations':
 				$this->saveIntegrations();
 				break;
@@ -69,7 +73,7 @@ class SettingsPage {
 
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
-		if ( 'email-layout' === $tab ) {
+		if ( in_array( $tab, array( 'email-layout', 'email-templates' ), true ) ) {
 			$this->enqueueEditor();
 		}
 
@@ -79,11 +83,14 @@ class SettingsPage {
 			<h1><?php esc_html_e( 'WP Helpdesk Settings', 'wp-helpdesk' ); ?></h1>
 			<nav class="nav-tab-wrapper">
 				<a class="nav-tab <?php echo 'general' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=general' ) ); ?>"><?php esc_html_e( 'General', 'wp-helpdesk' ); ?></a>
+				<a class="nav-tab <?php echo 'email-templates' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=email-templates' ) ); ?>"><?php esc_html_e( 'Email Templates', 'wp-helpdesk' ); ?></a>
 				<a class="nav-tab <?php echo 'email-layout' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=email-layout' ) ); ?>"><?php esc_html_e( 'Email Header & Footer', 'wp-helpdesk' ); ?></a>
 				<a class="nav-tab <?php echo 'integrations' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=integrations' ) ); ?>"><?php esc_html_e( 'Integrations', 'wp-helpdesk' ); ?></a>
 			</nav>
 
-			<?php if ( 'email-layout' === $tab ) : ?>
+			<?php if ( 'email-templates' === $tab ) : ?>
+				<?php $this->renderEmailTemplates(); ?>
+			<?php elseif ( 'email-layout' === $tab ) : ?>
 				<?php $this->renderEmailLayout(); ?>
 			<?php elseif ( 'integrations' === $tab ) : ?>
 				<?php $this->renderIntegrations(); ?>
@@ -132,7 +139,7 @@ class SettingsPage {
 			$errors[] = __( 'Ticket number increment must be between 1 and 10,000.', 'wp-helpdesk' );
 		}
 
-		$status     = $this->sanitizeEnumFromPost( 'hd_general_default_status', self::VALID_STATUSES, 'open', $errors, __( 'Invalid default status value.', 'wp-helpdesk' ) );
+		$status     = $this->sanitizeEnumFromPost( 'hd_general_default_status', self::VALID_STATUSES, TicketStatus::CANONICAL_NEW, $errors, __( 'Invalid default status value.', 'wp-helpdesk' ) );
 		$priority   = $this->sanitizeEnumFromPost( 'hd_general_default_priority', self::VALID_PRIORITIES, 'normal', $errors, __( 'Invalid default priority value.', 'wp-helpdesk' ) );
 		$assign     = $this->sanitizeEnumFromPost( 'hd_general_auto_assign_mode', self::VALID_ASSIGN_MODES, 'none', $errors, __( 'Invalid auto-assign mode.', 'wp-helpdesk' ) );
 		$timezone   = $this->sanitizeEnumFromPost( 'hd_general_timezone_mode', self::VALID_TIMEZONE_MODES, 'network', $errors, __( 'Invalid timezone mode.', 'wp-helpdesk' ) );
@@ -143,6 +150,14 @@ class SettingsPage {
 		$retention_days = isset( $_POST['hd_data_retention_days'] ) ? (int) wp_unslash( $_POST['hd_data_retention_days'] ) : 365;
 		if ( $retention_days < 1 ) {
 			$errors[] = __( 'Retention days must be at least 1.', 'wp-helpdesk' );
+		}
+		$auto_resolve_days = isset( $_POST['hd_general_auto_resolve_days'] ) ? (int) wp_unslash( $_POST['hd_general_auto_resolve_days'] ) : 7;
+		$auto_close_days   = isset( $_POST['hd_general_auto_close_days'] ) ? (int) wp_unslash( $_POST['hd_general_auto_close_days'] ) : 7;
+		if ( $auto_resolve_days < 1 ) {
+			$errors[] = __( 'Auto-resolve days must be at least 1.', 'wp-helpdesk' );
+		}
+		if ( $auto_close_days < 1 ) {
+			$errors[] = __( 'Auto-close days must be at least 1.', 'wp-helpdesk' );
 		}
 
 		if ( ! empty( $errors ) ) {
@@ -163,6 +178,8 @@ class SettingsPage {
 		update_site_option( Constants::OPTION_GENERAL_TIMEZONE_MODE, $timezone );
 		update_site_option( Constants::OPTION_GENERAL_DATE_FORMAT, $date_fmt );
 		update_site_option( Constants::OPTION_GENERAL_RETENTION_DAYS, $retention_days );
+		update_site_option( Constants::OPTION_GENERAL_AUTO_RESOLVE_DAYS, $auto_resolve_days );
+		update_site_option( Constants::OPTION_GENERAL_AUTO_CLOSE_DAYS, $auto_close_days );
 
 		update_site_option( Constants::OPTION_TICKET_START, $start );
 		$current_counter = get_site_option( Constants::OPTION_TICKET_COUNTER, false );
@@ -261,7 +278,7 @@ class SettingsPage {
 	private function renderGeneral(): void {
 		$start       = (int) get_site_option( Constants::OPTION_GENERAL_TICKET_NUMBER_START, $this->getTicketStartDefault() );
 		$increment   = (int) get_site_option( Constants::OPTION_GENERAL_TICKET_NUMBER_INC, 1 );
-		$def_status  = (string) get_site_option( Constants::OPTION_GENERAL_DEFAULT_STATUS, 'open' );
+		$def_status  = (string) get_site_option( Constants::OPTION_GENERAL_DEFAULT_STATUS, TicketStatus::CANONICAL_NEW );
 		$def_prio    = (string) get_site_option( Constants::OPTION_GENERAL_DEFAULT_PRIORITY, 'normal' );
 		$allow_guest = (int) get_site_option( Constants::OPTION_GENERAL_ALLOW_GUEST, 1 );
 		$req_topic   = (int) get_site_option( Constants::OPTION_GENERAL_REQUIRE_TOPIC, 1 );
@@ -272,8 +289,16 @@ class SettingsPage {
 		$counter     = (int) get_site_option( Constants::OPTION_TICKET_COUNTER, $start );
 		$next_ticket = max( $counter, $start );
 		$retention_days = (int) get_site_option( Constants::OPTION_GENERAL_RETENTION_DAYS, 365 );
+		$auto_resolve_days = (int) get_site_option( Constants::OPTION_GENERAL_AUTO_RESOLVE_DAYS, 7 );
+		$auto_close_days   = (int) get_site_option( Constants::OPTION_GENERAL_AUTO_CLOSE_DAYS, 7 );
 		if ( $retention_days < 1 ) {
 			$retention_days = 365;
+		}
+		if ( $auto_resolve_days < 1 ) {
+			$auto_resolve_days = 7;
+		}
+		if ( $auto_close_days < 1 ) {
+			$auto_close_days = 7;
 		}
 		?>
 		<form method="post">
@@ -287,7 +312,7 @@ class SettingsPage {
 					<td>
 						<select id="hd_general_default_status" name="hd_general_default_status">
 							<?php foreach ( self::VALID_STATUSES as $status ) : ?>
-								<option value="<?php echo esc_attr( $status ); ?>" <?php selected( $def_status, $status ); ?>><?php echo esc_html( ucfirst( $status ) ); ?></option>
+								<option value="<?php echo esc_attr( $status ); ?>" <?php selected( $def_status, $status ); ?>><?php echo esc_html( TicketStatus::label( $status ) ); ?></option>
 							<?php endforeach; ?>
 						</select>
 					</td>
@@ -386,6 +411,22 @@ class SettingsPage {
 				</tr>
 			</table>
 
+			<h2><?php esc_html_e( 'Ticket Lifecycle Automation', 'wp-helpdesk' ); ?></h2>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="hd_general_auto_resolve_days"><?php esc_html_e( 'Days after which auto-change to Resolved', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input type="number" id="hd_general_auto_resolve_days" name="hd_general_auto_resolve_days" value="<?php echo esc_attr( (string) $auto_resolve_days ); ?>" min="1" class="small-text">
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="hd_general_auto_close_days"><?php esc_html_e( 'Days after which auto-change to Closed', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input type="number" id="hd_general_auto_close_days" name="hd_general_auto_close_days" value="<?php echo esc_attr( (string) $auto_close_days ); ?>" min="1" class="small-text">
+					</td>
+				</tr>
+			</table>
+
 			<h2><?php esc_html_e( 'Data Retention', 'wp-helpdesk' ); ?></h2>
 			<table class="form-table" role="presentation">
 				<tr>
@@ -397,6 +438,59 @@ class SettingsPage {
 				</tr>
 			</table>
 
+			<?php submit_button( __( 'Save Settings', 'wp-helpdesk' ) ); ?>
+		</form>
+		<?php
+	}
+
+	/**
+	 * Save Email Templates tab.
+	 *
+	 * @return void
+	 */
+	private function saveEmailTemplates(): void {
+		$templates = $this->getEmailTemplateFields();
+		foreach ( $templates as $template ) {
+			$subject = isset( $_POST[ $template['subject_field'] ] ) ? sanitize_text_field( wp_unslash( $_POST[ $template['subject_field'] ] ) ) : '';
+			$body    = isset( $_POST[ $template['body_field'] ] ) ? Helpers::sanitizeRichText( wp_unslash( $_POST[ $template['body_field'] ] ) ) : '';
+			update_site_option( $template['subject_option'], $subject );
+			update_site_option( $template['body_option'], $body );
+		}
+
+		add_settings_error(
+			'wp_helpdesk_settings',
+			'wp_helpdesk_settings_saved',
+			__( 'Email template settings saved.', 'wp-helpdesk' ),
+			'updated'
+		);
+	}
+
+	/**
+	 * Render Email Templates tab.
+	 *
+	 * @return void
+	 */
+	private function renderEmailTemplates(): void {
+		$templates = $this->getEmailTemplateFields();
+		?>
+		<form method="post">
+			<?php wp_nonce_field( 'hd_settings_save', 'hd_settings_nonce' ); ?>
+			<input type="hidden" name="hd_current_tab" value="email-templates">
+			<?php foreach ( $templates as $template ) : ?>
+				<h2><?php echo esc_html( $template['label'] ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="<?php echo esc_attr( $template['subject_field'] ); ?>"><?php esc_html_e( 'Subject', 'wp-helpdesk' ); ?></label></th>
+						<td><input type="text" id="<?php echo esc_attr( $template['subject_field'] ); ?>" name="<?php echo esc_attr( $template['subject_field'] ); ?>" class="regular-text" value="<?php echo esc_attr( (string) get_site_option( $template['subject_option'], $template['default_subject'] ) ); ?>"></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="<?php echo esc_attr( $template['body_field'] ); ?>"><?php esc_html_e( 'HTML Body', 'wp-helpdesk' ); ?></label></th>
+						<td>
+							<textarea id="<?php echo esc_attr( $template['body_field'] ); ?>" name="<?php echo esc_attr( $template['body_field'] ); ?>" rows="8" class="large-text code"><?php echo esc_textarea( (string) get_site_option( $template['body_option'], '' ) ); ?></textarea>
+						</td>
+					</tr>
+				</table>
+			<?php endforeach; ?>
 			<?php submit_button( __( 'Save Settings', 'wp-helpdesk' ) ); ?>
 		</form>
 		<?php
@@ -647,7 +741,7 @@ class SettingsPage {
 
 			wp_add_inline_script(
 				'wp-helpdesk-ckeditor',
-				"document.addEventListener('DOMContentLoaded', function () { if (window.CKEDITOR) { CKEDITOR.replace('hd_email_header'); CKEDITOR.replace('hd_email_footer'); } });"
+				"document.addEventListener('DOMContentLoaded', function () { if (!window.CKEDITOR) { return; } ['hd_email_header','hd_email_footer','hd_email_tpl_ticket_created_body','hd_email_tpl_ticket_reply_body','hd_email_tpl_status_changed_body','hd_email_tpl_ticket_created_admin_body'].forEach(function (id) { if (document.getElementById(id)) { CKEDITOR.replace(id); } }); });"
 			);
 		} else {
 			add_settings_error(
@@ -783,5 +877,45 @@ class SettingsPage {
 		}
 
 		return implode( "\n", array_unique( $clean ) );
+	}
+
+	/**
+	 * @return array<int, array<string, string>>
+	 */
+	private function getEmailTemplateFields(): array {
+		return array(
+			array(
+				'label'           => __( 'Ticket Created (Client)', 'wp-helpdesk' ),
+				'subject_field'   => 'hd_email_tpl_ticket_created_subject',
+				'body_field'      => 'hd_email_tpl_ticket_created_body',
+				'subject_option'  => Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_SUBJECT,
+				'body_option'     => Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_BODY,
+				'default_subject' => 'Ticket created: {ticket_no}',
+			),
+			array(
+				'label'           => __( 'Ticket Reply (Client)', 'wp-helpdesk' ),
+				'subject_field'   => 'hd_email_tpl_ticket_reply_subject',
+				'body_field'      => 'hd_email_tpl_ticket_reply_body',
+				'subject_option'  => Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_SUBJECT,
+				'body_option'     => Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_BODY,
+				'default_subject' => 'Ticket reply: {ticket_no}',
+			),
+			array(
+				'label'           => __( 'Ticket Status Changed (Client)', 'wp-helpdesk' ),
+				'subject_field'   => 'hd_email_tpl_status_changed_subject',
+				'body_field'      => 'hd_email_tpl_status_changed_body',
+				'subject_option'  => Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_SUBJECT,
+				'body_option'     => Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_BODY,
+				'default_subject' => 'Ticket status updated: {ticket_no}',
+			),
+			array(
+				'label'           => __( 'Ticket Created (Admin)', 'wp-helpdesk' ),
+				'subject_field'   => 'hd_email_tpl_ticket_created_admin_subject',
+				'body_field'      => 'hd_email_tpl_ticket_created_admin_body',
+				'subject_option'  => Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT,
+				'body_option'     => Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY,
+				'default_subject' => 'New helpdesk ticket: {ticket_no}',
+			),
+		);
 	}
 }

@@ -23,6 +23,8 @@ class Constants {
 	public const OPTION_GENERAL_TICKET_NUMBER_INC    = 'hd_general_ticket_number_increment';
 	public const OPTION_GENERAL_DEFAULT_STATUS       = 'hd_general_default_status';
 	public const OPTION_GENERAL_DEFAULT_PRIORITY     = 'hd_general_default_priority';
+	public const OPTION_GENERAL_AUTO_RESOLVE_DAYS    = 'hd_general_auto_resolve_days';
+	public const OPTION_GENERAL_AUTO_CLOSE_DAYS      = 'hd_general_auto_close_days';
 	public const OPTION_GENERAL_ALLOW_GUEST          = 'hd_general_allow_guest_tickets';
 	public const OPTION_GENERAL_REQUIRE_TOPIC        = 'hd_general_require_topic';
 	public const OPTION_GENERAL_AUTO_ASSIGN_MODE     = 'hd_general_auto_assign_mode';
@@ -50,6 +52,16 @@ class Constants {
 	public const OPTION_API_RATE_LIMIT                 = 'hd_api_rate_limit_per_minute';
 	public const OPTION_API_LOG_REQUESTS               = 'hd_api_log_requests';
 	public const OPTION_API_ALLOWED_ORIGINS            = 'hd_api_allowed_origins';
+
+	// Email template option keys.
+	public const OPTION_EMAIL_TEMPLATE_TICKET_CREATED_SUBJECT       = 'hd_email_tpl_ticket_created_subject';
+	public const OPTION_EMAIL_TEMPLATE_TICKET_CREATED_BODY          = 'hd_email_tpl_ticket_created_body';
+	public const OPTION_EMAIL_TEMPLATE_TICKET_REPLY_SUBJECT         = 'hd_email_tpl_ticket_reply_subject';
+	public const OPTION_EMAIL_TEMPLATE_TICKET_REPLY_BODY            = 'hd_email_tpl_ticket_reply_body';
+	public const OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_SUBJECT       = 'hd_email_tpl_status_changed_subject';
+	public const OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_BODY          = 'hd_email_tpl_status_changed_body';
+	public const OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT = 'hd_email_tpl_ticket_created_admin_subject';
+	public const OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY    = 'hd_email_tpl_ticket_created_admin_body';
 
 	// Frontend page option keys (per-site, stored in blog options).
 	public const OPTION_PAGE_INDEX      = 'hd_page_id_index';
@@ -91,6 +103,8 @@ class Constants {
 			self::OPTION_GENERAL_TICKET_NUMBER_INC,
 			self::OPTION_GENERAL_DEFAULT_STATUS,
 			self::OPTION_GENERAL_DEFAULT_PRIORITY,
+			self::OPTION_GENERAL_AUTO_RESOLVE_DAYS,
+			self::OPTION_GENERAL_AUTO_CLOSE_DAYS,
 			self::OPTION_GENERAL_ALLOW_GUEST,
 			self::OPTION_GENERAL_REQUIRE_TOPIC,
 			self::OPTION_GENERAL_AUTO_ASSIGN_MODE,
@@ -115,6 +129,14 @@ class Constants {
 			self::OPTION_API_RATE_LIMIT,
 			self::OPTION_API_LOG_REQUESTS,
 			self::OPTION_API_ALLOWED_ORIGINS,
+			self::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_SUBJECT,
+			self::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_BODY,
+			self::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_SUBJECT,
+			self::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_BODY,
+			self::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_SUBJECT,
+			self::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_BODY,
+			self::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT,
+			self::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY,
 		);
 	}
 

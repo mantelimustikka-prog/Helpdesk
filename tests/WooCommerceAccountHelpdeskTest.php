@@ -275,7 +275,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		self::assertStringContainsString( 'Need billing help', $output );
-		self::assertStringContainsString( 'in_progress', $output );
+		self::assertStringContainsString( 'Pending Agent reply', $output );
 		self::assertStringContainsString( '/helpdesk/request/HD-10011/', $output );
 	}
 
@@ -303,7 +303,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		self::assertStringContainsString( 'Need billing help', $output );
-		self::assertStringContainsString( 'waiting_customer', $output );
+		self::assertStringContainsString( 'Pending Client reply', $output );
 		self::assertStringContainsString( 'Support', $output );
 		self::assertStringContainsString( 'Send a reply', $output );
 	}

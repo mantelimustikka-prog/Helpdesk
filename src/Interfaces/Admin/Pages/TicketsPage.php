@@ -6,6 +6,7 @@
 namespace WPHelpdesk\Interfaces\Admin\Pages;
 
 use WPHelpdesk\Domain\Attachment\AttachmentService;
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
@@ -36,7 +37,7 @@ class TicketsPage {
 		$tickets            = $this->listTickets( 50, $status_filter );
 		$selected_ticket    = $selected_ticket_id > 0 ? $this->findTicket( $selected_ticket_id ) : null;
 		$messages           = $selected_ticket ? $this->getMessages( (int) $selected_ticket['id'] ) : array();
-		$status_options     = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
+		$status_options     = TicketStatus::canonicalValues();
 		?>
 		<div class="wrap hd-admin-wrap">
 			<h1><?php esc_html_e( 'Ticket Queue', 'wp-helpdesk' ); ?></h1>
@@ -56,7 +57,7 @@ class TicketsPage {
 					<option value=""><?php esc_html_e( 'All', 'wp-helpdesk' ); ?></option>
 					<?php foreach ( $status_options as $status_opt ) : ?>
 						<option value="<?php echo esc_attr( $status_opt ); ?>" <?php selected( $status_filter, $status_opt ); ?>>
-							<?php echo esc_html( $status_opt ); ?>
+							<?php echo esc_html( TicketStatus::label( $status_opt ) ); ?>
 						</option>
 					<?php endforeach; ?>
 				</select>
@@ -70,10 +71,18 @@ class TicketsPage {
 				<?php else : ?>
 					<form method="post" id="hd-bulk-form">
 						<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
-						<input type="hidden" name="hd_ticket_action" value="bulk_delete">
 						<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
 							<div style="margin-bottom:8px;">
-								<button type="submit" class="button button-secondary" onclick="return confirm('<?php esc_attr_e( 'Delete selected tickets and all their attachments?', 'wp-helpdesk' ); ?>');">
+								<select name="hd_bulk_status" style="margin-right:8px;">
+									<option value=""><?php esc_html_e( 'Select status…', 'wp-helpdesk' ); ?></option>
+									<?php foreach ( $status_options as $status_option ) : ?>
+										<option value="<?php echo esc_attr( $status_option ); ?>"><?php echo esc_html( TicketStatus::label( $status_option ) ); ?></option>
+									<?php endforeach; ?>
+								</select>
+								<button type="submit" class="button button-secondary" name="hd_ticket_action" value="bulk_status">
+									<?php esc_html_e( 'Change Status', 'wp-helpdesk' ); ?>
+								</button>
+								<button type="submit" class="button button-secondary" name="hd_ticket_action" value="bulk_delete" onclick="return confirm('<?php esc_attr_e( 'Delete selected tickets and all their attachments?', 'wp-helpdesk' ); ?>');">
 									<?php esc_html_e( 'Delete Selected', 'wp-helpdesk' ); ?>
 								</button>
 							</div>
@@ -108,7 +117,7 @@ class TicketsPage {
 										</td>
 										<td><?php echo esc_html( (string) $ticket['subject'] ); ?></td>
 										<td><?php echo esc_html( (string) $ticket['requester_name'] . ' (' . (string) $ticket['requester_email'] . ')' ); ?></td>
-										<td><?php echo esc_html( (string) $ticket['status'] ); ?></td>
+										<td><?php echo esc_html( TicketStatus::label( (string) $ticket['status'] ) ); ?></td>
 										<td><?php echo esc_html( (string) $ticket['updated_at'] ); ?></td>
 									</tr>
 								<?php endforeach; ?>
@@ -138,7 +147,7 @@ class TicketsPage {
 					</h2>
 					<p><strong><?php esc_html_e( 'Subject:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['subject'] ); ?></p>
 					<p><strong><?php esc_html_e( 'Phone:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['requester_phone'] ); ?></p>
-					<p><strong><?php esc_html_e( 'Status:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['status'] ); ?></p>
+					<p><strong><?php esc_html_e( 'Status:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( TicketStatus::label( (string) $selected_ticket['status'] ) ); ?></p>
 					<?php $this->renderOrderRelationRow( $selected_ticket ); ?>
 
 					<h3><?php esc_html_e( 'Thread', 'wp-helpdesk' ); ?></h3>
@@ -205,8 +214,8 @@ class TicketsPage {
 								<label for="hd-status-select"><strong><?php esc_html_e( 'Change status', 'wp-helpdesk' ); ?></strong></label><br>
 								<select id="hd-status-select" name="hd_status" required>
 									<?php foreach ( $status_options as $status_option ) : ?>
-										<option value="<?php echo esc_attr( $status_option ); ?>" <?php selected( $selected_ticket['status'], $status_option ); ?>>
-											<?php echo esc_html( $status_option ); ?>
+										<option value="<?php echo esc_attr( $status_option ); ?>" <?php selected( TicketStatus::toCanonical( (string) $selected_ticket['status'] ), $status_option ); ?>>
+											<?php echo esc_html( TicketStatus::label( $status_option ) ); ?>
 										</option>
 									<?php endforeach; ?>
 								</select>
@@ -287,6 +296,10 @@ class TicketsPage {
 			$this->handleBulkDelete();
 			return;
 		}
+		if ( 'bulk_status' === $action ) {
+			$this->handleBulkStatus();
+			return;
+		}
 
 		if ( $ticket_id <= 0 ) {
 			return;
@@ -323,6 +336,43 @@ class TicketsPage {
 		$ticket_service = $this->getTicketService();
 		foreach ( $ticket_ids as $id ) {
 			$ticket_service->deleteTicket( $id );
+		}
+
+		$this->redirectTo( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+	}
+
+	/**
+	 * Handle bulk status change of selected tickets.
+	 *
+	 * @return void
+	 */
+	protected function handleBulkStatus(): void {
+		if ( ! current_user_can( 'hd_manage_tickets' ) ) {
+			wp_die( esc_html__( 'You do not have permission to change ticket status.', 'wp-helpdesk' ) );
+		}
+
+		$raw_ids = isset( $_POST['hd_ticket_ids'] ) && is_array( $_POST['hd_ticket_ids'] )
+			? $_POST['hd_ticket_ids']
+			: array();
+		$ticket_ids = array_filter( array_map( 'intval', $raw_ids ) );
+		$status     = TicketStatus::tryCanonical( isset( $_POST['hd_bulk_status'] ) ? sanitize_key( wp_unslash( $_POST['hd_bulk_status'] ) ) : '' );
+
+		if ( empty( $ticket_ids ) || null === $status ) {
+			$this->redirectTo( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+			return;
+		}
+
+		$ticket_service = $this->getTicketService();
+		foreach ( $ticket_ids as $ticket_id ) {
+			$ticket = $this->findTicket( $ticket_id );
+			if ( ! $ticket ) {
+				continue;
+			}
+
+			$ticket_service->updateTicket( $ticket_id, array( 'status' => $status ) );
+			$updated_ticket           = $ticket;
+			$updated_ticket['status'] = TicketStatus::toStorage( $status );
+			do_action( 'hd_ticket_status_changed', $updated_ticket, TicketStatus::toCanonical( (string) $ticket['status'] ), $status );
 		}
 
 		$this->redirectTo( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
@@ -447,20 +497,20 @@ class TicketsPage {
 			return;
 		}
 
-		$new_status = isset( $_POST['hd_status'] ) ? sanitize_key( wp_unslash( $_POST['hd_status'] ) ) : '';
-		$allowed = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
-		if ( ! in_array( $new_status, $allowed, true ) ) {
+		$new_status = TicketStatus::tryCanonical( isset( $_POST['hd_status'] ) ? sanitize_key( wp_unslash( $_POST['hd_status'] ) ) : '' );
+		if ( null === $new_status ) {
 			return;
 		}
 
 		global $wpdb;
 		$table = Schema::table( Constants::TABLE_TICKETS );
+		$storage_status = TicketStatus::toStorage( $new_status );
 		$wpdb->update(
 			$table,
 			array(
-				'status' => $new_status,
+				'status' => $storage_status,
 				'updated_at' => current_time( 'mysql' ),
-				'closed_at' => 'closed' === $new_status ? current_time( 'mysql' ) : null,
+				'closed_at' => TicketStatus::CANONICAL_CLOSED === $new_status ? current_time( 'mysql' ) : null,
 			),
 			array( 'id' => $ticket_id ),
 			array( '%s', '%s', '%s' ),
@@ -468,7 +518,7 @@ class TicketsPage {
 		);
 
 		$updated_ticket = $this->findTicket( $ticket_id );
-		do_action( 'hd_ticket_status_changed', $updated_ticket ?: $ticket, (string) $ticket['status'], $new_status );
+		do_action( 'hd_ticket_status_changed', $updated_ticket ?: $ticket, TicketStatus::toCanonical( (string) $ticket['status'] ), $new_status );
 
 		wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . $ticket_id ) );
 		exit;
@@ -559,14 +609,20 @@ class TicketsPage {
 		global $wpdb;
 		$table      = Schema::table( Constants::TABLE_TICKETS );
 		$network_id = Helpers::getNetworkId();
-		$allowed    = array( 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' );
+		$allowed    = TicketStatus::canonicalValues();
 
 		$where  = 'WHERE network_id = %d';
 		$params = array( $network_id );
 
 		if ( '' !== $status_filter && in_array( $status_filter, $allowed, true ) ) {
-			$where   .= ' AND status = %s';
-			$params[] = $status_filter;
+			$storage_statuses = TicketStatus::storageValuesForCanonical( $status_filter );
+			if ( 1 === count( $storage_statuses ) ) {
+				$where   .= ' AND status = %s';
+				$params[] = $storage_statuses[0];
+			} else {
+				$where   .= ' AND status IN (' . implode( ',', array_fill( 0, count( $storage_statuses ), '%s' ) ) . ')';
+				$params   = array_merge( $params, $storage_statuses );
+			}
 		}
 
 		$params[] = max( 1, $limit );
