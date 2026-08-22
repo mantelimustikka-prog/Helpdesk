@@ -7,6 +7,7 @@ namespace WPHelpdesk\Bootstrap;
 
 use WPHelpdesk\Infrastructure\Database\Migrator;
 use WPHelpdesk\Infrastructure\Security\Capabilities;
+use WPHelpdesk\Domain\Notification\EmailTemplateDefaults;
 use WPHelpdesk\Domain\SLA\SlaService;
 use WPHelpdesk\Domain\Ticket\TicketLifecycleService;
 use WPHelpdesk\Domain\Privacy\RetentionService;
@@ -36,6 +37,9 @@ class Activator {
 		if ( false === get_site_option( Constants::OPTION_DB_VERSION, false ) ) {
 			update_site_option( Constants::OPTION_DB_VERSION, HD_VERSION );
 		}
+
+		// Seed email template settings from built-in defaults (only for empty values).
+		EmailTemplateDefaults::seedIfEmpty();
 
 		if ( ! $network_wide && is_multisite() ) {
 			update_site_option( 'hd_last_non_network_activation', gmdate( 'Y-m-d H:i:s' ) );
