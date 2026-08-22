@@ -30,6 +30,8 @@ final class HelpdeskPageTest extends TestCase {
 		self::assertStringContainsString( '/helpdesk/requests/', $output );
 		self::assertStringContainsString( 'New Request', $output );
 		self::assertStringContainsString( 'My Requests', $output );
+		self::assertStringContainsString( '>Home<', $output );
+		self::assertStringContainsString( 'href="https://example.test/"', $output );
 		self::assertStringNotContainsString( 'wp-login.php?redirect_to=', $output );
 	}
 
@@ -46,6 +48,8 @@ final class HelpdeskPageTest extends TestCase {
 		self::assertStringContainsString( 'Sign in', $output );
 		self::assertStringContainsString( 'wp-login.php?redirect_to=', $output );
 		self::assertStringContainsString( rawurlencode( 'https://example.test/helpdesk/member/new/' ), $output );
+		self::assertStringContainsString( '>Home<', $output );
+		self::assertStringContainsString( 'href="https://example.test/"', $output );
 	}
 
 	public function testRenderHidesGuestSubmitWhenGuestTicketsDisabled(): void {

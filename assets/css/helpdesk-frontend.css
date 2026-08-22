@@ -83,23 +83,25 @@
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 14px;
-	margin: 32px auto 0;
-	max-width: 360px;
+	gap: 16px;
+	margin: 52px auto 0;
+	max-width: 420px;
 }
 
 .hd-nav-menu__item {
 	display: block;
 	width: 100%;
-	padding: 16px 28px;
-	font-size: 1.15rem;
+	padding: 18px 30px;
+	font-size: 1.5rem;
+	line-height: 1.2;
 	font-weight: 600;
 	text-align: center;
 	text-decoration: none;
 	background: #f6f7f7;
 	color: #1d2327;
 	border: 1px solid #dcdcde;
-	border-radius: 10px;
+	border-radius: 12px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 	transition: background 0.15s ease, border-color 0.15s ease;
 }
 
