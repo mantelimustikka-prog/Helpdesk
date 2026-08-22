@@ -85,6 +85,11 @@ class HelpdeskPage {
 			}
 		}
 
+		$links[] = array(
+			'url'   => home_url( '/' ),
+			'label' => __( 'Home', 'wp-helpdesk' ),
+		);
+
 		return $links;
 	}
 
