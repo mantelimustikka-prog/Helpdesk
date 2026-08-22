@@ -56,6 +56,9 @@ class SettingsPage {
 			case 'integrations':
 				$this->saveIntegrations();
 				break;
+			case 'appearance':
+				$this->saveAppearance();
+				break;
 			case 'general':
 				$this->saveGeneral();
 				break;
@@ -84,6 +87,7 @@ class SettingsPage {
 			<h1><?php esc_html_e( 'WP Helpdesk Settings', 'wp-helpdesk' ); ?></h1>
 			<nav class="nav-tab-wrapper">
 				<a class="nav-tab <?php echo 'general' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=general' ) ); ?>"><?php esc_html_e( 'General', 'wp-helpdesk' ); ?></a>
+				<a class="nav-tab <?php echo 'appearance' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=appearance' ) ); ?>"><?php esc_html_e( 'Appearance', 'wp-helpdesk' ); ?></a>
 				<a class="nav-tab <?php echo 'email-templates' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=email-templates' ) ); ?>"><?php esc_html_e( 'Email Templates', 'wp-helpdesk' ); ?></a>
 				<a class="nav-tab <?php echo 'email-layout' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=email-layout' ) ); ?>"><?php esc_html_e( 'Email Header & Footer', 'wp-helpdesk' ); ?></a>
 				<a class="nav-tab <?php echo 'integrations' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=integrations' ) ); ?>"><?php esc_html_e( 'Integrations', 'wp-helpdesk' ); ?></a>
@@ -95,6 +99,8 @@ class SettingsPage {
 				<?php $this->renderEmailLayout(); ?>
 			<?php elseif ( 'integrations' === $tab ) : ?>
 				<?php $this->renderIntegrations(); ?>
+			<?php elseif ( 'appearance' === $tab ) : ?>
+				<?php $this->renderAppearance(); ?>
 			<?php else : ?>
 				<?php $this->renderGeneral(); ?>
 			<?php endif; ?>
@@ -269,6 +275,73 @@ class SettingsPage {
 			__( 'Integration settings saved.', 'wp-helpdesk' ),
 			'updated'
 		);
+	}
+
+	/**
+	 * Save Appearance tab options.
+	 *
+	 * @return void
+	 */
+	private function saveAppearance(): void {
+		$admin_color  = sanitize_hex_color( (string) ( $_POST['hd_appearance_admin_reply_color'] ?? '' ) );
+		$client_color = sanitize_hex_color( (string) ( $_POST['hd_appearance_client_reply_color'] ?? '' ) );
+
+		update_site_option( Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR, $admin_color ?: '' );
+		update_site_option( Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR, $client_color ?: '' );
+
+		add_settings_error(
+			'wp_helpdesk_settings',
+			'wp_helpdesk_settings_saved',
+			__( 'Appearance settings saved.', 'wp-helpdesk' ),
+			'updated'
+		);
+	}
+
+	/**
+	 * Render the Appearance settings tab.
+	 *
+	 * @return void
+	 */
+	private function renderAppearance(): void {
+		$admin_color  = (string) get_site_option( Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR, '' );
+		$client_color = (string) get_site_option( Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR, '' );
+		?>
+		<form method="post">
+			<?php wp_nonce_field( 'hd_settings_save', 'hd_settings_nonce' ); ?>
+			<input type="hidden" name="hd_current_tab" value="appearance">
+
+			<h2><?php esc_html_e( 'Reply Text Colors', 'wp-helpdesk' ); ?></h2>
+			<p class="description"><?php esc_html_e( 'Customize the text color used to display replies in the ticket thread. Leave blank to use the theme default.', 'wp-helpdesk' ); ?></p>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="hd_appearance_admin_reply_color"><?php esc_html_e( 'Admin Reply Text Color', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input
+							type="color"
+							id="hd_appearance_admin_reply_color"
+							name="hd_appearance_admin_reply_color"
+							value="<?php echo esc_attr( $admin_color ?: '#000000' ); ?>"
+						>
+						<p class="description"><?php esc_html_e( 'Text color for agent/admin reply messages.', 'wp-helpdesk' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="hd_appearance_client_reply_color"><?php esc_html_e( 'Client Reply Text Color', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input
+							type="color"
+							id="hd_appearance_client_reply_color"
+							name="hd_appearance_client_reply_color"
+							value="<?php echo esc_attr( $client_color ?: '#000000' ); ?>"
+						>
+						<p class="description"><?php esc_html_e( 'Text color for customer/client reply messages.', 'wp-helpdesk' ); ?></p>
+					</td>
+				</tr>
+			</table>
+
+			<?php submit_button( __( 'Save Appearance Settings', 'wp-helpdesk' ) ); ?>
+		</form>
+		<?php
 	}
 
 	/**

@@ -174,6 +174,73 @@ final class SettingsPageTest extends TestCase {
 		self::assertStringContainsString( 'name="hd_general_ticket_number_start"', $output );
 	}
 
+	public function testAppearanceTabIsRenderedInNavigation(): void {
+		$_GET['tab'] = 'general';
+
+		ob_start();
+		$this->page->render();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'page=wp-helpdesk-settings&tab=appearance', $output );
+		self::assertStringContainsString( 'Appearance', $output );
+	}
+
+	public function testAppearanceTabRendersColorFields(): void {
+		$_GET['tab'] = 'appearance';
+
+		ob_start();
+		$this->page->render();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'name="hd_appearance_admin_reply_color"', $output );
+		self::assertStringContainsString( 'name="hd_appearance_client_reply_color"', $output );
+		self::assertStringContainsString( 'hd_current_tab" value="appearance"', $output );
+	}
+
+	public function testAppearanceSavePersistsValidHexColors(): void {
+		$this->submit(
+			'appearance',
+			array(
+				'hd_appearance_admin_reply_color'  => '#1a2b3c',
+				'hd_appearance_client_reply_color' => '#aabbcc',
+			)
+		);
+
+		self::assertSame( '#1a2b3c', $GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR ] );
+		self::assertSame( '#aabbcc', $GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR ] );
+		self::assertSame( 'Appearance settings saved.', $GLOBALS['wp_settings_errors'][0]['message'] );
+	}
+
+	public function testAppearanceSaveRejectsInvalidHexColors(): void {
+		$this->submit(
+			'appearance',
+			array(
+				'hd_appearance_admin_reply_color'  => 'not-a-color',
+				'hd_appearance_client_reply_color' => 'red',
+			)
+		);
+
+		// Invalid colors are stored as empty strings (sanitize_hex_color returns null for bad input).
+		self::assertSame( '', $GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR ] );
+		self::assertSame( '', $GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR ] );
+	}
+
+	public function testAppearanceSavePreservesExistingColorWhenBlankSubmitted(): void {
+		$GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR ] = '#ffffff';
+
+		$this->submit(
+			'appearance',
+			array(
+				'hd_appearance_admin_reply_color'  => '',
+				'hd_appearance_client_reply_color' => '#000000',
+			)
+		);
+
+		// Blank submission clears the stored value.
+		self::assertSame( '', $GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR ] );
+		self::assertSame( '#000000', $GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR ] );
+	}
+
 	/**
 	 * @param array<string, string> $post
 	 */

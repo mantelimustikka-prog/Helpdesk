@@ -207,7 +207,7 @@ class TicketsPage {
 						<ul>
 							<?php foreach ( $messages as $message ) : ?>
 								<li style="margin-bottom: 12px;">
-									<strong><?php echo esc_html( (string) $message['author_type'] ); ?></strong>
+									<strong><?php echo esc_html( $this->resolveAuthorLabel( $message, $selected_ticket ) ); ?></strong>
 									(<?php echo esc_html( (string) $message['created_at'] ); ?>)
 									<?php if ( ! empty( $message['is_internal'] ) ) : ?>
 										<em><?php esc_html_e( 'Internal', 'wp-helpdesk' ); ?></em>
@@ -596,6 +596,34 @@ class TicketsPage {
 		}
 
 		return in_array( $value, TicketStatus::canonicalValues(), true ) ? $value : '';
+	}
+
+	/**
+	 * Resolve a human-readable author label for a message.
+	 *
+	 * Uses the ticket's requester_name for guest/member messages so the actual
+	 * customer name is displayed instead of the generic role label.
+	 *
+	 * @param array<string, mixed> $message Message row.
+	 * @param array<string, mixed> $ticket  Ticket row.
+	 * @return string
+	 */
+	protected function resolveAuthorLabel( array $message, array $ticket ): string {
+		$author_type = (string) ( $message['author_type'] ?? '' );
+
+		if ( in_array( $author_type, array( 'member', 'guest' ), true ) ) {
+			$name = trim( (string) ( $ticket['requester_name'] ?? '' ) );
+			if ( '' !== $name ) {
+				return $name;
+			}
+		}
+
+		$map = array(
+			'agent'  => __( 'Agent', 'wp-helpdesk' ),
+			'system' => __( 'System', 'wp-helpdesk' ),
+		);
+
+		return $map[ $author_type ] ?? ucfirst( $author_type );
 	}
 
 	/**

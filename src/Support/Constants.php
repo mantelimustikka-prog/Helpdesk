@@ -63,6 +63,10 @@ class Constants {
 	public const OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT = 'hd_email_tpl_ticket_created_admin_subject';
 	public const OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY    = 'hd_email_tpl_ticket_created_admin_body';
 
+	// Appearance tab option keys.
+	public const OPTION_APPEARANCE_ADMIN_REPLY_COLOR  = 'hd_appearance_admin_reply_color';
+	public const OPTION_APPEARANCE_CLIENT_REPLY_COLOR = 'hd_appearance_client_reply_color';
+
 	// Frontend page option keys (per-site, stored in blog options).
 	public const OPTION_PAGE_INDEX      = 'hd_page_id_index';
 	public const OPTION_PAGE_NEW        = 'hd_page_id_new';
@@ -137,6 +141,9 @@ class Constants {
 			self::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_BODY,
 			self::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT,
 			self::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY,
+			// Appearance tab.
+			self::OPTION_APPEARANCE_ADMIN_REPLY_COLOR,
+			self::OPTION_APPEARANCE_CLIENT_REPLY_COLOR,
 		);
 	}
 

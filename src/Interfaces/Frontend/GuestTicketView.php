@@ -104,7 +104,7 @@ class GuestTicketView extends HelpdeskPage {
 						<?php foreach ( $messages as $msg ) : ?>
 							<div class="hd-thread__message hd-thread__message--<?php echo esc_attr( (string) $msg['author_type'] ); ?>">
 								<div class="hd-thread__meta">
-									<span class="hd-thread__author"><?php echo esc_html( (string) $msg['author_type'] ); ?></span>
+									<span class="hd-thread__author"><?php echo esc_html( $this->resolveAuthorLabel( $msg, $ticket ) ); ?></span>
 									<span class="hd-thread__date"><?php echo esc_html( (string) $msg['created_at'] ); ?></span>
 								</div>
 								<div class="hd-thread__body"><?php echo wp_kses_post( wpautop( (string) $msg['body'] ) ); ?></div>
@@ -219,5 +219,33 @@ class GuestTicketView extends HelpdeskPage {
 		);
 
 		return $rows ?: array();
+	}
+
+	/**
+	 * Resolve a human-readable author label for a message.
+	 *
+	 * Uses the ticket's requester_name for guest/member messages so that the
+	 * customer's actual name is displayed instead of the generic role label.
+	 *
+	 * @param array<string, mixed> $message Message row.
+	 * @param array<string, mixed> $ticket  Ticket row.
+	 * @return string
+	 */
+	protected function resolveAuthorLabel( array $message, array $ticket ): string {
+		$author_type = (string) ( $message['author_type'] ?? '' );
+
+		if ( in_array( $author_type, array( 'guest', 'member' ), true ) ) {
+			$name = trim( (string) ( $ticket['requester_name'] ?? '' ) );
+			if ( '' !== $name ) {
+				return $name;
+			}
+		}
+
+		$map = array(
+			'agent'  => __( 'Support', 'wp-helpdesk' ),
+			'system' => __( 'System', 'wp-helpdesk' ),
+		);
+
+		return $map[ $author_type ] ?? ucfirst( $author_type );
 	}
 }
