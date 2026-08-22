@@ -33,11 +33,15 @@ class TicketsPage {
 		$this->handlePost();
 
 		$selected_ticket_id = isset( $_GET['ticket_id'] ) ? (int) $_GET['ticket_id'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$status_filter      = isset( $_GET['status_filter'] ) ? sanitize_key( wp_unslash( $_GET['status_filter'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$status_filter      = $this->currentStatusFilter();
 		$tickets            = $this->listTickets( 50, $status_filter );
 		$selected_ticket    = $selected_ticket_id > 0 ? $this->findTicket( $selected_ticket_id ) : null;
 		$messages           = $selected_ticket ? $this->getMessages( (int) $selected_ticket['id'] ) : array();
 		$status_options     = TicketStatus::canonicalValues();
+		$navigation         = $selected_ticket ? $this->getTicketNavigation( $tickets, (int) $selected_ticket['id'] ) : array(
+			'previous' => null,
+			'next'     => null,
+		);
 		?>
 		<div class="wrap hd-admin-wrap">
 			<h1><?php esc_html_e( 'Ticket Queue', 'wp-helpdesk' ); ?></h1>
@@ -72,6 +76,9 @@ class TicketsPage {
 					<?php else : ?>
 						<form method="post" id="hd-bulk-form">
 							<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
+							<?php if ( '' !== $status_filter ) : ?>
+								<input type="hidden" name="hd_status_filter" value="<?php echo esc_attr( $status_filter ); ?>">
+							<?php endif; ?>
 							<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
 								<div style="margin-bottom:8px;">
 									<select name="hd_bulk_status" style="margin-right:8px;">
@@ -112,7 +119,7 @@ class TicketsPage {
 												</td>
 											<?php endif; ?>
 											<td>
-												<a href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . (int) $ticket['id'] ) ); ?>">
+												<a href="<?php echo esc_url( $this->getAdminPageUrl( array( 'ticket_id' => (int) $ticket['id'] ), $status_filter ) ); ?>">
 													<?php echo esc_html( (string) $ticket['ticket_no'] ); ?>
 												</a>
 											</td>
@@ -143,6 +150,47 @@ class TicketsPage {
 			<?php endif; ?>
 
 			<?php if ( $selected_ticket ) : ?>
+				<div class="hd-ticket-nav">
+					<div class="hd-ticket-nav__actions">
+						<a class="button button-secondary" href="<?php echo esc_url( $this->getAdminPageUrl( array(), $status_filter ) ); ?>">
+							<?php esc_html_e( 'Back to Queue', 'wp-helpdesk' ); ?>
+						</a>
+						<?php if ( ! empty( $navigation['previous'] ) ) : ?>
+							<a class="button button-secondary" href="<?php echo esc_url( $this->getAdminPageUrl( array( 'ticket_id' => (int) $navigation['previous']['id'] ), $status_filter ) ); ?>">
+								<?php esc_html_e( 'Previous Ticket', 'wp-helpdesk' ); ?>
+							</a>
+						<?php else : ?>
+							<button type="button" class="button button-secondary" disabled>
+								<?php esc_html_e( 'Previous Ticket', 'wp-helpdesk' ); ?>
+							</button>
+						<?php endif; ?>
+						<?php if ( ! empty( $navigation['next'] ) ) : ?>
+							<a class="button button-secondary" href="<?php echo esc_url( $this->getAdminPageUrl( array( 'ticket_id' => (int) $navigation['next']['id'] ), $status_filter ) ); ?>">
+								<?php esc_html_e( 'Next Ticket', 'wp-helpdesk' ); ?>
+							</a>
+						<?php else : ?>
+							<button type="button" class="button button-secondary" disabled>
+								<?php esc_html_e( 'Next Ticket', 'wp-helpdesk' ); ?>
+							</button>
+						<?php endif; ?>
+					</div>
+					<div class="hd-ticket-nav__summary">
+						<div class="hd-ticket-nav__title">
+							<strong><?php echo esc_html( sprintf( __( 'Ticket %s', 'wp-helpdesk' ), (string) $selected_ticket['ticket_no'] ) ); ?></strong>
+							<span><?php echo esc_html( (string) $selected_ticket['subject'] ); ?></span>
+						</div>
+						<div class="hd-ticket-nav__meta">
+							<span class="hd-status-badge"><?php echo esc_html( TicketStatus::label( (string) $selected_ticket['status'] ) ); ?></span>
+							<?php if ( ! empty( $selected_ticket['requester_name'] ) ) : ?>
+								<span><?php echo esc_html( (string) $selected_ticket['requester_name'] ); ?></span>
+							<?php endif; ?>
+							<?php if ( '' !== $status_filter ) : ?>
+								<span><?php echo esc_html( sprintf( __( 'Filtered by %s', 'wp-helpdesk' ), TicketStatus::label( $status_filter ) ) ); ?></span>
+							<?php endif; ?>
+						</div>
+					</div>
+				</div>
+
 				<div class="hd-card" style="margin-top: 20px;">
 					<h2>
 						<?php echo esc_html( sprintf( __( 'Ticket %s', 'wp-helpdesk' ), (string) $selected_ticket['ticket_no'] ) ); ?>
@@ -183,6 +231,9 @@ class TicketsPage {
 							<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
 							<input type="hidden" name="hd_ticket_id" value="<?php echo esc_attr( (string) $selected_ticket['id'] ); ?>">
 							<input type="hidden" name="hd_ticket_action" value="reply">
+							<?php if ( '' !== $status_filter ) : ?>
+								<input type="hidden" name="hd_status_filter" value="<?php echo esc_attr( $status_filter ); ?>">
+							<?php endif; ?>
 							<p>
 								<label for="hd-reply-body"><strong><?php esc_html_e( 'Reply', 'wp-helpdesk' ); ?></strong></label><br>
 								<textarea id="hd-reply-body" name="hd_reply_body" rows="5" class="large-text" required></textarea>
@@ -212,6 +263,9 @@ class TicketsPage {
 							<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
 							<input type="hidden" name="hd_ticket_id" value="<?php echo esc_attr( (string) $selected_ticket['id'] ); ?>">
 							<input type="hidden" name="hd_ticket_action" value="status">
+							<?php if ( '' !== $status_filter ) : ?>
+								<input type="hidden" name="hd_status_filter" value="<?php echo esc_attr( $status_filter ); ?>">
+							<?php endif; ?>
 							<p>
 								<label for="hd-status-select"><strong><?php esc_html_e( 'Change status', 'wp-helpdesk' ); ?></strong></label><br>
 								<select id="hd-status-select" name="hd_status" required>
@@ -331,7 +385,7 @@ class TicketsPage {
 
 		$ticket_ids = array_filter( array_map( 'intval', $raw_ids ) );
 		if ( empty( $ticket_ids ) ) {
-			$this->redirectTo( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+			$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter( true ) ) );
 			return;
 		}
 
@@ -340,7 +394,7 @@ class TicketsPage {
 			$ticket_service->deleteTicket( $id );
 		}
 
-		$this->redirectTo( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+		$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter( true ) ) );
 	}
 
 	/**
@@ -360,7 +414,7 @@ class TicketsPage {
 		$status     = TicketStatus::tryCanonical( isset( $_POST['hd_bulk_status'] ) ? sanitize_key( wp_unslash( $_POST['hd_bulk_status'] ) ) : '' );
 
 		if ( empty( $ticket_ids ) || null === $status ) {
-			$this->redirectTo( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+			$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter( true ) ) );
 			return;
 		}
 
@@ -377,7 +431,7 @@ class TicketsPage {
 			do_action( 'hd_ticket_status_changed', $updated_ticket, TicketStatus::toCanonical( (string) $ticket['status'] ), $status );
 		}
 
-		$this->redirectTo( network_admin_url( 'admin.php?page=wp-helpdesk-tickets' ) );
+		$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter( true ) ) );
 	}
 
 	/**
@@ -451,7 +505,7 @@ class TicketsPage {
 
 		do_action( 'hd_ticket_replied', $ticket, $message ?: array() );
 
-		$redirect = network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . $ticket_id );
+		$redirect = $this->getAdminPageUrl( array( 'ticket_id' => $ticket_id ), $this->currentStatusFilter( true ) );
 		if ( null !== $upload_error ) {
 			$redirect = add_query_arg( 'hd_attach_error', rawurlencode( $upload_error->get_error_message() ), $redirect );
 		}
@@ -522,8 +576,73 @@ class TicketsPage {
 		$updated_ticket = $this->findTicket( $ticket_id );
 		do_action( 'hd_ticket_status_changed', $updated_ticket ?: $ticket, TicketStatus::toCanonical( (string) $ticket['status'] ), $new_status );
 
-		wp_safe_redirect( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . $ticket_id ) );
+		wp_safe_redirect( $this->getAdminPageUrl( array( 'ticket_id' => $ticket_id ), $this->currentStatusFilter( true ) ) );
 		exit;
+	}
+
+	/**
+	 * Get the active canonical status filter from the current request.
+	 *
+	 * @param bool $allow_post Whether to read the hidden POSTed filter value.
+	 * @return string
+	 */
+	protected function currentStatusFilter( bool $allow_post = false ): string {
+		$value = '';
+
+		if ( $allow_post && isset( $_POST['hd_status_filter'] ) ) {
+			$value = sanitize_key( wp_unslash( (string) $_POST['hd_status_filter'] ) );
+		} elseif ( isset( $_GET['status_filter'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$value = sanitize_key( wp_unslash( (string) $_GET['status_filter'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		}
+
+		return in_array( $value, TicketStatus::canonicalValues(), true ) ? $value : '';
+	}
+
+	/**
+	 * Build a ticket admin URL with optional queue filter context.
+	 *
+	 * @param array<string, scalar> $args          Additional query arguments.
+	 * @param string                $status_filter Optional canonical status filter.
+	 * @return string
+	 */
+	protected function getAdminPageUrl( array $args = array(), string $status_filter = '' ): string {
+		$query_args = array_merge(
+			array( 'page' => 'wp-helpdesk-tickets' ),
+			$args
+		);
+
+		if ( '' !== $status_filter ) {
+			$query_args['status_filter'] = $status_filter;
+		}
+
+		return add_query_arg( $query_args, network_admin_url( 'admin.php' ) );
+	}
+
+	/**
+	 * Resolve previous/next tickets from the current queue context.
+	 *
+	 * @param array<int, array<string, mixed>> $tickets            Queue rows.
+	 * @param int                              $selected_ticket_id Selected ticket id.
+	 * @return array{previous: array<string, mixed>|null, next: array<string, mixed>|null}
+	 */
+	protected function getTicketNavigation( array $tickets, int $selected_ticket_id ): array {
+		$navigation = array(
+			'previous' => null,
+			'next'     => null,
+		);
+		$tickets    = array_values( $tickets );
+
+		foreach ( $tickets as $index => $ticket ) {
+			if ( (int) ( $ticket['id'] ?? 0 ) !== $selected_ticket_id ) {
+				continue;
+			}
+
+			$navigation['previous'] = $index > 0 ? ( $tickets[ $index - 1 ] ?? null ) : null;
+			$navigation['next']     = $tickets[ $index + 1 ] ?? null;
+			break;
+		}
+
+		return $navigation;
 	}
 
 	/**
