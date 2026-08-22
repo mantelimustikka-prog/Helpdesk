@@ -71,6 +71,9 @@ class GuestTicketView extends HelpdeskPage {
 		$attachments = $this->attachment_service->getForTicket( (int) $ticket['id'] );
 		$status      = TicketStatus::toCanonical( (string) ( $ticket['status'] ?? '' ) );
 
+		$admin_reply_color  = sanitize_hex_color( (string) get_site_option( Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR, '' ) );
+		$client_reply_color = sanitize_hex_color( (string) get_site_option( Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR, '' ) );
+
 		$this->outputHeader( sprintf( __( 'Ticket %s', 'wp-helpdesk' ), esc_html( (string) $ticket['ticket_no'] ) ) );
 		?>
 		<div class="hd-wrap">
@@ -102,12 +105,16 @@ class GuestTicketView extends HelpdeskPage {
 						<p><?php esc_html_e( 'No messages yet.', 'wp-helpdesk' ); ?></p>
 					<?php else : ?>
 						<?php foreach ( $messages as $msg ) : ?>
+							<?php
+							$raw_color  = 'agent' === (string) ( $msg['author_type'] ?? '' ) ? $admin_reply_color : $client_reply_color;
+							$msg_style  = $raw_color ? ' style="color:' . esc_attr( $raw_color ) . ';"' : '';
+							?>
 							<div class="hd-thread__message hd-thread__message--<?php echo esc_attr( (string) $msg['author_type'] ); ?>">
 								<div class="hd-thread__meta">
 									<span class="hd-thread__author"><?php echo esc_html( $this->resolveAuthorLabel( $msg, $ticket ) ); ?></span>
 									<span class="hd-thread__date"><?php echo esc_html( (string) $msg['created_at'] ); ?></span>
 								</div>
-								<div class="hd-thread__body"><?php echo wp_kses_post( wpautop( (string) $msg['body'] ) ); ?></div>
+								<div class="hd-thread__body"<?php echo $msg_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- sanitized above ?>><?php echo wp_kses_post( wpautop( (string) $msg['body'] ) ); ?></div>
 							</div>
 						<?php endforeach; ?>
 					<?php endif; ?>
