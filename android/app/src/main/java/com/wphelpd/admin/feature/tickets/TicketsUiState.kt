@@ -2,6 +2,7 @@ package com.wphelpd.admin.feature.tickets
 
 import com.wphelpd.admin.domain.model.CurrentUser
 import com.wphelpd.admin.domain.model.Pagination
+import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.Ticket
 
 data class TicketsUiState(
@@ -13,7 +14,13 @@ data class TicketsUiState(
     val errorMessage: String? = null,
     val currentUser: CurrentUser? = null,
     val tickets: List<Ticket> = emptyList(),
-    val pagination: Pagination? = null
+    val pagination: Pagination? = null,
+    val selectedTicketId: Int? = null,
+    val ticketDetail: TicketDetail? = null,
+    val isDetailLoading: Boolean = false,
+    val detailErrorMessage: String? = null,
+    val actionMessage: String? = null,
+    val isMutating: Boolean = false
 ) {
     val canSubmit: Boolean = !isLoading && siteUrl.isNotBlank() && username.isNotBlank() && applicationPassword.isNotBlank()
 }

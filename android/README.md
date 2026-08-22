@@ -9,7 +9,12 @@ This directory contains the initial Android admin client scaffold for the WP Hel
 - Optional `X-WP-Nonce` header support for browser-style sessions
 - `GET /auth/check` integration
 - `GET /tickets` integration
-- Compose UI + `TicketsViewModel` for auth check, loading state, error state, and ticket list rendering
+- Ticket detail integration via `GET /tickets/{id}` with thread + attachments support (including `GET /tickets/{id}/messages` fallback for current plugin payloads)
+- Ticket actions:
+  - `POST /tickets/{id}/reply`
+  - `POST /tickets/{id}/status`
+  - `POST /tickets/{id}/note`
+- Compose UI + `TicketsViewModel` for auth check, loading and error states, ticket list, ticket detail, and reply/status/note actions
 - JVM unit tests for auth and ticket response mapping
 
 ## Open in Android Studio
