@@ -18,9 +18,7 @@ data class TicketsUiState(
     val selectedTicketId: Int? = null,
     val ticketDetail: TicketDetail? = null,
     val isDetailLoading: Boolean = false,
-    val detailErrorMessage: String? = null,
-    val actionMessage: String? = null,
-    val isMutating: Boolean = false
+    val detailErrorMessage: String? = null
 ) {
     val canSubmit: Boolean = !isLoading && siteUrl.isNotBlank() && username.isNotBlank() && applicationPassword.isNotBlank()
 }

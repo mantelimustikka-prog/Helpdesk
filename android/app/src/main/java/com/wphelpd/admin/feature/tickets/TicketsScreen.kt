@@ -24,24 +24,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.wphelpd.admin.data.repository.HelpdeskRepository
 import com.wphelpd.admin.domain.model.Ticket
 import com.wphelpd.admin.domain.model.TicketAttachment
 import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.TicketThreadEntry
-
-private val allowedStatuses = HelpdeskRepository.allowedStatuses.toList()
 
 @Composable
 fun TicketsRoute(viewModel: TicketsViewModel) {
@@ -55,10 +47,7 @@ fun TicketsRoute(viewModel: TicketsViewModel) {
         onConnect = viewModel::connectAndLoadTickets,
         onRefreshList = viewModel::refreshTickets,
         onTicketSelected = viewModel::selectTicket,
-        onRefreshDetail = viewModel::refreshSelectedTicket,
-        onReplySubmit = viewModel::submitReply,
-        onStatusSubmit = viewModel::submitStatusUpdate,
-        onNoteSubmit = viewModel::submitInternalNote
+        onRefreshDetail = viewModel::refreshSelectedTicket
     )
 }
 
@@ -73,10 +62,7 @@ fun TicketsScreen(
     onConnect: () -> Unit,
     onRefreshList: () -> Unit,
     onTicketSelected: (Int) -> Unit,
-    onRefreshDetail: () -> Unit,
-    onReplySubmit: (String) -> Unit,
-    onStatusSubmit: (String) -> Unit,
-    onNoteSubmit: (String) -> Unit
+    onRefreshDetail: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -156,10 +142,7 @@ fun TicketsScreen(
                 item {
                     TicketDetailSection(
                         uiState = uiState,
-                        onRefreshDetail = onRefreshDetail,
-                        onReplySubmit = onReplySubmit,
-                        onStatusSubmit = onStatusSubmit,
-                        onNoteSubmit = onNoteSubmit
+                        onRefreshDetail = onRefreshDetail
                     )
                 }
             }
@@ -277,31 +260,8 @@ private fun TicketCard(ticket: Ticket, isSelected: Boolean, onClick: () -> Unit)
 @Composable
 private fun TicketDetailSection(
     uiState: TicketsUiState,
-    onRefreshDetail: () -> Unit,
-    onReplySubmit: (String) -> Unit,
-    onStatusSubmit: (String) -> Unit,
-    onNoteSubmit: (String) -> Unit
+    onRefreshDetail: () -> Unit
 ) {
-    var replyDraft by remember(uiState.selectedTicketId) { mutableStateOf("") }
-    var statusDraft by remember(uiState.selectedTicketId) { mutableStateOf(uiState.ticketDetail?.ticket?.status ?: "") }
-    var userEditedStatus by remember(uiState.selectedTicketId) { mutableStateOf(false) }
-    var noteDraft by remember(uiState.selectedTicketId) { mutableStateOf("") }
-    LaunchedEffect(uiState.ticketDetail?.ticket?.id, uiState.ticketDetail?.ticket?.status) {
-        val status = uiState.ticketDetail?.ticket?.status ?: return@LaunchedEffect
-        if (!userEditedStatus) {
-            statusDraft = status
-        }
-    }
-    LaunchedEffect(uiState.actionMessage) {
-        when (uiState.actionMessage) {
-            "Reply sent." -> replyDraft = ""
-            "Internal note added." -> noteDraft = ""
-            else -> if (uiState.actionMessage?.startsWith("Status updated to ") == true) {
-                userEditedStatus = false
-            }
-        }
-    }
-
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -312,7 +272,7 @@ private fun TicketDetailSection(
                 Text("Ticket detail", style = MaterialTheme.typography.titleMedium)
                 TextButton(
                     onClick = onRefreshDetail,
-                    enabled = !uiState.isDetailLoading && !uiState.isMutating
+                    enabled = !uiState.isDetailLoading
                 ) {
                     Text("Refresh")
                 }
@@ -332,94 +292,26 @@ private fun TicketDetailSection(
                 TicketMetadata(detail)
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Attachments", style = MaterialTheme.typography.titleSmall)
-                if (detail.attachments.isEmpty()) {
-                    Text("No attachments.", style = MaterialTheme.typography.bodySmall)
-                } else {
-                    detail.attachments.forEach { attachment ->
-                        AttachmentRow(attachment)
-                    }
-                }
+                AttachmentSection(detail.attachments)
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Conversation", style = MaterialTheme.typography.titleSmall)
-                if (detail.thread.isEmpty()) {
-                    Text("No messages yet.", style = MaterialTheme.typography.bodySmall)
-                } else {
-                    detail.thread.forEach { entry ->
-                        ThreadEntryCard(entry)
-                    }
-                }
+                ConversationSection(detail.thread)
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Reply", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = replyDraft,
-                    onValueChange = { replyDraft = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Reply message") }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        onReplySubmit(replyDraft)
-                    },
-                    enabled = !uiState.isMutating
-                ) {
-                    Text("Send reply")
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Status update", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = statusDraft,
-                    onValueChange = {
-                        statusDraft = it
-                        userEditedStatus = true
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("Status") }
-                )
                 Text(
-                    "Allowed: ${allowedStatuses.joinToString()}",
+                    "Reply, status, and internal note actions will be added in a later Android step.",
                     style = MaterialTheme.typography.bodySmall
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = { onStatusSubmit(statusDraft) },
-                    enabled = !uiState.isMutating
-                ) {
-                    Text("Update status")
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Internal note", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = noteDraft,
-                    onValueChange = { noteDraft = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Private note") }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        onNoteSubmit(noteDraft)
-                    },
-                    enabled = !uiState.isMutating
-                ) {
-                    Text("Add note")
-                }
             }
 
-            uiState.actionMessage?.let {
-                Spacer(modifier = Modifier.height(12.dp))
-                val messageColor = if (it.contains("failed", ignoreCase = true) || it.contains("required", ignoreCase = true)) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                }
-                Text(it, color = messageColor, fontWeight = FontWeight.Medium)
+            if (
+                uiState.selectedTicketId != null &&
+                !uiState.isDetailLoading &&
+                uiState.ticketDetail == null &&
+                uiState.detailErrorMessage == null
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("No ticket detail returned yet.", style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -428,23 +320,45 @@ private fun TicketDetailSection(
 @Composable
 private fun TicketMetadata(detail: TicketDetail) {
     Spacer(modifier = Modifier.height(8.dp))
-    Text("${detail.ticket.ticketNo} · ${detail.ticket.subject}", style = MaterialTheme.typography.titleSmall)
-    Text(
-        listOfNotNull(detail.ticket.status, detail.ticket.priority, detail.ticket.customerName).joinToString(" • "),
-        style = MaterialTheme.typography.bodyMedium
-    )
-    Text("Messages: ${detail.ticket.messageCount}", style = MaterialTheme.typography.bodySmall)
-    detail.ticket.customerEmail?.let {
-        Text(it, style = MaterialTheme.typography.bodySmall)
+    MetadataLine("Ticket number", detail.ticket.ticketNo)
+    MetadataLine("Subject", detail.ticket.subject)
+    MetadataLine("Status", detail.ticket.status)
+    MetadataLine("Priority", detail.ticket.priority ?: "—")
+    MetadataLine("Customer", detail.ticket.customerName ?: "—")
+    MetadataLine("Customer email", detail.ticket.customerEmail ?: "—")
+    MetadataLine("Assigned agent", detail.assignedToName ?: "—")
+    MetadataLine("Created", detail.ticket.createdAt ?: "—")
+    MetadataLine("Updated", detail.ticket.updatedAt ?: "—")
+    MetadataLine("Messages", detail.ticket.messageCount.toString())
+}
+
+@Composable
+private fun MetadataLine(label: String, value: String) {
+    Spacer(modifier = Modifier.height(4.dp))
+    Text("$label: $value", style = MaterialTheme.typography.bodyMedium)
+}
+
+@Composable
+private fun AttachmentSection(attachments: List<TicketAttachment>) {
+    Text("Attachments", style = MaterialTheme.typography.titleSmall)
+    if (attachments.isEmpty()) {
+        Text("No attachments.", style = MaterialTheme.typography.bodySmall)
+    } else {
+        attachments.forEach { attachment ->
+            AttachmentRow(attachment)
+        }
     }
-    detail.assignedToName?.let {
-        Text("Assigned to: $it", style = MaterialTheme.typography.bodySmall)
-    }
-    detail.ticket.createdAt?.let {
-        Text("Created: $it", style = MaterialTheme.typography.bodySmall)
-    }
-    detail.ticket.updatedAt?.let {
-        Text("Updated: $it", style = MaterialTheme.typography.bodySmall)
+}
+
+@Composable
+private fun ConversationSection(thread: List<TicketThreadEntry>) {
+    Text("Conversation", style = MaterialTheme.typography.titleSmall)
+    if (thread.isEmpty()) {
+        Text("No messages yet.", style = MaterialTheme.typography.bodySmall)
+    } else {
+        thread.forEach { entry ->
+            ThreadEntryCard(entry)
+        }
     }
 }
 
