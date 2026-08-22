@@ -119,7 +119,7 @@ class TicketsPage {
 												</td>
 											<?php endif; ?>
 											<td>
-													<a href="<?php echo esc_url( $this->getAdminPageUrl( array( 'ticket_id' => (int) $ticket['id'] ), $status_filter ) ); ?>">
+												<a href="<?php echo esc_url( $this->getAdminPageUrl( array( 'ticket_id' => (int) $ticket['id'] ), $status_filter ) ); ?>">
 													<?php echo esc_html( (string) $ticket['ticket_no'] ); ?>
 												</a>
 											</td>
@@ -385,7 +385,7 @@ class TicketsPage {
 
 		$ticket_ids = array_filter( array_map( 'intval', $raw_ids ) );
 		if ( empty( $ticket_ids ) ) {
-			$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter() ) );
+			$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter( true ) ) );
 			return;
 		}
 
@@ -394,7 +394,7 @@ class TicketsPage {
 			$ticket_service->deleteTicket( $id );
 		}
 
-		$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter() ) );
+		$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter( true ) ) );
 	}
 
 	/**
@@ -414,7 +414,7 @@ class TicketsPage {
 		$status     = TicketStatus::tryCanonical( isset( $_POST['hd_bulk_status'] ) ? sanitize_key( wp_unslash( $_POST['hd_bulk_status'] ) ) : '' );
 
 		if ( empty( $ticket_ids ) || null === $status ) {
-			$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter() ) );
+			$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter( true ) ) );
 			return;
 		}
 
@@ -431,7 +431,7 @@ class TicketsPage {
 			do_action( 'hd_ticket_status_changed', $updated_ticket, TicketStatus::toCanonical( (string) $ticket['status'] ), $status );
 		}
 
-		$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter() ) );
+		$this->redirectTo( $this->getAdminPageUrl( array(), $this->currentStatusFilter( true ) ) );
 	}
 
 	/**
@@ -505,7 +505,7 @@ class TicketsPage {
 
 		do_action( 'hd_ticket_replied', $ticket, $message ?: array() );
 
-		$redirect = $this->getAdminPageUrl( array( 'ticket_id' => $ticket_id ), $this->currentStatusFilter() );
+		$redirect = $this->getAdminPageUrl( array( 'ticket_id' => $ticket_id ), $this->currentStatusFilter( true ) );
 		if ( null !== $upload_error ) {
 			$redirect = add_query_arg( 'hd_attach_error', rawurlencode( $upload_error->get_error_message() ), $redirect );
 		}
@@ -576,19 +576,20 @@ class TicketsPage {
 		$updated_ticket = $this->findTicket( $ticket_id );
 		do_action( 'hd_ticket_status_changed', $updated_ticket ?: $ticket, TicketStatus::toCanonical( (string) $ticket['status'] ), $new_status );
 
-		wp_safe_redirect( $this->getAdminPageUrl( array( 'ticket_id' => $ticket_id ), $this->currentStatusFilter() ) );
+		wp_safe_redirect( $this->getAdminPageUrl( array( 'ticket_id' => $ticket_id ), $this->currentStatusFilter( true ) ) );
 		exit;
 	}
 
 	/**
 	 * Get the active canonical status filter from the current request.
 	 *
+	 * @param bool $allow_post Whether to read the hidden POSTed filter value.
 	 * @return string
 	 */
-	protected function currentStatusFilter(): string {
+	protected function currentStatusFilter( bool $allow_post = false ): string {
 		$value = '';
 
-		if ( isset( $_POST['hd_status_filter'] ) ) {
+		if ( $allow_post && isset( $_POST['hd_status_filter'] ) ) {
 			$value = sanitize_key( wp_unslash( (string) $_POST['hd_status_filter'] ) );
 		} elseif ( isset( $_GET['status_filter'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			$value = sanitize_key( wp_unslash( (string) $_GET['status_filter'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -614,7 +615,7 @@ class TicketsPage {
 			$query_args['status_filter'] = $status_filter;
 		}
 
-		return network_admin_url( 'admin.php?' . http_build_query( $query_args, '', '&', PHP_QUERY_RFC3986 ) );
+		return add_query_arg( $query_args, network_admin_url( 'admin.php' ) );
 	}
 
 	/**
@@ -629,13 +630,14 @@ class TicketsPage {
 			'previous' => null,
 			'next'     => null,
 		);
+		$tickets    = array_values( $tickets );
 
 		foreach ( $tickets as $index => $ticket ) {
 			if ( (int) ( $ticket['id'] ?? 0 ) !== $selected_ticket_id ) {
 				continue;
 			}
 
-			$navigation['previous'] = $tickets[ $index - 1 ] ?? null;
+			$navigation['previous'] = $index > 0 ? ( $tickets[ $index - 1 ] ?? null ) : null;
 			$navigation['next']     = $tickets[ $index + 1 ] ?? null;
 			break;
 		}

@@ -12,7 +12,7 @@ require_once __DIR__ . '/bootstrap.php';
 /**
  * Test double that intercepts DB calls and lets us inject a TicketService stub.
  */
-class TicketsPageTestDouble extends TicketsPage {
+final class TicketsPageTestDouble extends TicketsPage {
 	public ?string $redirect_target = null;
 
 	/** @var array<int, int> */
@@ -225,7 +225,10 @@ final class TicketsPageBulkDeleteTest extends TestCase {
 				return array();
 			}
 		};
-		$page = new class ( $attachment_service ) extends TicketsPageTestDouble {
+		$page = new class ( $attachment_service ) extends TicketsPage {
+			/** @var array<int, array<string, mixed>> */
+			public array $tickets_by_id = array();
+
 			protected function listTickets( int $limit, string $status_filter = '' ): array {
 				return array(
 					array(
@@ -247,6 +250,14 @@ final class TicketsPageBulkDeleteTest extends TestCase {
 						'status'    => 'new',
 					),
 				);
+			}
+
+			protected function findTicket( int $ticket_id ): ?array {
+				return $this->tickets_by_id[ $ticket_id ] ?? null;
+			}
+
+			protected function getMessages( int $ticket_id ): array {
+				return array();
 			}
 		};
 		$page->tickets_by_id[2] = array(

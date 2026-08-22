@@ -502,6 +502,54 @@ if ( ! function_exists( 'home_url' ) ) {
 	}
 }
 
+if ( ! function_exists( 'add_query_arg' ) ) {
+	/**
+	 * @param array<string, scalar>|string $key
+	 * @param scalar|string                $value
+	 */
+	function add_query_arg( $key, $value = '', string $url = '' ): string {
+		if ( is_array( $key ) ) {
+			$args       = $key;
+			$target_url = (string) $value;
+		} else {
+			$args       = array( (string) $key => $value );
+			$target_url = $url;
+		}
+
+		$parsed = parse_url( $target_url );
+		$query  = array();
+		if ( ! empty( $parsed['query'] ) ) {
+			parse_str( (string) $parsed['query'], $query );
+		}
+
+		foreach ( $args as $arg_key => $arg_value ) {
+			if ( false === $arg_value ) {
+				unset( $query[ (string) $arg_key ] );
+				continue;
+			}
+
+			$query[ (string) $arg_key ] = (string) $arg_value;
+		}
+
+		$rebuilt = '';
+		if ( ! empty( $parsed['scheme'] ) ) {
+			$rebuilt .= $parsed['scheme'] . '://';
+		}
+		if ( ! empty( $parsed['host'] ) ) {
+			$rebuilt .= $parsed['host'];
+		}
+		if ( isset( $parsed['port'] ) ) {
+			$rebuilt .= ':' . $parsed['port'];
+		}
+		$rebuilt .= $parsed['path'] ?? '';
+		if ( ! empty( $query ) ) {
+			$rebuilt .= '?' . http_build_query( $query );
+		}
+
+		return $rebuilt;
+	}
+}
+
 if ( ! function_exists( 'wp_login_url' ) ) {
 	function wp_login_url( string $redirect = '' ): string {
 		return 'https://example.test/wp-login.php?redirect_to=' . rawurlencode( $redirect );
