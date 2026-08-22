@@ -195,6 +195,8 @@ final class SettingsPageTest extends TestCase {
 		self::assertStringContainsString( 'name="hd_appearance_admin_reply_color"', $output );
 		self::assertStringContainsString( 'name="hd_appearance_client_reply_color"', $output );
 		self::assertStringContainsString( 'hd_current_tab" value="appearance"', $output );
+		// Color fields are text inputs so admins can clear them to restore the theme default.
+		self::assertStringContainsString( 'type="text"', $output );
 	}
 
 	public function testAppearanceSavePersistsValidHexColors(): void {

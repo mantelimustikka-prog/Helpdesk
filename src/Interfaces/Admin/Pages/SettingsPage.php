@@ -311,16 +311,18 @@ class SettingsPage {
 			<input type="hidden" name="hd_current_tab" value="appearance">
 
 			<h2><?php esc_html_e( 'Reply Text Colors', 'wp-helpdesk' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'Customize the text color used to display replies in the ticket thread. Leave blank to use the theme default.', 'wp-helpdesk' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Customize the text color used to display replies in the ticket thread. Enter a valid hex color (e.g. #1a73e8) or leave blank to use the theme default.', 'wp-helpdesk' ); ?></p>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="hd_appearance_admin_reply_color"><?php esc_html_e( 'Admin Reply Text Color', 'wp-helpdesk' ); ?></label></th>
 					<td>
 						<input
-							type="color"
+							type="text"
 							id="hd_appearance_admin_reply_color"
 							name="hd_appearance_admin_reply_color"
-							value="<?php echo esc_attr( $admin_color ?: '#000000' ); ?>"
+							value="<?php echo esc_attr( $admin_color ); ?>"
+							placeholder="#000000"
+							class="small-text"
 						>
 						<p class="description"><?php esc_html_e( 'Text color for agent/admin reply messages.', 'wp-helpdesk' ); ?></p>
 					</td>
@@ -329,10 +331,12 @@ class SettingsPage {
 					<th scope="row"><label for="hd_appearance_client_reply_color"><?php esc_html_e( 'Client Reply Text Color', 'wp-helpdesk' ); ?></label></th>
 					<td>
 						<input
-							type="color"
+							type="text"
 							id="hd_appearance_client_reply_color"
 							name="hd_appearance_client_reply_color"
-							value="<?php echo esc_attr( $client_color ?: '#000000' ); ?>"
+							value="<?php echo esc_attr( $client_color ); ?>"
+							placeholder="#000000"
+							class="small-text"
 						>
 						<p class="description"><?php esc_html_e( 'Text color for customer/client reply messages.', 'wp-helpdesk' ); ?></p>
 					</td>
