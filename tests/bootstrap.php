@@ -57,6 +57,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_mail_calls'] = array();
 		$GLOBALS['wp_enqueued_scripts'] = array();
 		$GLOBALS['wp_inline_scripts'] = array();
+		$GLOBALS['wp_inline_styles'] = array();
 		$GLOBALS['wp_localized_scripts'] = array();
 		$GLOBALS['wp_safe_redirect_to'] = null;
 		$GLOBALS['wp_filters'] = array();
@@ -627,6 +628,16 @@ if ( ! function_exists( 'wp_localize_script' ) ) {
 
 if ( ! function_exists( 'wp_enqueue_style' ) ) {
 	function wp_enqueue_style( string $handle, string $src = '', array $deps = array(), string $ver = '' ): void {
+	}
+}
+
+if ( ! function_exists( 'wp_add_inline_style' ) ) {
+	function wp_add_inline_style( string $handle, string $data ): bool {
+		if ( ! isset( $GLOBALS['wp_inline_styles'][ $handle ] ) ) {
+			$GLOBALS['wp_inline_styles'][ $handle ] = '';
+		}
+		$GLOBALS['wp_inline_styles'][ $handle ] .= $data;
+		return true;
 	}
 }
 
