@@ -1,19 +1,19 @@
 <?php return array(
     'root' => array(
         'name' => 'wp-helpdesk/helpdesk',
-        'pretty_version' => 'dev-copilot/helpdesk-architecture-implementation',
-        'version' => 'dev-copilot/helpdesk-architecture-implementation',
-        'reference' => '24f04d46a353e2c2b9567f9d1229b44cc2ba5c14',
+        'pretty_version' => 'dev-copilot/apply-appearance-colors-to-comments',
+        'version' => 'dev-copilot/apply-appearance-colors-to-comments',
+        'reference' => '1f3202d472dac3f84a6a20ae5b0cba9a21004a1c',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'dev' => true,
+        'dev' => false,
     ),
     'versions' => array(
         'wp-helpdesk/helpdesk' => array(
-            'pretty_version' => 'dev-copilot/helpdesk-architecture-implementation',
-            'version' => 'dev-copilot/helpdesk-architecture-implementation',
-            'reference' => '24f04d46a353e2c2b9567f9d1229b44cc2ba5c14',
+            'pretty_version' => 'dev-copilot/apply-appearance-colors-to-comments',
+            'version' => 'dev-copilot/apply-appearance-colors-to-comments',
+            'reference' => '1f3202d472dac3f84a6a20ae5b0cba9a21004a1c',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

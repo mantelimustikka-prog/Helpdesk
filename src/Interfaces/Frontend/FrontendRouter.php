@@ -225,6 +225,19 @@ class FrontendRouter {
 			HD_VERSION
 		);
 
+		$admin_color  = sanitize_hex_color( (string) get_site_option( Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR, '' ) );
+		$client_color = sanitize_hex_color( (string) get_site_option( Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR, '' ) );
+		$inline_css   = '';
+		if ( $admin_color ) {
+			$inline_css .= '.hd-thread__message--agent .hd-thread__body{color:' . $admin_color . ';}';
+		}
+		if ( $client_color ) {
+			$inline_css .= '.hd-thread__message--guest .hd-thread__body,.hd-thread__message--member .hd-thread__body{color:' . $client_color . ';}';
+		}
+		if ( $inline_css ) {
+			wp_add_inline_style( 'wp-helpdesk-frontend', $inline_css );
+		}
+
 		wp_enqueue_script(
 			'wp-helpdesk-frontend',
 			Helpers::pluginUrl( 'assets/js/helpdesk-frontend.js' ),

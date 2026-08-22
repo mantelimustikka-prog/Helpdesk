@@ -38,6 +38,8 @@ class TicketsPage {
 		$selected_ticket    = $selected_ticket_id > 0 ? $this->findTicket( $selected_ticket_id ) : null;
 		$messages           = $selected_ticket ? $this->getMessages( (int) $selected_ticket['id'] ) : array();
 		$status_options     = TicketStatus::canonicalValues();
+		$admin_reply_color  = (string) get_site_option( Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR, '' );
+		$client_reply_color = (string) get_site_option( Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR, '' );
 		$navigation         = $selected_ticket ? $this->getTicketNavigation( $tickets, (int) $selected_ticket['id'] ) : array(
 			'previous' => null,
 			'next'     => null,
@@ -212,7 +214,14 @@ class TicketsPage {
 									<?php if ( ! empty( $message['is_internal'] ) ) : ?>
 										<em><?php esc_html_e( 'Internal', 'wp-helpdesk' ); ?></em>
 									<?php endif; ?>
-									<div><?php echo wp_kses_post( wpautop( (string) $message['body'] ) ); ?></div>
+									<?php
+								$raw_color  = 'agent' === (string) ( $message['author_type'] ?? '' ) ? $admin_reply_color : $client_reply_color;
+								$safe_color = sanitize_hex_color( $raw_color );
+								$msg_style  = $safe_color ? ' style="color:' . esc_attr( $safe_color ) . ';"' : '';
+								?>
+								<div<?php echo $msg_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
+									<?php echo wp_kses_post( wpautop( (string) $message['body'] ) ); ?>
+								</div>
 								</li>
 							<?php endforeach; ?>
 						</ul>
