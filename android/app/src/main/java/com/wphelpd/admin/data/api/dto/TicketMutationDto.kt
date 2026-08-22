@@ -6,7 +6,8 @@ import com.wphelpd.admin.domain.model.TicketThreadEntry
 data class ReplyRequestDto(
     @SerializedName("message") val message: String,
     // Keep both fields for contract + current plugin compatibility.
-    @SerializedName("body") val body: String = message
+    @SerializedName("body") val body: String = message,
+    @SerializedName("internal_note") val internalNote: Boolean = false
 )
 
 data class StatusUpdateRequestDto(

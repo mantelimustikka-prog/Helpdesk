@@ -218,6 +218,16 @@ class HelpdeskRepositoryTest {
         assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
         assertThat((result as NetworkResult.Success).value).isEqualTo("resolved")
     }
+
+    @Test
+    fun updateTicketStatus_rejectsStatusesOutsideContractValues() = runTest {
+        val repository = HelpdeskRepository { FakeHelpdeskAdminApi() }
+
+        val result = repository.updateTicketStatus(config, ticketId = 101, status = "archived")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat((result as NetworkResult.Failure).message).contains("Status must be one of:")
+    }
 }
 
 private class FakeHelpdeskAdminApi(

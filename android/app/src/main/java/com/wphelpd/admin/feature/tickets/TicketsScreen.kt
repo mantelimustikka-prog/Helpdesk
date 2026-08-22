@@ -35,12 +35,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.wphelpd.admin.data.repository.HelpdeskRepository
 import com.wphelpd.admin.domain.model.Ticket
 import com.wphelpd.admin.domain.model.TicketAttachment
 import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.TicketThreadEntry
 
-private val allowedStatuses = listOf("new", "open", "pending", "resolved", "closed")
+private val allowedStatuses = HelpdeskRepository.allowedStatuses.toList()
 
 @Composable
 fun TicketsRoute(viewModel: TicketsViewModel) {
@@ -432,11 +433,18 @@ private fun TicketMetadata(detail: TicketDetail) {
         listOfNotNull(detail.ticket.status, detail.ticket.priority, detail.ticket.customerName).joinToString(" • "),
         style = MaterialTheme.typography.bodyMedium
     )
+    Text("Messages: ${detail.ticket.messageCount}", style = MaterialTheme.typography.bodySmall)
     detail.ticket.customerEmail?.let {
         Text(it, style = MaterialTheme.typography.bodySmall)
     }
     detail.assignedToName?.let {
         Text("Assigned to: $it", style = MaterialTheme.typography.bodySmall)
+    }
+    detail.ticket.createdAt?.let {
+        Text("Created: $it", style = MaterialTheme.typography.bodySmall)
+    }
+    detail.ticket.updatedAt?.let {
+        Text("Updated: $it", style = MaterialTheme.typography.bodySmall)
     }
 }
 
