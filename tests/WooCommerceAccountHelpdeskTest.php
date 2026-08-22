@@ -392,7 +392,7 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertRegExp( '/Open<\/a>\s+<a[^>]+download=/', $output, 'A space must separate the Open and Download action links' );
 	}
 
-	public function testReplySubmissionPostsMemberMessageAndShowsSuccessNotice(): void {
+	public function testReplySubmissionPostsMemberMessageAndRedirectsWithSuccessNotice(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
 		$this->ticket_repository->ticket      = array(
 			'id'              => 11,
@@ -413,13 +413,35 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 
 		ob_start();
 		$this->integration->render();
-		$output = (string) ob_get_clean();
+		ob_end_clean();
 
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertSame( 'member', $this->message_service->posted_author_type );
 		self::assertSame( 'Here is my extra detail.', $this->message_service->posted_body );
+		self::assertSame(
+			'https://example.test/my-account/helpdesk/request/HD-10011/?hd_reply_notice=reply_sent&hd_reply_notice_nonce=nonce-hd_reply_notice_reply_sent',
+			$GLOBALS['wp_safe_redirect_to']
+		);
+	}
+
+	public function testReplyNoticeQueryParamDisplaysVisibleNotice(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		$_GET['hd_reply_notice']       = 'reply_sent';
+		$_GET['hd_reply_notice_nonce'] = 'nonce-hd_reply_notice_reply_sent';
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
 		self::assertStringContainsString( 'Your reply was sent.', $output );
-		self::assertNull( $GLOBALS['wp_safe_redirect_to'] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -474,10 +496,12 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		self::assertStringContainsString( 'multipart/form-data', $output, 'Reply form must use multipart/form-data encoding' );
+		self::assertStringContainsString( 'method="post"', $output, 'Reply form must submit with POST' );
 		self::assertStringContainsString( 'action="https://example.test/my-account/helpdesk/request/HD-10011/"', $output, 'Reply form must post back to the request detail URL' );
 		self::assertStringContainsString( 'type="file"', $output, 'Reply form must include a file input' );
 		self::assertStringContainsString( 'hd_helpdesk_attachment', $output, 'File input must be named hd_helpdesk_attachment' );
 		self::assertStringContainsString( 'hd-file-input', $output, 'File input must use the hd-file-input class for visibility' );
+		self::assertStringContainsString( 'type="submit"', $output, 'Reply form must include a submit button' );
 	}
 
 	// -------------------------------------------------------------------------
@@ -619,13 +643,16 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 
 		ob_start();
 		$this->integration->render();
-		$output = (string) ob_get_clean();
+		ob_end_clean();
 
 		unset( $_FILES['hd_helpdesk_attachment'] );
 
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertCount( 2, $this->attachment_service->upload_calls );
-		self::assertStringContainsString( 'Your reply was sent, but one or more attachments could not be uploaded.', $output );
+		self::assertSame(
+			'https://example.test/my-account/helpdesk/request/HD-10011/?hd_reply_notice=reply_attachment_error&hd_reply_notice_nonce=nonce-hd_reply_notice_reply_attachment_error',
+			$GLOBALS['wp_safe_redirect_to']
+		);
 	}
 }
 
