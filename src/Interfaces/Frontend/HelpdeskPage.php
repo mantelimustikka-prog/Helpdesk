@@ -35,25 +35,24 @@ class HelpdeskPage {
 	 * @return array<int, array<string, string>>
 	 */
 	protected function getCustomerActionLinks(): array {
-		$links = array();
+		$links        = array();
+		$is_logged_in  = is_user_logged_in();
+		$allow_guest   = 1 === (int) get_site_option( Constants::OPTION_GENERAL_ALLOW_GUEST, 1 );
 
-		if ( is_user_logged_in() ) {
+		if ( $is_logged_in ) {
 			$links[] = array(
 				'url'   => home_url( '/helpdesk/member/new/' ),
 				'label' => __( 'New Request', 'wp-helpdesk' ),
 			);
-		} else {
-			$allow_guest = 1 === (int) get_site_option( Constants::OPTION_GENERAL_ALLOW_GUEST, 1 );
-			if ( $allow_guest ) {
-				$links[] = array(
-					'url'   => home_url( '/helpdesk/new/' ),
-					'label' => __( 'New Request', 'wp-helpdesk' ),
-				);
-			}
+		} elseif ( $allow_guest ) {
+			$links[] = array(
+				'url'   => home_url( '/helpdesk/new/' ),
+				'label' => __( 'New Request', 'wp-helpdesk' ),
+			);
 		}
 
 		$links[] = array(
-			'url'   => is_user_logged_in() ? home_url( '/helpdesk/requests/' ) : wp_login_url( home_url( '/helpdesk/requests/' ) ),
+			'url'   => $is_logged_in ? home_url( '/helpdesk/requests/' ) : wp_login_url( home_url( '/helpdesk/requests/' ) ),
 			'label' => __( 'My Requests', 'wp-helpdesk' ),
 		);
 
