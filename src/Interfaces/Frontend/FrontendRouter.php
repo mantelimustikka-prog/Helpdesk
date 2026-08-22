@@ -142,7 +142,7 @@ class FrontendRouter {
 				exit;
 
 			case 'member_request':
-				$ticket_no = sanitize_text_field( (string) get_query_var( 'hd_ticket_no', '' ) );
+				$ticket_no = rawurldecode( (string) get_query_var( 'hd_ticket_no', '' ) );
 				$this->member_helpdesk->renderStandalone( 'request/' . $ticket_no );
 				exit;
 

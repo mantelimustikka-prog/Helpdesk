@@ -253,8 +253,11 @@ class WooCommerceAccountHelpdesk {
 	 */
 	public function renderStandalone( string $subpath = '' ): void {
 		$this->setEndpointQueryVar( trim( $subpath, '/' ) );
-		$this->outputHeader( __( 'Helpdesk', 'wp-helpdesk' ) );
+		ob_start();
 		$this->render();
+		$content = (string) ob_get_clean();
+		$this->outputHeader( __( 'Helpdesk', 'wp-helpdesk' ) );
+		echo $content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		$this->outputFooter();
 	}
 
@@ -1013,7 +1016,7 @@ class WooCommerceAccountHelpdesk {
 		}
 
 		$request_uri = isset( $_SERVER['REQUEST_URI'] )
-			? sanitize_text_field( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) )
+			? (string) wp_unslash( (string) $_SERVER['REQUEST_URI'] )
 			: '';
 		if ( '' === $request_uri ) {
 			return;
@@ -1109,17 +1112,21 @@ class WooCommerceAccountHelpdesk {
 	 */
 	protected function outputHeader( string $title ): void {
 		if ( function_exists( 'get_header' ) ) {
-			add_filter( 'document_title_parts', static function ( array $parts ) use ( $title ): array {
+			$title_filter = static function ( array $parts ) use ( $title ): array {
 				$parts['title'] = $title;
 				return $parts;
-			} );
+			};
+			add_filter( 'document_title_parts', $title_filter );
 			get_header();
+			if ( function_exists( 'remove_filter' ) ) {
+				remove_filter( 'document_title_parts', $title_filter );
+			}
 			return;
 		}
 
 		?>
 		<!DOCTYPE html>
-		<html>
+		<html lang="<?php echo esc_attr( function_exists( 'get_bloginfo' ) ? (string) get_bloginfo( 'language' ) : 'en' ); ?>">
 		<head>
 			<meta charset="utf-8">
 			<title><?php echo esc_html( $title ); ?></title>
