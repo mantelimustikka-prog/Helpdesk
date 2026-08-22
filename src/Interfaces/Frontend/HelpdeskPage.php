@@ -46,10 +46,6 @@ class HelpdeskPage {
 				'url'   => home_url( '/helpdesk/member/new/' ),
 				'label' => __( 'New Request', 'wp-helpdesk' ),
 			);
-			$links[] = array(
-				'url'   => home_url( '/helpdesk/requests/' ),
-				'label' => __( 'My Requests', 'wp-helpdesk' ),
-			);
 		} else {
 			if ( $allow_guest ) {
 				$links[] = array(
@@ -57,21 +53,21 @@ class HelpdeskPage {
 					'label' => __( 'New Request', 'wp-helpdesk' ),
 				);
 			}
-			$links[] = array(
-				'url'   => wp_login_url( home_url( '/helpdesk/requests/' ) ),
-				'label' => __( 'My Requests', 'wp-helpdesk' ),
-			);
 		}
 
-		if ( $is_logged_in ) {
-			$account_url = $this->getWooAccountUrl();
-			if ( '' !== $account_url ) {
-				$links[] = array(
-					'url'   => $account_url,
-					'label' => __( 'My Account', 'wp-helpdesk' ),
-				);
-			}
+		$links[] = array(
+			'url'   => $this->getMyRequestsUrl( $is_logged_in ),
+			'label' => __( 'My Requests', 'wp-helpdesk' ),
+		);
+
+		$account_url = $this->getWooAccountUrl();
+		if ( '' === $account_url ) {
+			$account_url = home_url( '/' );
 		}
+		$links[] = array(
+			'url'   => $account_url,
+			'label' => __( 'My Account', 'wp-helpdesk' ),
+		);
 
 		$links[] = array(
 			'url'   => home_url( '/' ),
@@ -79,6 +75,18 @@ class HelpdeskPage {
 		);
 
 		return $links;
+	}
+
+	/**
+	 * Get the requests page URL for the current user state.
+	 *
+	 * @param bool $is_logged_in Whether the current visitor is logged in.
+	 * @return string
+	 */
+	protected function getMyRequestsUrl( bool $is_logged_in ): string {
+		return $is_logged_in
+			? home_url( '/helpdesk/requests/' )
+			: wp_login_url( home_url( '/helpdesk/requests/' ) );
 	}
 
 	/**
