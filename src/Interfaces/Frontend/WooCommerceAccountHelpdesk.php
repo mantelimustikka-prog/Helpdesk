@@ -64,7 +64,9 @@ class WooCommerceAccountHelpdesk {
 		// the priority-9999 callback guarantees Helpdesk is still present in the
 		// final array handed to the template.
 		add_filter( 'woocommerce_account_menu_items', array( $this, 'addMenuItem' ), 9999 );
-		add_action( 'woocommerce_account_' . self::ENDPOINT . '_endpoint', array( $this, 'render' ) );
+		add_filter( 'woocommerce_get_endpoint_url', array( $this, 'mapEndpointUrlToHelpdesk' ), 10, 4 );
+		add_action( 'woocommerce_account_' . self::ENDPOINT . '_endpoint', array( $this, 'redirectLegacyEndpointRequest' ) );
+		add_action( 'template_redirect', array( $this, 'redirectLegacyAccountRoute' ) );
 	}
 
 	/**
@@ -241,6 +243,19 @@ class WooCommerceAccountHelpdesk {
 			?>
 		</section>
 		<?php
+	}
+
+	/**
+	 * Render the member helpdesk interface as a standalone theme page.
+	 *
+	 * @param string $subpath Optional route payload (e.g. requests, request/HD-10011).
+	 * @return void
+	 */
+	public function renderStandalone( string $subpath = '' ): void {
+		$this->setEndpointQueryVar( trim( $subpath, '/' ) );
+		$this->outputHeader( __( 'Helpdesk', 'wp-helpdesk' ) );
+		$this->render();
+		$this->outputFooter();
 	}
 
 	/**
@@ -837,48 +852,7 @@ class WooCommerceAccountHelpdesk {
 	 * @return string
 	 */
 	protected function buildAccountUrl( string $subpath = '' ): string {
-		$value = trim( $subpath, '/' );
-		$account_page = $this->getAccountPageUrl();
-
-		if ( '' !== $account_page && function_exists( 'wc_get_endpoint_url' ) ) {
-			$base         = function_exists( 'wc_get_account_endpoint_url' )
-				? wc_get_account_endpoint_url( self::ENDPOINT )
-				: rtrim( $account_page, '/' ) . '/' . self::ENDPOINT . '/';
-
-			if ( '' === $value ) {
-				return $base;
-			}
-
-			if ( 0 === strpos( $value, 'request/' ) ) {
-				$ticket_no = substr( $value, strlen( 'request/' ) );
-
-				if ( false !== strpos( $account_page, '?' ) ) {
-					return $this->buildNonPrettyAccountUrl( 'request/' . $ticket_no );
-				}
-
-				return trailingslashit( $base ) . 'request/' . rawurlencode( $ticket_no ) . '/';
-			}
-
-			return wc_get_endpoint_url( self::ENDPOINT, $value, $account_page );
-		}
-
-		if ( function_exists( 'wc_get_account_endpoint_url' ) && '' === $value ) {
-			return wc_get_account_endpoint_url( self::ENDPOINT );
-		}
-
-		$base = function_exists( 'wc_get_account_endpoint_url' )
-			? wc_get_account_endpoint_url( self::ENDPOINT )
-			: home_url( '/my-account/helpdesk/' );
-
-		if ( '' === $value ) {
-			return $base;
-		}
-
-		if ( false !== strpos( $base, '?' ) ) {
-			return $this->buildNonPrettyAccountUrl( $value );
-		}
-
-		return trailingslashit( $base ) . $value . '/';
+		return $this->buildHelpdeskUrl( $subpath );
 	}
 
 	/**
@@ -986,5 +960,188 @@ class WooCommerceAccountHelpdesk {
 		);
 
 		return $map[ $author_type ] ?? ucfirst( $author_type );
+	}
+
+	/**
+	 * Map WooCommerce endpoint URLs for Helpdesk to standalone /helpdesk URLs.
+	 *
+	 * @param string $url       Original endpoint URL.
+	 * @param string $endpoint  Endpoint slug.
+	 * @param string $value     Endpoint value.
+	 * @param string $permalink Base permalink (unused).
+	 * @return string
+	 */
+	public function mapEndpointUrlToHelpdesk( string $url, string $endpoint, string $value = '', string $permalink = '' ): string {
+		if ( self::ENDPOINT !== trim( $endpoint, '/' ) ) {
+			return $url;
+		}
+
+		return $this->buildHelpdeskUrl( $value );
+	}
+
+	/**
+	 * Redirect legacy endpoint GET requests from /my-account/helpdesk/... to /helpdesk/...
+	 *
+	 * @return void
+	 */
+	public function redirectLegacyEndpointRequest(): void {
+		if ( 'POST' === strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
+			$this->render();
+			return;
+		}
+
+		$subpath = trim( (string) get_query_var( self::ENDPOINT, '' ), '/' );
+		$target  = $this->buildHelpdeskUrl( $subpath );
+		$target  = $this->appendReplyNoticeArgs( $target );
+
+		$this->redirectTo( $target );
+	}
+
+	/**
+	 * Redirect pretty legacy account paths that bypass endpoint rendering.
+	 *
+	 * @return void
+	 */
+	public function redirectLegacyAccountRoute(): void {
+		if ( 'GET' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
+			return;
+		}
+
+		$account_page = $this->getAccountPageUrl();
+		if ( '' === $account_page ) {
+			return;
+		}
+
+		$request_uri = isset( $_SERVER['REQUEST_URI'] )
+			? sanitize_text_field( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) )
+			: '';
+		if ( '' === $request_uri ) {
+			return;
+		}
+
+		$path         = rtrim( (string) parse_url( $request_uri, PHP_URL_PATH ), '/' );
+		$account_path = rtrim( (string) parse_url( $account_page, PHP_URL_PATH ), '/' );
+		$legacy_base  = $account_path . '/' . self::ENDPOINT;
+
+		if ( '' === $account_path || ( $path !== $legacy_base && 0 !== strpos( $path, $legacy_base . '/' ) ) ) {
+			return;
+		}
+
+		$subpath = trim( substr( $path, strlen( $legacy_base ) ), '/' );
+		$target  = $this->buildHelpdeskUrl( $subpath );
+		$target  = $this->appendReplyNoticeArgs( $target );
+
+		$this->redirectTo( $target );
+	}
+
+	/**
+	 * Build canonical standalone /helpdesk URLs.
+	 *
+	 * @param string $subpath Optional canonical subpath.
+	 * @return string
+	 */
+	protected function buildHelpdeskUrl( string $subpath = '' ): string {
+		$value = trim( $subpath, '/' );
+
+		if ( '' === $value || 'overview' === $value ) {
+			return home_url( '/helpdesk/' );
+		}
+
+		if ( 'new' === $value ) {
+			return home_url( '/helpdesk/new/' );
+		}
+
+		if ( 'requests' === $value ) {
+			return home_url( '/helpdesk/requests/' );
+		}
+
+		if ( 0 === strpos( $value, 'request/' ) ) {
+			$ticket_no = sanitize_text_field( rawurldecode( substr( $value, strlen( 'request/' ) ) ) );
+			return home_url( '/helpdesk/request/' . rawurlencode( $ticket_no ) . '/' );
+		}
+
+		return home_url( '/helpdesk/' . $value . '/' );
+	}
+
+	/**
+	 * Preserve reply notice query args when redirecting from legacy URLs.
+	 *
+	 * @param string $url Redirect target.
+	 * @return string
+	 */
+	protected function appendReplyNoticeArgs( string $url ): string {
+		$notice = sanitize_key( (string) ( $_GET['hd_reply_notice'] ?? '' ) );
+		$nonce  = sanitize_text_field( (string) ( $_GET['hd_reply_notice_nonce'] ?? '' ) );
+		if ( '' === $notice || '' === $nonce ) {
+			return $url;
+		}
+
+		$separator = false !== strpos( $url, '?' ) ? '&' : '?';
+
+		return $url
+			. $separator
+			. 'hd_reply_notice='
+			. rawurlencode( $notice )
+			. '&hd_reply_notice_nonce='
+			. rawurlencode( $nonce );
+	}
+
+	/**
+	 * Set the endpoint query var for route parsing.
+	 *
+	 * @param string $value Endpoint value.
+	 * @return void
+	 */
+	protected function setEndpointQueryVar( string $value ): void {
+		if ( function_exists( 'set_query_var' ) ) {
+			set_query_var( self::ENDPOINT, $value );
+			return;
+		}
+
+		$GLOBALS['wp_query_vars'][ self::ENDPOINT ] = $value;
+	}
+
+	/**
+	 * Output a minimal HTML header, honouring the active theme when available.
+	 *
+	 * @param string $title Page title.
+	 * @return void
+	 */
+	protected function outputHeader( string $title ): void {
+		if ( function_exists( 'get_header' ) ) {
+			add_filter( 'document_title_parts', static function ( array $parts ) use ( $title ): array {
+				$parts['title'] = $title;
+				return $parts;
+			} );
+			get_header();
+			return;
+		}
+
+		?>
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="utf-8">
+			<title><?php echo esc_html( $title ); ?></title>
+		</head>
+		<body class="hd-page">
+		<?php
+	}
+
+	/**
+	 * Output a minimal HTML footer.
+	 *
+	 * @return void
+	 */
+	protected function outputFooter(): void {
+		if ( function_exists( 'get_footer' ) ) {
+			get_footer();
+			return;
+		}
+
+		?>
+		</body>
+		</html>
+		<?php
 	}
 }

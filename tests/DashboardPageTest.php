@@ -41,7 +41,7 @@ final class DashboardPageTest extends TestCase {
 		self::assertStringContainsString( 'Front-end Interfaces', $output );
 		self::assertStringContainsString( '/helpdesk/', $output );
 		self::assertStringContainsString( '/helpdesk/member/new/', $output );
-		self::assertStringContainsString( '/my-account/helpdesk/requests/', $output );
+		self::assertStringContainsString( '/helpdesk/requests/', $output );
 		self::assertStringContainsString( 'request/{ticket-no}', $output );
 	}
 
