@@ -10,6 +10,7 @@ use WPHelpdesk\Domain\Message\MessageService;
 use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Domain\Ticket\TicketRepository;
 use WPHelpdesk\Support\Helpers;
+use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\RendersAttachmentsTrait;
 
 class WooCommerceAccountHelpdesk {
@@ -381,14 +382,22 @@ class WooCommerceAccountHelpdesk {
 			<?php if ( empty( $messages ) ) : ?>
 				<p><?php esc_html_e( 'No messages yet.', 'wp-helpdesk' ); ?></p>
 			<?php else : ?>
+				<?php
+				$admin_reply_color  = sanitize_hex_color( (string) get_site_option( Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR, '' ) );
+				$client_reply_color = sanitize_hex_color( (string) get_site_option( Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR, '' ) );
+				?>
 				<ul class="hd-account-helpdesk__messages">
 					<?php foreach ( $messages as $message ) : ?>
+						<?php
+						$raw_color = 'agent' === (string) ( $message['author_type'] ?? '' ) ? $admin_reply_color : $client_reply_color;
+						$msg_style = $raw_color ? ' style="color:' . esc_attr( $raw_color ) . ';"' : '';
+						?>
 						<li>
 							<strong><?php echo esc_html( $this->resolveMessageAuthorLabel( $message, $ticket ) ); ?></strong>
 							<?php if ( ! empty( $message['created_at'] ) ) : ?>
 								(<?php echo esc_html( (string) $message['created_at'] ); ?>)
 							<?php endif; ?>
-							<div><?php echo nl2br( esc_html( (string) ( $message['body'] ?? '' ) ) ); ?></div>
+							<div<?php echo $msg_style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- sanitized above ?>><?php echo nl2br( esc_html( (string) ( $message['body'] ?? '' ) ) ); ?></div>
 						</li>
 					<?php endforeach; ?>
 				</ul>
