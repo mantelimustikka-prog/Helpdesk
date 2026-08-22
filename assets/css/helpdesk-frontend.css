@@ -1,4 +1,4 @@
-/* ==========================================================================
+/* ========================================================================== 
    WP Helpdesk – Customer-facing frontend styles
    ========================================================================== */
 
@@ -79,7 +79,7 @@
 }
 
 /* Centered navigation menu on the Help Desk landing page */
-.hd-nav-menu {
+.hd-wrap .hd-nav-menu {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -89,16 +89,17 @@
 	width: 100%;
 }
 
-.hd-nav-menu a.hd-nav-menu__item {
-	display: block;
+.hd-wrap .hd-nav-menu__item,
+.hd-wrap .hd-nav-menu a.hd-nav-menu__item {
+	display: block !important;
 	width: 100%;
 	margin: 0 auto;
 	padding: 22px 32px;
-	font-size: 2rem;
+	font-size: 2rem !important;
 	line-height: 1.2;
 	font-weight: 600;
 	text-align: center;
-	text-decoration: none;
+	text-decoration: none !important;
 	background: #f6f7f7;
 	color: #1d2327;
 	border: 1px solid #dcdcde;
@@ -107,7 +108,8 @@
 	transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
-.hd-nav-menu a.hd-nav-menu__item:hover {
+.hd-wrap .hd-nav-menu a.hd-nav-menu__item:hover,
+.hd-wrap .hd-nav-menu__item:hover {
 	background: #fff;
 	border-color: #8c8f94;
 	color: #1d2327;
@@ -115,8 +117,10 @@
 	transform: translateY(-1px);
 }
 
-.hd-nav-menu a.hd-nav-menu__item:focus,
-.hd-nav-menu a.hd-nav-menu__item:focus-visible {
+.hd-wrap .hd-nav-menu a.hd-nav-menu__item:focus,
+.hd-wrap .hd-nav-menu a.hd-nav-menu__item:focus-visible,
+.hd-wrap .hd-nav-menu__item:focus,
+.hd-wrap .hd-nav-menu__item:focus-visible {
 	background: #fff;
 	border-color: #0073aa;
 	color: #1d2327;
