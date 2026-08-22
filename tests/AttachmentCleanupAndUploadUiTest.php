@@ -6,8 +6,10 @@ use PHPUnit\Framework\TestCase;
 use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Domain\Ticket\TicketRepository;
 use WPHelpdesk\Domain\Ticket\TicketService;
+use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Interfaces\Frontend\GuestTicketForm;
 use WPHelpdesk\Interfaces\Frontend\MemberTicketForm;
+use WPHelpdesk\Support\Constants;
 
 require_once __DIR__ . '/bootstrap.php';
 
@@ -66,6 +68,58 @@ final class AttachmentCleanupAndUploadUiTest extends TestCase {
 
 		self::assertFalse( $result );
 		self::assertContains( 99, $deleted_attachment_ticket_ids );
+	}
+
+	public function testDeleteTicketCleansUpMessageAndEventRows(): void {
+		$repository = new class extends TicketRepository {
+			public function delete( int $id, int $network_id ): bool {
+				return true;
+			}
+		};
+
+		global $wpdb;
+		$wpdb = new class {
+			public string $base_prefix = 'wp_';
+			public string $sitemeta    = 'wp_sitemeta';
+			/** @var array<int, array{table:string,where:array<string,int>}> */
+			public array $delete_calls = array();
+
+			public function get_col( string $query ): array {
+				return array();
+			}
+
+			public function prepare( string $query, ...$args ): string {
+				return $query;
+			}
+
+			public function query( string $query ): int {
+				return 1;
+			}
+
+			public function delete( string $table, array $where, array $format = array() ): int {
+				$this->delete_calls[] = array(
+					'table' => $table,
+					'where' => $where,
+				);
+				return 1;
+			}
+		};
+
+		$service = new TicketService();
+
+		$repo_prop = new ReflectionProperty( TicketService::class, 'repository' );
+		$repo_prop->setAccessible( true );
+		$repo_prop->setValue( $service, $repository );
+
+		$service->deleteTicket( 42 );
+
+		$deleted_tables = array_map(
+			static fn( array $call ): string => $call['table'],
+			$wpdb->delete_calls
+		);
+
+		self::assertContains( Schema::table( Constants::TABLE_TICKET_MESSAGES ), $deleted_tables );
+		self::assertContains( Schema::table( Constants::TABLE_TICKET_EVENTS ), $deleted_tables );
 	}
 
 	// -------------------------------------------------------------------------
