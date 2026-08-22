@@ -298,6 +298,68 @@ final class PublicTicketControllerTest extends TestCase {
 		self::assertSame( 'hd_invalid_topic_path', $response->get_error_code() );
 	}
 
+	public function testBuildTopicPathFromHierarchySupportsLegacyPayloadRecovery(): void {
+		$topic_service = new class extends TopicService {
+			public function getTopic( int $id ): ?array {
+				$topics = array(
+					1 => array( 'id' => 1, 'is_active' => 1, 'type' => 'root', 'parent_id' => null ),
+					2 => array( 'id' => 2, 'is_active' => 1, 'type' => 'followup', 'parent_id' => 1 ),
+					3 => array( 'id' => 3, 'is_active' => 1, 'type' => 'followup', 'parent_id' => 2 ),
+				);
+
+				return $topics[ $id ] ?? null;
+			}
+		};
+
+		$controller = new class( $topic_service, new TopicTransitionService(), new KnowledgeBaseService() ) extends PublicTicketController {
+			public function buildPathForTest( int $topic_id ): array {
+				return $this->buildTopicPathFromHierarchy( $topic_id );
+			}
+		};
+
+		self::assertSame( array( 1, 2, 3 ), $controller->buildPathForTest( 3 ) );
+	}
+
+	public function testValidateTopicPathAcceptsParentChainWhenTransitionsAreUnavailable(): void {
+		$topic_service = new class extends TopicService {
+			public function isTopLevelTopic( int $id ): bool {
+				return false;
+			}
+
+			public function getTopicsByIds( array $ids ): array {
+				$topics = array(
+					1 => array( 'id' => 1, 'is_active' => 1, 'type' => 'root', 'parent_id' => null ),
+					2 => array( 'id' => 2, 'is_active' => 1, 'type' => 'followup', 'parent_id' => 1 ),
+					3 => array( 'id' => 3, 'is_active' => 1, 'type' => 'followup', 'parent_id' => 2 ),
+				);
+				$result = array();
+
+				foreach ( $ids as $id ) {
+					$id = (int) $id;
+					if ( isset( $topics[ $id ] ) ) {
+						$result[ $id ] = $topics[ $id ];
+					}
+				}
+
+				return $result;
+			}
+		};
+
+		$transition_service = new class extends TopicTransitionService {
+			public function listValidFrom( int $from_topic_id, bool $active_only = true ): array {
+				return array();
+			}
+		};
+
+		$controller = new class( $topic_service, $transition_service, new KnowledgeBaseService() ) extends PublicTicketController {
+			public function validateForTest( array $topic_path, int $topic_id ) {
+				return $this->validateTopicPath( $topic_path, $topic_id );
+			}
+		};
+
+		self::assertTrue( $controller->validateForTest( array( 1, 2, 3 ), 3 ) );
+	}
+
 	public function testListChildrenReturnsChildTopics(): void {
 		$topic_service = new class extends TopicService {
 			public function listChildrenOf( int $parent_id ): array {
