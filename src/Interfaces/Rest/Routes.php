@@ -8,26 +8,25 @@ namespace WPHelpdesk\Interfaces\Rest;
 use WP_Error;
 use WP_REST_Request;
 use WPHelpdesk\Domain\Attachment\AttachmentService;
-use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
 
 class Routes {
-	protected AdminMeController $admin_me_controller;
+	protected AdminApiController $admin_api_controller;
+	protected AdminAuthController $admin_auth_controller;
 	protected AdminTicketController $admin_ticket_controller;
-	protected AdminDashboardController $admin_dashboard_controller;
-	protected AdminTopicsController $admin_topics_controller;
-	protected DeviceController $device_controller;
+	protected AdminUserController $admin_user_controller;
+	protected AdminAttachmentController $admin_attachment_controller;
 	protected AttachmentController $attachment_controller;
 	protected PublicTicketController $public_ticket_controller;
 
 	public function __construct() {
-		$this->admin_me_controller        = new AdminMeController();
-		$this->admin_ticket_controller    = new AdminTicketController();
-		$this->admin_dashboard_controller = new AdminDashboardController();
-		$this->admin_topics_controller    = new AdminTopicsController();
-		$this->device_controller          = new DeviceController();
-		$this->attachment_controller      = new AttachmentController( new AttachmentService() );
-		$this->public_ticket_controller   = new PublicTicketController();
+		$this->admin_api_controller        = new AdminApiController();
+		$this->admin_auth_controller       = new AdminAuthController();
+		$this->admin_ticket_controller     = new AdminTicketController();
+		$this->admin_user_controller       = new AdminUserController();
+		$this->admin_attachment_controller = new AdminAttachmentController();
+		$this->attachment_controller       = new AttachmentController( new AttachmentService() );
+		$this->public_ticket_controller    = new PublicTicketController();
 	}
 
 	/**
@@ -36,242 +35,95 @@ class Routes {
 	 * @return void
 	 */
 	public function register_rest_routes(): void {
-		$namespace = Helpers::restNamespace();
+		$namespace = Helpers::restNamespace() . '/admin';
 
 		register_rest_route(
 			$namespace,
-			'/admin/me',
+			'/auth/check',
 			array(
 				'methods'             => 'GET',
-				'callback'            => array( $this->admin_me_controller, 'getMe' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_reply_tickets' ) ),
+				'callback'            => array( $this->admin_auth_controller, 'check' ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
 
 		register_rest_route(
 			$namespace,
-			'/admin/topics',
+			'/tickets',
 			array(
 				array(
 					'methods'             => 'GET',
-					'callback'            => array( $this->admin_topics_controller, 'listTopics' ),
-					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
+					'callback'            => array( $this->admin_ticket_controller, 'list' ),
+					'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 				),
 				array(
 					'methods'             => 'POST',
-					'callback'            => array( $this->admin_topics_controller, 'createTopic' ),
-					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
+					'callback'            => array( $this->admin_ticket_controller, 'create' ),
+					'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 				),
 			)
 		);
 
 		register_rest_route(
 			$namespace,
-			'/admin/topics/reorder',
-			array(
-				'methods'             => 'POST',
-				'callback'            => array( $this->admin_topics_controller, 'reorderTopics' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
-			)
-		);
-
-		register_rest_route(
-			$namespace,
-			'/admin/topics/(?P<id>\d+)',
-			array(
-				array(
-					'methods'             => 'GET',
-					'callback'            => array( $this->admin_topics_controller, 'getTopic' ),
-					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
-				),
-				array(
-					'methods'             => 'PUT, PATCH',
-					'callback'            => array( $this->admin_topics_controller, 'updateTopic' ),
-					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
-				),
-				array(
-					'methods'             => 'DELETE',
-					'callback'            => array( $this->admin_topics_controller, 'deleteTopic' ),
-					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_topics' ) ),
-				),
-			)
-		);
-
-		register_rest_route(
-			$namespace,
-			'/admin/tickets',
+			'/tickets/(?P<id>\d+)',
 			array(
 				'methods'             => 'GET',
-				'callback'            => array( $this->admin_ticket_controller, 'listTickets' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_reply_tickets' ) ),
+				'callback'            => array( $this->admin_ticket_controller, 'get' ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
 
 		register_rest_route(
 			$namespace,
-			'/admin/tickets/(?P<id>\d+)',
-			array(
-				'methods'             => 'GET',
-				'callback'            => array( $this->admin_ticket_controller, 'getTicket' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_reply_tickets' ) ),
-			)
-		);
-
-		register_rest_route(
-			$namespace,
-			'/admin/tickets/(?P<id>\d+)/messages',
-			array(
-				'methods'             => 'GET',
-				'callback'            => array( $this->admin_ticket_controller, 'getMessages' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_reply_tickets' ) ),
-			)
-		);
-
-		register_rest_route(
-			$namespace,
-			'/admin/tickets/(?P<id>\d+)/reply',
+			'/tickets/(?P<id>\d+)/reply',
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this->admin_ticket_controller, 'reply' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_reply_tickets', 'hd_manage_tickets' ) ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
 
 		register_rest_route(
 			$namespace,
-			'/admin/tickets/(?P<id>\d+)/status',
+			'/tickets/(?P<id>\d+)/status',
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this->admin_ticket_controller, 'updateStatus' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets' ) ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
 
 		register_rest_route(
 			$namespace,
-			'/admin/tickets/(?P<id>\d+)/assign',
+			'/tickets/(?P<id>\d+)/note',
 			array(
 				'methods'             => 'POST',
-				'callback'            => array( $this->admin_ticket_controller, 'assignTicket' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets' ) ),
+				'callback'            => array( $this->admin_ticket_controller, 'addNote' ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
 
 		register_rest_route(
 			$namespace,
-			'/admin/dashboard/summary',
+			'/users',
 			array(
 				'methods'             => 'GET',
-				'callback'            => array( $this->admin_dashboard_controller, 'summary' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_view_reports' ) ),
+				'callback'            => array( $this->admin_user_controller, 'list' ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
 
 		register_rest_route(
 			$namespace,
-			'/admin/devices/register',
+			'/attachments/(?P<id>\d+)',
 			array(
-				'methods'             => 'POST',
-				'callback'            => array( $this->device_controller, 'register' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_reply_tickets' ) ),
+				'methods'             => 'GET',
+				'callback'            => array( $this->admin_attachment_controller, 'get' ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
 
-		register_rest_route(
-			$namespace,
-			'/admin/devices/unregister',
-			array(
-				'methods'             => 'POST',
-				'callback'            => array( $this->device_controller, 'unregister' ),
-				'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_reply_tickets' ) ),
-			)
-		);
-
-		register_rest_route(
-			$namespace,
-			'/admin/tickets/(?P<id>\d+)/attachments',
-			array(
-				array(
-					'methods'             => 'POST',
-					'callback'            => array( $this->attachment_controller, 'upload' ),
-					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_reply_tickets' ) ),
-				),
-				array(
-					'methods'             => 'GET',
-					'callback'            => array( $this->attachment_controller, 'list' ),
-					'permission_callback' => fn( WP_REST_Request $request ) => $this->authorize( $request, array( 'hd_manage_tickets', 'hd_reply_tickets' ) ),
-				),
-			)
-		);
-
-		$this->public_ticket_controller->register( $namespace );
-	}
-
-	/**
-	 * Validate REST permissions and nonce usage.
-	 *
-	 * @param WP_REST_Request    $request      Request instance.
-	 * @param array<int, string> $capabilities Allowed capabilities.
-	 * @return bool|WP_Error
-	 */
-	protected function authorize( WP_REST_Request $request, array $capabilities ) {
-		if ( 1 !== (int) get_site_option( Constants::OPTION_API_ENABLED, 1 ) ) {
-			return new WP_Error( 'hd_api_disabled', 'The Helpdesk API is disabled.', array( 'status' => 403 ) );
-		}
-
-		if ( ! is_user_logged_in() ) {
-			return new WP_Error( 'hd_rest_auth_required', 'Authentication required.', array( 'status' => 401 ) );
-		}
-
-		$allowed = false;
-		foreach ( $capabilities as $capability ) {
-			if ( current_user_can( $capability ) ) {
-				$allowed = true;
-				break;
-			}
-		}
-
-		if ( ! $allowed ) {
-			return new WP_Error( 'hd_rest_forbidden', 'Insufficient permissions.', array( 'status' => 403 ) );
-		}
-
-		if ( $this->isApplicationPasswordRequest() ) {
-			return true;
-		}
-
-		$nonce = $request->get_header( 'X-WP-Nonce' );
-		if ( empty( $nonce ) ) {
-			$nonce = $request->get_param( '_wpnonce' );
-		}
-
-		if ( empty( $nonce ) || ! wp_verify_nonce( (string) $nonce, 'wp_rest' ) ) {
-			return new WP_Error( 'hd_rest_invalid_nonce', 'Invalid or missing REST nonce.', array( 'status' => 403 ) );
-		}
-
-		return true;
-	}
-
-	/**
-	 * Detect whether the current request was authenticated via Application Passwords.
-	 * Uses WP core's auth method flag when available; falls back to checking if a
-	 * valid credential header is present and WP has authenticated the user (i.e.,
-	 * is_user_logged_in() is already true at this point in the permission callback).
-	 *
-	 * For Android / REST clients using Application Passwords over HTTPS we skip
-	 * the browser-session nonce requirement — the credentials themselves serve as
-	 * the CSRF-equivalent proof of identity.
-	 *
-	 * @return bool
-	 */
-	protected function isApplicationPasswordRequest(): bool {
-		// WP 5.6+ sets this global flag when auth succeeds via Application Passwords.
-		if ( function_exists( 'wp_is_application_passwords_available' ) ) {
-			global $wp_rest_application_password_status;
-			if ( isset( $wp_rest_application_password_status ) && true === $wp_rest_application_password_status ) {
-				return true;
-			}
-		}
-
-		return false;
+		$this->public_ticket_controller->register( Helpers::restNamespace() );
 	}
 }
