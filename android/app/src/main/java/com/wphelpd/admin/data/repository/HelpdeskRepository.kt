@@ -18,6 +18,10 @@ import retrofit2.HttpException
 class HelpdeskRepository(
     private val apiProvider: (AuthConfig) -> HelpdeskAdminApi = ApiClientFactory::create
 ) {
+    companion object {
+        val allowedStatuses: Set<String> = setOf("new", "open", "pending", "resolved", "closed")
+    }
+
     suspend fun authCheck(config: AuthConfig): NetworkResult<CurrentUser> = execute {
         apiProvider(config).authCheck().requireUser()
     }
@@ -73,6 +77,9 @@ class HelpdeskRepository(
         ticketId: Int,
         status: String
     ): NetworkResult<String> = execute {
+        require(status in allowedStatuses) {
+            "Status must be one of: ${allowedStatuses.joinToString()}."
+        }
         apiProvider(config)
             .updateTicketStatus(ticketId, StatusUpdateRequestDto(status = status))
             .requireResult()

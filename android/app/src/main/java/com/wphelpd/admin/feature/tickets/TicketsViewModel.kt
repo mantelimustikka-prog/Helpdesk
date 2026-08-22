@@ -118,6 +118,16 @@ class TicketsViewModel(
             updateState { copy(actionMessage = "Status is required.") }
             return
         }
+        if (trimmed !in HelpdeskRepository.allowedStatuses) {
+            updateState {
+                copy(
+                    actionMessage = "Status must be one of: ${
+                        HelpdeskRepository.allowedStatuses.joinToString()
+                    }."
+                )
+            }
+            return
+        }
         runMutation {
             when (val result = repository.updateTicketStatus(_uiState.value.toAuthConfig(), ticketId, trimmed)) {
                 is NetworkResult.Failure -> updateState {
