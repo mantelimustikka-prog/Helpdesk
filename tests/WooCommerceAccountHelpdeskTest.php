@@ -329,6 +329,64 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertStringContainsString( 'Send a reply', $output );
 	}
 
+	public function testRenderDetailShowsMemberMessageAsYou(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'requester_name'  => 'Jane Customer',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+		$this->message_service->messages      = array(
+			array(
+				'id'          => 52,
+				'author_type' => 'member',
+				'created_at'  => '2026-08-19 07:05:00',
+				'body'        => 'My order is wrong.',
+			),
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
+		// Member messages always show as "You" in the customer-facing view.
+		self::assertStringContainsString( 'You', $output );
+		self::assertStringNotContainsString( '<strong>member</strong>', $output );
+	}
+
+	public function testRenderDetailShowsGuestMessageWithRequesterName(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'requester_name'  => 'Sam Guest',
+			'subject'         => 'Delivery issue',
+			'status'          => 'waiting_customer',
+		);
+		$this->message_service->messages      = array(
+			array(
+				'id'          => 53,
+				'author_type' => 'guest',
+				'created_at'  => '2026-08-19 07:05:00',
+				'body'        => 'Package is missing.',
+			),
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
+		// Guest messages show the requester's actual name, not the generic "Guest" label.
+		self::assertStringContainsString( 'Sam Guest', $output );
+		self::assertStringNotContainsString( '<strong>Guest</strong>', $output );
+	}
+
 	public function testRenderDetailShowsCloseTicketButtonForOpenTicket(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
 		$this->ticket_repository->ticket      = array(

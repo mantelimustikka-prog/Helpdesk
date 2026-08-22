@@ -246,6 +246,19 @@ if ( ! function_exists( 'sanitize_textarea_field' ) ) {
 	}
 }
 
+if ( ! function_exists( 'sanitize_hex_color' ) ) {
+	function sanitize_hex_color( string $color ): ?string {
+		$color = trim( $color );
+		if ( '' === $color ) {
+			return null;
+		}
+		if ( preg_match( '/^#([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$/', $color ) ) {
+			return $color;
+		}
+		return null;
+	}
+}
+
 if ( ! function_exists( 'sanitize_title' ) ) {
 	function sanitize_title( string $title ): string {
 		$title = strtolower( trim( $title ) );

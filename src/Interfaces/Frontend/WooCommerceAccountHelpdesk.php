@@ -384,7 +384,7 @@ class WooCommerceAccountHelpdesk {
 				<ul class="hd-account-helpdesk__messages">
 					<?php foreach ( $messages as $message ) : ?>
 						<li>
-							<strong><?php echo esc_html( $this->formatAuthorType( (string) ( $message['author_type'] ?? '' ) ) ); ?></strong>
+							<strong><?php echo esc_html( $this->resolveMessageAuthorLabel( $message, $ticket ) ); ?></strong>
 							<?php if ( ! empty( $message['created_at'] ) ) : ?>
 								(<?php echo esc_html( (string) $message['created_at'] ); ?>)
 							<?php endif; ?>
@@ -1082,6 +1082,31 @@ class WooCommerceAccountHelpdesk {
 		);
 
 		return $map[ $author_type ] ?? ucfirst( $author_type );
+	}
+
+	/**
+	 * Resolve a human-readable author label for a message, using the customer's
+	 * actual name from the ticket when known instead of a generic role label.
+	 *
+	 * @param array<string, mixed> $message Message row.
+	 * @param array<string, mixed> $ticket  Ticket row.
+	 * @return string
+	 */
+	protected function resolveMessageAuthorLabel( array $message, array $ticket ): string {
+		$author_type = (string) ( $message['author_type'] ?? '' );
+
+		if ( in_array( $author_type, array( 'guest', 'member' ), true ) ) {
+			// Member messages from the currently logged-in user read as "You".
+			if ( 'member' === $author_type ) {
+				return __( 'You', 'wp-helpdesk' );
+			}
+			$name = trim( (string) ( $ticket['requester_name'] ?? '' ) );
+			if ( '' !== $name ) {
+				return $name;
+			}
+		}
+
+		return $this->formatAuthorType( $author_type );
 	}
 
 	/**
