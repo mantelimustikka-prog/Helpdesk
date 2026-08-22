@@ -11,6 +11,7 @@ use WP_REST_Response;
 use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseService;
 use WPHelpdesk\Infrastructure\Database\Schema;
+use WPHelpdesk\Infrastructure\Logger;
 use WPHelpdesk\Infrastructure\Security\RateLimiter;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
@@ -28,12 +29,14 @@ class PublicTicketController {
 	protected TopicTransitionService $topic_transition_service;
 	protected KnowledgeBaseService $kb_service;
 	protected AttachmentService $attachment_service;
+	protected Logger $logger;
 
-	public function __construct( ?TopicService $topic_service = null, ?TopicTransitionService $topic_transition_service = null, ?KnowledgeBaseService $kb_service = null, ?AttachmentService $attachment_service = null ) {
+	public function __construct( ?TopicService $topic_service = null, ?TopicTransitionService $topic_transition_service = null, ?KnowledgeBaseService $kb_service = null, ?AttachmentService $attachment_service = null, ?Logger $logger = null ) {
 		$this->topic_service            = $topic_service ?: new TopicService();
 		$this->topic_transition_service = $topic_transition_service ?: new TopicTransitionService();
 		$this->kb_service               = $kb_service ?: new KnowledgeBaseService();
 		$this->attachment_service       = $attachment_service ?: new AttachmentService();
+		$this->logger                   = $logger ?: new Logger();
 	}
 
 	/**
@@ -501,9 +504,18 @@ class PublicTicketController {
 			return new WP_Error( 'hd_missing_order_relation', __( 'Please select an order relation.', 'wp-helpdesk' ), array( 'status' => 422 ) );
 		}
 
-		$topic_path = $this->normaliseTopicPath( $data['topic_path'] ?? array(), (int) ( $data['topic_id'] ?? 0 ) );
+		$raw_topic_path = $data['topic_path'] ?? array();
+		$topic_id       = (int) ( $data['topic_id'] ?? 0 );
+		$topic_path     = $this->normaliseTopicPath( $raw_topic_path, $topic_id );
+		$terminal_topic_id = $this->getTerminalTopicId( $topic_path );
+		if ( $topic_id > 0 && ( ! is_array( $raw_topic_path ) || empty( $raw_topic_path ) || $terminal_topic_id !== $topic_id ) ) {
+			$fallback_topic_path = $this->buildTopicPathFromHierarchy( $topic_id );
+			if ( ! empty( $fallback_topic_path ) ) {
+				$topic_path = $fallback_topic_path;
+			}
+		}
 		if ( ! empty( $data['topic_id'] ) ) {
-			$topic_path_validation = $this->validateTopicPath( $topic_path, (int) $data['topic_id'] );
+			$topic_path_validation = $this->validateTopicPath( $topic_path, $topic_id );
 			if ( is_wp_error( $topic_path_validation ) ) {
 				return $topic_path_validation;
 			}
@@ -982,7 +994,7 @@ class PublicTicketController {
 				static fn( int $value ): bool => $value > 0
 			)
 		);
-		if ( empty( $path ) || (int) end( $path ) !== $topic_id ) {
+		if ( empty( $path ) || $this->getTerminalTopicId( $path ) !== $topic_id ) {
 			$path[] = $topic_id;
 		}
 
@@ -1001,22 +1013,42 @@ class PublicTicketController {
 			return true;
 		}
 
-		if ( empty( $topic_path ) || (int) end( $topic_path ) !== $topic_id ) {
-			return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+		if ( empty( $topic_path ) || $this->getTerminalTopicId( $topic_path ) !== $topic_id ) {
+			return $this->invalidTopicPathError(
+				'missing_or_terminal_topic_mismatch',
+				array(
+					'topic_id'   => $topic_id,
+					'topic_path' => $topic_path,
+				)
+			);
 		}
 
 		$first_topic_id = (int) $topic_path[0];
-		if ( ! $this->topic_service->isTopLevelTopic( $first_topic_id ) ) {
-			return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
-		}
-
 		$topics_by_id = $this->topic_service->getTopicsByIds( $topic_path );
 		$valid_next_ids_by_topic = array();
+		$first_topic = $topics_by_id[ $first_topic_id ] ?? null;
+		if ( ! $this->isRuntimeTopLevelTopic( $first_topic_id, $first_topic ) ) {
+			return $this->invalidTopicPathError(
+				'invalid_top_level_topic',
+				array(
+					'topic_id'       => $topic_id,
+					'topic_path'     => $topic_path,
+					'first_topic_id' => $first_topic_id,
+				)
+			);
+		}
 
 		foreach ( $topic_path as $index => $path_topic_id ) {
 			$topic = $topics_by_id[ (int) $path_topic_id ] ?? null;
 			if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
-				return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+				return $this->invalidTopicPathError(
+					'missing_or_inactive_topic',
+					array(
+						'topic_id'      => $topic_id,
+						'topic_path'    => $topic_path,
+						'path_topic_id' => (int) $path_topic_id,
+					)
+				);
 			}
 
 			if ( 0 === $index ) {
@@ -1031,12 +1063,124 @@ class PublicTicketController {
 				);
 			}
 
-			if ( ! in_array( (int) $path_topic_id, $valid_next_ids_by_topic[ $from_topic_id ], true ) ) {
-				return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), array( 'status' => 422 ) );
+			if ( ! in_array( (int) $path_topic_id, $valid_next_ids_by_topic[ $from_topic_id ], true ) && ! $this->isHierarchyChildOf( $topic, $from_topic_id ) ) {
+				return $this->invalidTopicPathError(
+					'invalid_topic_transition',
+					array(
+						'topic_id'       => $topic_id,
+						'topic_path'     => $topic_path,
+						'from_topic_id'  => $from_topic_id,
+						'to_topic_id'    => (int) $path_topic_id,
+						'valid_next_ids' => $valid_next_ids_by_topic[ $from_topic_id ],
+						'actual_parent'  => (int) ( $topic['parent_id'] ?? 0 ),
+					)
+				);
 			}
 		}
 
 		return true;
+	}
+
+	/**
+	 * Build a best-effort topic path from parent links for migration-safe payloads.
+	 *
+	 * @param int $topic_id Final topic id.
+	 * @return array<int, int>
+	 */
+	protected function buildTopicPathFromHierarchy( int $topic_id ): array {
+		if ( $topic_id <= 0 ) {
+			return array();
+		}
+
+		$path = array();
+		$seen = array();
+		$current_topic_id = $topic_id;
+
+		while ( $current_topic_id > 0 ) {
+			if ( isset( $seen[ $current_topic_id ] ) ) {
+				return array();
+			}
+
+			$seen[ $current_topic_id ] = true;
+			$path[] = $current_topic_id;
+
+			$topic = $this->topic_service->getTopic( $current_topic_id );
+			if ( ! $topic || ( isset( $topic['is_active'] ) && empty( $topic['is_active'] ) ) ) {
+				return array();
+			}
+
+			$current_topic_id = (int) ( $topic['parent_id'] ?? 0 );
+		}
+
+		return array_reverse( $path );
+	}
+
+	/**
+	 * Determine whether a topic can be considered top-level during runtime checks.
+	 *
+	 * @param int                               $topic_id Topic id.
+	 * @param array<string, mixed>|null $topic Topic payload.
+	 * @return bool
+	 */
+	protected function isRuntimeTopLevelTopic( int $topic_id, ?array $topic ): bool {
+		if ( $this->topic_service->isTopLevelTopic( $topic_id ) ) {
+			return true;
+		}
+
+		return null !== $topic && (
+			'root' === (string) ( $topic['type'] ?? '' ) ||
+			empty( $topic['parent_id'] )
+		);
+	}
+
+	/**
+	 * Determine whether a topic row is a direct hierarchy child of a parent id.
+	 *
+	 * @param array<string, mixed> $topic Topic payload.
+	 * @param int                  $parent_topic_id Parent topic id.
+	 * @return bool
+	 */
+	protected function isHierarchyChildOf( array $topic, int $parent_topic_id ): bool {
+		return $parent_topic_id > 0 && (int) ( $topic['parent_id'] ?? 0 ) === $parent_topic_id;
+	}
+
+	/**
+	 * Build and log a structured topic-path validation error.
+	 *
+	 * @param string               $reason Failure reason key.
+	 * @param array<string, mixed> $context Safe diagnostic context.
+	 * @return WP_Error
+	 */
+	protected function invalidTopicPathError( string $reason, array $context = array() ): WP_Error {
+		$data = array(
+			'status' => 422,
+			'reason' => sanitize_key( $reason ),
+		);
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			$data['debug'] = $context;
+		}
+
+		$this->logger->error(
+			'Topic path validation failed [' . $data['reason'] . '] ' . wp_json_encode( $context )
+		);
+
+		return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), $data );
+	}
+
+	/**
+	 * Return the terminal topic id from a normalized topic path.
+	 *
+	 * @param array<int, int> $topic_path Topic path.
+	 * @return int
+	 */
+	protected function getTerminalTopicId( array $topic_path ): int {
+		if ( empty( $topic_path ) ) {
+			return 0;
+		}
+
+		$last_key = array_key_last( $topic_path );
+		return (int) $topic_path[ $last_key ];
 	}
 
 	/**

@@ -789,12 +789,28 @@
 				self._goToStep( self._getNextStepIndex( 'submit' ) );
 				self._clearState();
 			} else {
+				if ( res && res.code === 'hd_invalid_topic_path' ) {
+					self._logTopicPathValidationError( data, res );
+				}
 				self._showError( res && res.message ? res.message : 'An error occurred. Please try again.' );
 				submitBtn.disabled = false;
 			}
 		} ).catch( function () {
 			self._showError( 'Network error. Please check your connection and try again.' );
 			submitBtn.disabled = false;
+		} );
+	};
+
+	FormController.prototype._logTopicPathValidationError = function ( payload, response ) {
+		if ( ! window.console || typeof window.console.warn !== 'function' ) {
+			return;
+		}
+
+		window.console.warn( '[WP Helpdesk] Ticket topic_path validation failed.', {
+			topic_id: payload && payload.topic_id ? payload.topic_id : 0,
+			topic_path: payload && Array.isArray( payload.topic_path ) ? payload.topic_path : [],
+			reason: response && response.data && response.data.reason ? response.data.reason : null,
+			debug: response && response.data && response.data.debug ? response.data.debug : null
 		} );
 	};
 
