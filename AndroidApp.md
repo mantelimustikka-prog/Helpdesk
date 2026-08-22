@@ -1,30 +1,59 @@
 # Android Admin App for WP Helpdesk
 
-This document captures the product direction and implementation notes for the Android admin companion app for the WP Helpdesk plugin.
+## Overview
 
-## Core requirement
+This document defines the product direction for an Android companion app that lets admins and support staff manage tickets in the WP Helpdesk plugin from an Android device.
 
-The app should **always require a local app password to open**.
+The app should be a secure, admin-focused client for customer service operations, with a mandatory local app password and direct communication with the Helpdesk REST API.
+
+## Goals
+
+- Provide a fast mobile interface for support agents and admins
+- Allow secure access to tickets and customer conversations
+- Support replying, status updates, notes, and new ticket creation
+- Keep sensitive admin access protected by a local device password
+- Integrate with the existing WP Helpdesk plugin backend
+
+## Core Requirement: App Password Lock
+
+The app must **always require a local password to open**.
 
 ### Password behavior
 
-- On **first launch**, the user must **create a password**.
-- That password is stored securely on the device.
-- On every later launch, the app must ask for that password before showing anything.
-- The app should **not** open directly without the password.
-- Later enhancements can include:
-  - fingerprint/biometric unlock
+- On first launch, the user must create a password
+- The password is stored securely on the device
+- On every later launch, the app must ask for that password before showing app content
+- The app must not open directly without the password
+- Future options may include:
+  - biometric unlock
   - password reset via admin action or reinstall
   - auto-lock after inactivity
 
-## What the app should do
+## Backend Integration
 
-The app will act as an **admin companion app** for the WP Helpdesk plugin and let support staff manage tickets from Android.
+The Android app will communicate with the WP Helpdesk plugin through its REST API.
 
-### Main features
+From the repository README:
+
+- Base admin API: `/wp-json/helpdesk/v1/admin/`
+- Recommended auth: WordPress Application Passwords
+- For browser-based requests: use `X-WP-Nonce`
+
+### Recommended app-side approach
+
+- Use HTTPS only
+- Use Application Passwords or a dedicated admin token flow
+- Keep app password and server credentials separate from the WordPress login where possible
+- Store secrets securely with Android Keystore and encrypted storage
+
+## Main Features
+
+The app should support the daily work of a customer service admin.
+
+### Ticket management
 
 - View ticket list
-- Filter by status:
+- Filter tickets by status:
   - new
   - open
   - pending
@@ -35,144 +64,120 @@ The app will act as an **admin companion app** for the WP Helpdesk plugin and le
 - Reply to tickets
 - Add internal notes
 - Change ticket status
-- Assign/reassign tickets
+- Assign or reassign tickets
 - View attachments
-- Create new tickets
 - Search tickets
-- View customer info
-- Push notifications for new tickets and replies
+- View customer information
+- Create new tickets
+- Receive push notifications for new tickets and replies
 
-## Backend communication
+## Suggested App Screens
 
-The app should talk to the Helpdesk plugin through its REST API.
+### 1. Lock Screen
 
-From the repository README:
+- Create password on first launch
+- Enter password on subsequent launches
 
-- Base admin API: `/wp-json/helpdesk/v1/admin/`
-- Recommended auth: WordPress Application Passwords
-- For browser-based requests: send `X-WP-Nonce`
-
-For the Android app, the preferred approach is:
-
-- use HTTPS
-- use Application Passwords or a dedicated admin token flow
-- keep app password and server credentials separate from WordPress login if possible
-- store tokens securely with Android Keystore / encrypted storage
-
-## Suggested app architecture
-
-### App layers
-
-1. **Local app lock**
-   - device password on open
-   - encrypted secure storage
-
-2. **Authentication layer**
-   - connect to WordPress admin API
-   - save server URL, username, app password/token
-
-3. **Ticket API layer**
-   - fetch tickets
-   - fetch single ticket
-   - post reply
-   - update status
-   - add note
-   - create ticket
-
-4. **UI layer**
-   - dashboard
-   - ticket list
-   - ticket detail
-   - reply screen
-   - settings
-
-## Suggested screens
-
-### 1. App lock screen
-
-- create password on first run
-- enter password on subsequent runs
-
-### 2. Server setup screen
+### 2. Server Setup Screen
 
 - WordPress site URL
-- admin username
-- application password / API token
+- Admin username
+- Application password or API token
 
 ### 3. Dashboard
 
-- ticket counts
-- new tickets
-- open tickets
-- overdue tickets
+- Ticket counts
+- New tickets
+- Open tickets
+- Overdue tickets
 
-### 4. Ticket list
+### 4. Ticket List
 
-- search
-- filters
-- status chips
-- priority indicators
+- Search
+- Filters
+- Status chips
+- Priority indicators
 
-### 5. Ticket detail
+### 5. Ticket Detail
 
-- ticket metadata
-- conversation thread
-- attachments
-- actions:
+- Ticket metadata
+- Conversation thread
+- Attachments
+- Actions:
   - reply
   - add note
   - change status
   - assign agent
 
-### 6. Compose reply
+### 6. Compose Reply
 
-- rich plain-text or markdown reply
-- optional attachment
+- Plain-text or markdown reply editor
+- Optional attachment support
 
 ### 7. Settings
 
-- app password change
-- reconnect server
-- logout
-- notification preferences
-- biometric unlock toggle
+- Change app password
+- Reconnect server
+- Logout
+- Notification preferences
+- Biometric unlock toggle
 
-## Recommended tech stack
+## Architecture
 
-For Android, the suggested stack is:
+A clean implementation can be organized into these layers:
 
-- Kotlin
-- Jetpack Compose
-- ViewModel + StateFlow
-- Retrofit for API calls
-- Room for offline cache if needed
-- EncryptedSharedPreferences or DataStore + encryption
-- Android Keystore for secrets
-- Firebase Cloud Messaging for push alerts
+### 1. Local app lock
 
-## Security design
+- Handles the mandatory password gate
+- Stores password hash securely
+- Supports session timeout / auto-lock later
 
-Because this is an admin app, security matters a lot.
+### 2. Authentication layer
+
+- Manages connection to the WordPress admin API
+- Stores server URL, username, and auth credentials
+- Handles login/session state
+
+### 3. Ticket API layer
+
+- Fetch tickets
+- Fetch a single ticket
+- Post a reply
+- Update ticket status
+- Add internal notes
+- Create a new ticket
+
+### 4. UI layer
+
+- Dashboard
+- Ticket list
+- Ticket detail
+- Reply composer
+- Settings
+
+## Security Considerations
+
+Because this is an admin app, security is critical.
 
 ### Local security
 
-- local password required every time app opens
-- store password hash, not plain text
-- use salted hashing
-- add timeout auto-lock
-- clear sensitive data on logout
+- Require local password every time the app opens
+- Store password hash, not plain text
+- Use salted hashing
+- Support auto-lock after inactivity
+- Clear sensitive data on logout
 
 ### Server security
 
 - HTTPS only
-- application passwords or token-based auth
-- role/capability checks in plugin API
-- restrict admin endpoints to authorized users only
-- audit logs for replies and status changes
+- Application passwords or token-based auth
+- Capability checks in plugin API
+- Restrict admin endpoints to authorized users only
+- Add audit logging for replies and status changes
 
-## Helpdesk plugin work needed
+## Helpdesk Plugin Support Needed
 
-To support the app properly, the plugin should expose clean admin endpoints like:
+To support the app properly, the plugin should expose clean admin endpoints such as:
 
 - `GET /admin/tickets`
 - `GET /admin/tickets/{id}`
@@ -183,18 +188,30 @@ To support the app properly, the plugin should expose clean admin endpoints like
 - `GET /admin/users`
 - `GET /admin/attachments`
 
-## Best next step
+## MVP Scope
 
-The recommended MVP is:
+The recommended first version of the app should include:
 
-- app lock password on first launch
-- login to Helpdesk server
-- ticket list
-- ticket detail
-- reply
-- status change
-- push notifications
+- App password lock on first launch
+- Server connection setup
+- Ticket list
+- Ticket detail view
+- Replying to tickets
+- Status changes
+- Push notifications
+
+## Future Enhancements
+
+Possible later additions include:
+
+- Biometric login
+- Offline caching
+- Attachment uploads from camera and gallery
+- Advanced filtering and sorting
+- Agent assignment workflows
+- Knowledge base shortcuts
+- Multi-account support
 
 ## Notes
 
-This document is intended as the starting point for the Android admin app plan and can be expanded into a full specification, API contract, or project scaffold.
+This document is the starting point for the Android admin app plan and can later be expanded into a formal technical specification, API contract, or implementation checklist.
