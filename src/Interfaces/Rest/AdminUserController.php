@@ -21,11 +21,12 @@ class AdminUserController extends AdminApiController {
 		$search   = sanitize_text_field( (string) $request->get_param( 'search' ) );
 
 		$args = array(
-			'number'  => $per_page,
-			'offset'  => ( $page - 1 ) * $per_page,
-			'orderby' => 'display_name',
-			'order'   => 'ASC',
-			'fields'  => array( 'ID', 'display_name', 'user_email', 'user_login' ),
+			'number'      => $per_page,
+			'offset'      => ( $page - 1 ) * $per_page,
+			'orderby'     => 'display_name',
+			'order'       => 'ASC',
+			'fields'      => array( 'ID', 'display_name', 'user_email', 'user_login' ),
+			'count_total' => true,
 		);
 
 		if ( '' !== $search ) {
@@ -33,8 +34,9 @@ class AdminUserController extends AdminApiController {
 			$args['search_columns'] = array( 'user_login', 'user_email', 'display_name' );
 		}
 
-		$users = get_users( $args );
-		$total = (int) ( new \WP_User_Query( array_merge( $args, array( 'count_total' => true, 'number' => -1, 'offset' => 0 ) ) ) )->get_total();
+		$query = new \WP_User_Query( $args );
+		$users = $query->get_results();
+		$total = (int) $query->get_total();
 
 		$items = array_map(
 			static function ( $user ): array {
