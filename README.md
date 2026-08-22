@@ -10,6 +10,7 @@ WP Helpdesk is a network-only WordPress multisite plugin scaffold for managing s
 - Email notification abstraction through `NotificationService`
 - Push notification abstraction through FCM
 - Attachment upload scaffolding for tickets and messages
+- Standalone Android admin scaffold under `/android`
 
 ## Architecture
 
@@ -50,6 +51,7 @@ The Android admin application should authenticate over HTTPS using WordPress App
 - Base URL: `/wp-json/helpdesk/v1/admin/`
 - Recommended auth: WordPress Application Passwords
 - For browser-based requests, send a valid `X-WP-Nonce` nonce
+- Android scaffold path: `/android`
 
 ### Push notifications
 
