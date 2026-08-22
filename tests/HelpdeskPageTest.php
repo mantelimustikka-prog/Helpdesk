@@ -50,10 +50,9 @@ final class HelpdeskPageTest extends TestCase {
 		self::assertStringContainsString( '/helpdesk/new/', $output );
 		self::assertStringContainsString( 'wp-login.php?redirect_to=', $output );
 		self::assertStringContainsString( rawurlencode( 'https://example.test/helpdesk/requests/' ), $output );
-		self::assertStringContainsString( 'My Account', $output );
-		self::assertStringContainsString( 'href="https://example.test/my-account/"', $output );
 		self::assertStringContainsString( 'Home', $output );
 		self::assertStringContainsString( 'href="https://example.test/"', $output );
+		self::assertStringNotContainsString( 'My Account', $output );
 		self::assertStringNotContainsString( 'Sign in', $output );
 		self::assertStringNotContainsString( 'Browse articles', $output );
 	}
@@ -69,8 +68,8 @@ final class HelpdeskPageTest extends TestCase {
 
 		self::assertStringNotContainsString( '/helpdesk/new/', $output );
 		self::assertStringContainsString( 'My Requests', $output );
-		self::assertStringContainsString( 'My Account', $output );
 		self::assertStringContainsString( 'Home', $output );
+		self::assertStringNotContainsString( 'My Account', $output );
 	}
 
 	public function testRenderSkipsMyAccountWhenWooAccountUrlUnavailable(): void {

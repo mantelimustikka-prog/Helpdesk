@@ -63,12 +63,14 @@ class HelpdeskPage {
 			);
 		}
 
-		$account_url = $this->getWooAccountUrl();
-		if ( '' !== $account_url ) {
-			$links[] = array(
-				'url'   => $account_url,
-				'label' => __( 'My Account', 'wp-helpdesk' ),
-			);
+		if ( $is_logged_in ) {
+			$account_url = $this->getWooAccountUrl();
+			if ( '' !== $account_url ) {
+				$links[] = array(
+					'url'   => $account_url,
+					'label' => __( 'My Account', 'wp-helpdesk' ),
+				);
+			}
 		}
 
 		$links[] = array(
