@@ -30,12 +30,15 @@ final class HelpdeskPageTest extends TestCase {
 		self::assertStringContainsString( '/helpdesk/requests/', $output );
 		self::assertStringContainsString( 'New Request', $output );
 		self::assertStringContainsString( 'My Requests', $output );
-		self::assertStringContainsString( '>Home<', $output );
+		self::assertStringContainsString( 'My Account', $output );
+		self::assertStringContainsString( 'Home', $output );
+		self::assertStringContainsString( 'href="https://example.test/my-account/"', $output );
 		self::assertStringContainsString( 'href="https://example.test/"', $output );
 		self::assertStringNotContainsString( 'wp-login.php?redirect_to=', $output );
+		self::assertStringNotContainsString( 'Browse articles', $output );
 	}
 
-	public function testRenderShowsGuestSubmitAndSignInWhenGuestTicketsEnabled(): void {
+	public function testRenderShowsGuestMenuWhenGuestTicketsEnabled(): void {
 		$GLOBALS['wp_logged_in'] = false;
 		$GLOBALS['wp_site_options'][ Constants::OPTION_GENERAL_ALLOW_GUEST ] = 1;
 
@@ -45,11 +48,14 @@ final class HelpdeskPageTest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		self::assertStringContainsString( '/helpdesk/new/', $output );
-		self::assertStringContainsString( 'Sign in', $output );
 		self::assertStringContainsString( 'wp-login.php?redirect_to=', $output );
-		self::assertStringContainsString( rawurlencode( 'https://example.test/helpdesk/member/new/' ), $output );
-		self::assertStringContainsString( '>Home<', $output );
+		self::assertStringContainsString( rawurlencode( 'https://example.test/helpdesk/requests/' ), $output );
+		self::assertStringContainsString( 'My Account', $output );
+		self::assertStringContainsString( 'href="https://example.test/my-account/"', $output );
+		self::assertStringContainsString( 'Home', $output );
 		self::assertStringContainsString( 'href="https://example.test/"', $output );
+		self::assertStringNotContainsString( 'Sign in', $output );
+		self::assertStringNotContainsString( 'Browse articles', $output );
 	}
 
 	public function testRenderHidesGuestSubmitWhenGuestTicketsDisabled(): void {
@@ -63,39 +69,18 @@ final class HelpdeskPageTest extends TestCase {
 
 		self::assertStringNotContainsString( '/helpdesk/new/', $output );
 		self::assertStringContainsString( 'My Requests', $output );
+		self::assertStringContainsString( 'My Account', $output );
+		self::assertStringContainsString( 'Home', $output );
 	}
 
-	public function testRenderShowsKnowledgeBaseCardWhenKbUrlProvided(): void {
-		$GLOBALS['wp_logged_in'] = false;
-		add_filter(
-			'wp_helpdesk_frontend_kb_url',
-			static function (): string {
-				return 'https://example.test/help/';
-			}
-		);
+	public function testRenderSkipsMyAccountWhenWooAccountUrlUnavailable(): void {
+		$GLOBALS['wc_page_permalinks']['myaccount'] = '';
 
 		$page = new HelpdeskPage();
 		ob_start();
 		$page->render();
 		$output = (string) ob_get_clean();
 
-		self::assertStringContainsString( 'https://example.test/help/', $output );
-	}
-
-	public function testRenderSkipsKnowledgeBaseCardForUnsafeKbUrl(): void {
-		$GLOBALS['wp_logged_in'] = true;
-		add_filter(
-			'wp_helpdesk_frontend_kb_url',
-			static function (): string {
-				return 'javascript:alert(1)';
-			}
-		);
-
-		$page = new HelpdeskPage();
-		ob_start();
-		$page->render();
-		$output = (string) ob_get_clean();
-
-		self::assertStringNotContainsString( 'Browse help articles', $output );
+		self::assertStringNotContainsString( 'My Account', $output );
 	}
 }

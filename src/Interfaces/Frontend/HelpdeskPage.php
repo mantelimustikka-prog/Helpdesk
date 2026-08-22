@@ -58,31 +58,17 @@ class HelpdeskPage {
 				);
 			}
 			$links[] = array(
-				'url'   => wp_login_url( home_url( '/helpdesk/member/new/' ) ),
-				'label' => __( 'Sign in', 'wp-helpdesk' ),
-			);
-			$links[] = array(
 				'url'   => wp_login_url( home_url( '/helpdesk/requests/' ) ),
 				'label' => __( 'My Requests', 'wp-helpdesk' ),
 			);
 		}
 
-		$kb_url = trim( (string) apply_filters( 'wp_helpdesk_frontend_kb_url', '' ) );
-		if ( $this->isHttpUrl( $kb_url ) ) {
+		$account_url = $this->getWooAccountUrl();
+		if ( '' !== $account_url ) {
 			$links[] = array(
-				'url'   => $kb_url,
-				'label' => __( 'Browse articles', 'wp-helpdesk' ),
+				'url'   => $account_url,
+				'label' => __( 'My Account', 'wp-helpdesk' ),
 			);
-		}
-
-		if ( $is_logged_in ) {
-			$account_url = $this->getWooAccountUrl();
-			if ( '' !== $account_url ) {
-				$links[] = array(
-					'url'   => $account_url,
-					'label' => __( 'My Account', 'wp-helpdesk' ),
-				);
-			}
 		}
 
 		$links[] = array(
