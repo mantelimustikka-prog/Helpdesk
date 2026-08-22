@@ -53,12 +53,12 @@ class Routes {
 			array(
 				array(
 					'methods'             => 'GET',
-					'callback'            => array( $this->admin_ticket_controller, 'list' ),
+					'callback'            => array( $this->admin_ticket_controller, 'listTickets' ),
 					'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 				),
 				array(
 					'methods'             => 'POST',
-					'callback'            => array( $this->admin_ticket_controller, 'create' ),
+					'callback'            => array( $this->admin_ticket_controller, 'createTicket' ),
 					'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 				),
 			)
@@ -69,7 +69,7 @@ class Routes {
 			'/tickets/(?P<id>\d+)',
 			array(
 				'methods'             => 'GET',
-				'callback'            => array( $this->admin_ticket_controller, 'get' ),
+				'callback'            => array( $this->admin_ticket_controller, 'getTicket' ),
 				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
@@ -109,7 +109,7 @@ class Routes {
 			'/users',
 			array(
 				'methods'             => 'GET',
-				'callback'            => array( $this->admin_user_controller, 'list' ),
+				'callback'            => array( $this->admin_user_controller, 'listUsers' ),
 				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
@@ -119,7 +119,7 @@ class Routes {
 			'/attachments/(?P<id>\d+)',
 			array(
 				'methods'             => 'GET',
-				'callback'            => array( $this->admin_attachment_controller, 'get' ),
+				'callback'            => array( $this->admin_attachment_controller, 'getAttachment' ),
 				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);
