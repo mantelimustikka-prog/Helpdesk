@@ -25,10 +25,11 @@ final class HelpdeskPageTest extends TestCase {
 		$page->render();
 		$output = (string) ob_get_clean();
 
-		self::assertStringContainsString( 'class="hd-action-grid"', $output );
+		self::assertStringContainsString( 'class="hd-nav-menu"', $output );
 		self::assertStringContainsString( '/helpdesk/member/new/', $output );
 		self::assertStringContainsString( '/helpdesk/requests/', $output );
-		self::assertStringContainsString( 'View or continue my requests', $output );
+		self::assertStringContainsString( 'New Request', $output );
+		self::assertStringContainsString( 'My Requests', $output );
 		self::assertStringNotContainsString( 'wp-login.php?redirect_to=', $output );
 	}
 
@@ -42,7 +43,7 @@ final class HelpdeskPageTest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		self::assertStringContainsString( '/helpdesk/new/', $output );
-		self::assertStringContainsString( 'Sign in / account access', $output );
+		self::assertStringContainsString( 'Sign in', $output );
 		self::assertStringContainsString( 'wp-login.php?redirect_to=', $output );
 		self::assertStringContainsString( rawurlencode( 'https://example.test/helpdesk/member/new/' ), $output );
 	}
@@ -57,7 +58,7 @@ final class HelpdeskPageTest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		self::assertStringNotContainsString( '/helpdesk/new/', $output );
-		self::assertStringContainsString( 'Track an existing request', $output );
+		self::assertStringContainsString( 'My Requests', $output );
 	}
 
 	public function testRenderShowsKnowledgeBaseCardWhenKbUrlProvided(): void {

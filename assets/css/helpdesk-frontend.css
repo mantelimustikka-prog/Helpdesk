@@ -45,7 +45,7 @@
 	margin-top: 24px;
 }
 
-/* Customer hub action grid */
+/* Customer hub action grid (kept for backward compatibility) */
 .hd-action-grid {
 	list-style: none;
 	padding: 0;
@@ -75,6 +75,46 @@
 	color: #646970;
 	font-size: 0.92rem;
 	line-height: 1.45;
+}
+
+/* Centered navigation menu on the Help Desk landing page */
+.hd-nav-menu {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 14px;
+	margin: 32px auto 0;
+	max-width: 360px;
+}
+
+.hd-nav-menu__item {
+	display: block;
+	width: 100%;
+	padding: 16px 28px;
+	font-size: 1.15rem;
+	font-weight: 600;
+	text-align: center;
+	text-decoration: none;
+	background: #f6f7f7;
+	color: #1d2327;
+	border: 1px solid #dcdcde;
+	border-radius: 10px;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.hd-nav-menu__item:hover {
+	background: #e8e8e8;
+	border-color: #b4b9be;
+	color: #1d2327;
+}
+
+.hd-nav-menu__item:focus,
+.hd-nav-menu__item:focus-visible {
+	background: #e8e8e8;
+	border-color: #b4b9be;
+	color: #1d2327;
+	outline: 2px solid #0073aa;
+	outline-offset: 2px;
 }
 
 /* Buttons */

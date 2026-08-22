@@ -21,116 +21,88 @@ class HelpdeskPage {
 		$this->outputHeader( __( 'Support Centre', 'wp-helpdesk' ) );
 		$allow_guest = 1 === (int) get_site_option( Constants::OPTION_GENERAL_ALLOW_GUEST, 1 );
 		$is_logged_in = is_user_logged_in();
-		$cards        = $this->getCustomerActionCards( $is_logged_in, $allow_guest );
+		$links        = $this->getCustomerActionLinks( $is_logged_in, $allow_guest );
 		?>
 		<div class="hd-wrap">
-			<h1 class="hd-title"><?php esc_html_e( 'How can we help you?', 'wp-helpdesk' ); ?></h1>
-			<p class="hd-subtitle">
-				<?php esc_html_e( 'Choose what you need help with and jump directly to the right support action.', 'wp-helpdesk' ); ?>
-			</p>
-			<?php $this->renderActionGrid( $cards ); ?>
+			<h1 class="hd-title"><?php esc_html_e( 'Help Desk', 'wp-helpdesk' ); ?></h1>
+			<?php $this->renderNavMenu( $links ); ?>
 		</div>
 		<?php
 		$this->outputFooter();
 	}
 
 	/**
-	 * Build the customer action cards shown on the helpdesk hub page.
+	 * Build the customer navigation links shown on the helpdesk hub page.
 	 *
 	 * @param bool $is_logged_in Whether the current visitor is logged in.
 	 * @param bool $allow_guest  Whether guest submissions are enabled.
 	 * @return array<int, array<string, string>>
 	 */
-	protected function getCustomerActionCards( bool $is_logged_in, bool $allow_guest ): array {
-		$cards = array();
+	protected function getCustomerActionLinks( bool $is_logged_in, bool $allow_guest ): array {
+		$links = array();
 
 		if ( $is_logged_in ) {
-			$cards[] = array(
-				'title'       => __( 'Submit a request', 'wp-helpdesk' ),
-				'description' => __( 'Open a new support request as a signed-in customer.', 'wp-helpdesk' ),
-				'url'         => home_url( '/helpdesk/member/new/' ),
-				'button'      => __( 'Start request', 'wp-helpdesk' ),
-				'variant'     => 'primary',
+			$links[] = array(
+				'url'   => home_url( '/helpdesk/member/new/' ),
+				'label' => __( 'New Request', 'wp-helpdesk' ),
 			);
-			$cards[] = array(
-				'title'       => __( 'View or continue my requests', 'wp-helpdesk' ),
-				'description' => __( 'See your requests, check status, and continue any open conversation.', 'wp-helpdesk' ),
-				'url'         => home_url( '/helpdesk/requests/' ),
-				'button'      => __( 'Open my requests', 'wp-helpdesk' ),
-				'variant'     => 'primary',
+			$links[] = array(
+				'url'   => home_url( '/helpdesk/requests/' ),
+				'label' => __( 'My Requests', 'wp-helpdesk' ),
 			);
 		} else {
 			if ( $allow_guest ) {
-				$cards[] = array(
-					'title'       => __( 'Submit a request', 'wp-helpdesk' ),
-					'description' => __( 'Send a support request without signing in.', 'wp-helpdesk' ),
-					'url'         => home_url( '/helpdesk/new/' ),
-					'button'      => __( 'Submit as guest', 'wp-helpdesk' ),
-					'variant'     => 'primary',
+				$links[] = array(
+					'url'   => home_url( '/helpdesk/new/' ),
+					'label' => __( 'New Request', 'wp-helpdesk' ),
 				);
 			}
-			$cards[] = array(
-				'title'       => __( 'Sign in / account access', 'wp-helpdesk' ),
-				'description' => __( 'Sign in to submit requests and manage your support history.', 'wp-helpdesk' ),
-				'url'         => wp_login_url( home_url( '/helpdesk/member/new/' ) ),
-				'button'      => __( 'Sign in', 'wp-helpdesk' ),
-				'variant'     => 'primary',
+			$links[] = array(
+				'url'   => wp_login_url( home_url( '/helpdesk/member/new/' ) ),
+				'label' => __( 'Sign in', 'wp-helpdesk' ),
 			);
-			$cards[] = array(
-				'title'       => __( 'Track an existing request', 'wp-helpdesk' ),
-				'description' => __( 'Use your sign-in account or secure ticket link from email updates.', 'wp-helpdesk' ),
-				'url'         => wp_login_url( home_url( '/helpdesk/requests/' ) ),
-				'button'      => __( 'Track request', 'wp-helpdesk' ),
-				'variant'     => 'secondary',
+			$links[] = array(
+				'url'   => wp_login_url( home_url( '/helpdesk/requests/' ) ),
+				'label' => __( 'My Requests', 'wp-helpdesk' ),
 			);
 		}
 
 		$kb_url = trim( (string) apply_filters( 'wp_helpdesk_frontend_kb_url', '' ) );
 		if ( $this->isHttpUrl( $kb_url ) ) {
-			$cards[] = array(
-				'title'       => __( 'Browse help articles', 'wp-helpdesk' ),
-				'description' => __( 'Find answers quickly in the knowledge base.', 'wp-helpdesk' ),
-				'url'         => $kb_url,
-				'button'      => __( 'Browse articles', 'wp-helpdesk' ),
-				'variant'     => 'secondary',
+			$links[] = array(
+				'url'   => $kb_url,
+				'label' => __( 'Browse articles', 'wp-helpdesk' ),
 			);
 		}
 
 		if ( $is_logged_in ) {
 			$account_url = $this->getWooAccountUrl();
 			if ( '' !== $account_url ) {
-				$cards[] = array(
-					'title'       => __( 'WooCommerce account', 'wp-helpdesk' ),
-					'description' => __( 'Open your account dashboard for orders and account details.', 'wp-helpdesk' ),
-					'url'         => $account_url,
-					'button'      => __( 'Open account', 'wp-helpdesk' ),
-					'variant'     => 'secondary',
+				$links[] = array(
+					'url'   => $account_url,
+					'label' => __( 'My Account', 'wp-helpdesk' ),
 				);
 			}
 		}
 
-		return $cards;
+		return $links;
 	}
 
 	/**
-	 * Render the action card grid.
+	 * Render the centered navigation menu.
 	 *
-	 * @param array<int, array<string, string>> $cards Action cards.
+	 * @param array<int, array<string, string>> $links Navigation links.
 	 * @return void
 	 */
-	protected function renderActionGrid( array $cards ): void {
+	protected function renderNavMenu( array $links ): void {
 		?>
-		<ul class="hd-action-grid" aria-label="<?php echo esc_attr( __( 'Helpdesk actions', 'wp-helpdesk' ) ); ?>">
-			<?php foreach ( $cards as $card ) : ?>
-				<li class="hd-action-card">
-					<h2 class="hd-action-card__title"><?php echo esc_html( $card['title'] ); ?></h2>
-					<p class="hd-action-card__description"><?php echo esc_html( $card['description'] ); ?></p>
-					<a href="<?php echo esc_url( $card['url'] ); ?>" class="hd-btn <?php echo 'primary' === $card['variant'] ? 'hd-btn--primary' : 'hd-btn--secondary'; ?>">
-						<?php echo esc_html( $card['button'] ); ?>
-					</a>
-				</li>
+		<nav class="hd-nav-menu" aria-label="<?php echo esc_attr( __( 'Helpdesk menu', 'wp-helpdesk' ) ); ?>">
+			<?php foreach ( $links as $link ) : ?>
+				<a href="<?php echo esc_url( $link['url'] ); ?>" class="hd-nav-menu__item">
+					<?php echo esc_html( $link['label'] ); ?>
+				</a>
 			<?php endforeach; ?>
-		</ul>
+		</nav>
 		<?php
 	}
 
