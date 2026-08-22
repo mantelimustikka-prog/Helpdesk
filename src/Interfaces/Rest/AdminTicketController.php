@@ -194,6 +194,108 @@ class AdminTicketController {
 	}
 
 	/**
+	 * Create a new ticket.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response
+	 */
+	public function createTicket( WP_REST_Request $request ): WP_REST_Response {
+		global $wpdb;
+
+		$subject = sanitize_text_field( (string) $request->get_param( 'subject' ) );
+		$body    = wp_kses_post( (string) $request->get_param( 'body' ) );
+
+		if ( '' === trim( $subject ) ) {
+			return new WP_REST_Response( array( 'message' => 'Subject is required.' ), 400 );
+		}
+
+		if ( '' === trim( wp_strip_all_tags( $body ) ) ) {
+			return new WP_REST_Response( array( 'message' => 'Body is required.' ), 400 );
+		}
+
+		$table      = Schema::table( Constants::TABLE_TICKETS );
+		$network_id = Helpers::getNetworkId();
+		$now        = current_time( 'mysql', true );
+
+		$wpdb->insert(
+			$table,
+			array(
+				'network_id'  => $network_id,
+				'subject'     => $subject,
+				'body'        => $body,
+				'status'      => TicketStatus::toStorage( TicketStatus::CANONICAL_OPEN ),
+				'author_id'   => (int) $request->get_param( 'author_id' ) ?: get_current_user_id(),
+				'assigned_to' => (int) $request->get_param( 'assigned_to' ) ?: null,
+				'created_at'  => $now,
+				'updated_at'  => $now,
+			),
+			array( '%d', '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
+		);
+
+		$ticket = $this->findTicket( (int) $wpdb->insert_id );
+
+		if ( empty( $ticket ) ) {
+			return new WP_REST_Response( array( 'message' => 'Failed to create ticket.' ), 500 );
+		}
+
+		/**
+		 * Fires when an admin creates a helpdesk ticket.
+		 */
+		do_action( 'hd_ticket_created', $ticket );
+
+		return new WP_REST_Response( $this->normalizeTicketForResponse( $ticket ), 201 );
+	}
+
+	/**
+	 * Add an internal note to a ticket.
+	 *
+	 * @param WP_REST_Request $request Request object.
+	 * @return WP_REST_Response
+	 */
+	public function addNote( WP_REST_Request $request ): WP_REST_Response {
+		global $wpdb;
+
+		$ticket = $this->findTicket( (int) $request['id'] );
+		if ( empty( $ticket ) ) {
+			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
+		}
+
+		$body = wp_kses_post( (string) $request->get_param( 'body' ) );
+		if ( '' === trim( wp_strip_all_tags( $body ) ) ) {
+			return new WP_REST_Response( array( 'message' => 'Note body is required.' ), 400 );
+		}
+
+		$table = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+		$wpdb->insert(
+			$table,
+			array(
+				'ticket_id'      => (int) $ticket['id'],
+				'author_user_id' => get_current_user_id(),
+				'author_type'    => 'agent',
+				'body'           => $body,
+				'is_internal'    => 1,
+				'created_at'     => current_time( 'mysql', true ),
+			),
+			array( '%d', '%d', '%s', '%s', '%d', '%s' )
+		);
+
+		$note = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE id = %d LIMIT 1",
+				(int) $wpdb->insert_id
+			),
+			ARRAY_A
+		);
+
+		/**
+		 * Fires when an internal note is added to a helpdesk ticket.
+		 */
+		do_action( 'hd_ticket_note_added', $ticket, $note );
+
+		return new WP_REST_Response( $note, 201 );
+	}
+
+	/**
 	 * Assign a ticket to a user.
 	 *
 	 * @param WP_REST_Request $request Request object.
