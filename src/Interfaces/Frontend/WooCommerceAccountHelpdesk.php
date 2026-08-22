@@ -199,6 +199,8 @@ class WooCommerceAccountHelpdesk {
 			$this->handleReplySubmission( $route['ticket_no'] );
 		}
 
+		$this->hydrateReplyNoticeFromRequest();
+
 		$active_nav = 'request' === $route['view'] ? 'requests' : $route['view'];
 		$links      = $this->getNavigationLinks( $active_nav );
 
@@ -580,16 +582,71 @@ class WooCommerceAccountHelpdesk {
 		);
 
 		if ( $upload_results['failed'] > 0 ) {
-			$this->notice = array(
-				'type'    => 'error',
-				'message' => __( 'Your reply was sent, but one or more attachments could not be uploaded.', 'wp-helpdesk' ),
-			);
+			$this->redirectToReplyNotice( $ticket_no, 'reply_attachment_error' );
 			return;
 		}
 
-		$this->notice = array(
-			'type'    => 'success',
-			'message' => __( 'Your reply was sent.', 'wp-helpdesk' ),
+		$this->redirectToReplyNotice( $ticket_no, 'reply_sent' );
+	}
+
+	/**
+	 * Hydrate request-detail notices after a redirect.
+	 *
+	 * @return void
+	 */
+	protected function hydrateReplyNoticeFromRequest(): void {
+		if ( null !== $this->notice ) {
+			return;
+		}
+
+		$notice_code = sanitize_key( (string) ( $_GET['hd_reply_notice'] ?? '' ) );
+		if ( '' === $notice_code ) {
+			return;
+		}
+		$notice_nonce = sanitize_text_field( (string) ( $_GET['hd_reply_notice_nonce'] ?? '' ) );
+		if ( '' === $notice_nonce ) {
+			return;
+		}
+		$expected_nonce = (string) wp_create_nonce( 'hd_reply_notice_' . $notice_code );
+		if ( ! hash_equals( $expected_nonce, $notice_nonce ) ) {
+			return;
+		}
+
+		$messages = array(
+			'reply_sent'             => array(
+				'type'    => 'success',
+				'message' => __( 'Your reply was sent.', 'wp-helpdesk' ),
+			),
+			'reply_attachment_error' => array(
+				'type'    => 'error',
+				'message' => __( 'Your reply was sent, but one or more attachments could not be uploaded.', 'wp-helpdesk' ),
+			),
+		);
+
+		if ( isset( $messages[ $notice_code ] ) ) {
+			$this->notice = $messages[ $notice_code ];
+		}
+	}
+
+	/**
+	 * Redirect to the request detail view with a reply notice code.
+	 *
+	 * @param string $ticket_no   Ticket number.
+	 * @param string $notice_code Notice code.
+	 * @return void
+	 */
+	protected function redirectToReplyNotice( string $ticket_no, string $notice_code ): void {
+		$url       = $this->buildAccountUrl( 'request/' . $ticket_no );
+		$separator = false !== strpos( $url, '?' ) ? '&' : '?';
+		$nonce     = wp_create_nonce( 'hd_reply_notice_' . $notice_code );
+
+		$this->redirectTo(
+			$url
+			. $separator
+			. 'hd_reply_notice='
+			. rawurlencode( $notice_code )
+			. '&hd_reply_notice_nonce='
+			. rawurlencode( (string) $nonce )
 		);
 	}
 
