@@ -411,7 +411,9 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		);
 		$GLOBALS['wp_valid_nonces']['hd_my_account_reply'] = 'valid-reply-nonce';
 
+		ob_start();
 		$this->integration->render();
+		ob_end_clean();
 
 		self::assertSame( 11, $this->message_service->posted_ticket_id );
 		self::assertSame( 'member', $this->message_service->posted_author_type );
@@ -639,7 +641,9 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 			'size'     => array( 1024, 2048 ),
 		);
 
+		ob_start();
 		$this->integration->render();
+		ob_end_clean();
 
 		unset( $_FILES['hd_helpdesk_attachment'] );
 
