@@ -8,6 +8,7 @@ namespace WPHelpdesk\Bootstrap;
 use WPHelpdesk\Infrastructure\Database\Migrator;
 use WPHelpdesk\Infrastructure\Security\Capabilities;
 use WPHelpdesk\Domain\SLA\SlaService;
+use WPHelpdesk\Domain\Ticket\TicketLifecycleService;
 use WPHelpdesk\Domain\Privacy\RetentionService;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Bootstrap\PageBootstrapper;
@@ -42,6 +43,7 @@ class Activator {
 
 		SlaService::scheduleCron();
 		RetentionService::scheduleCron();
+		TicketLifecycleService::scheduleCron();
 
 		// Bootstrap frontend pages (per-site; iterate on network activation).
 		if ( $network_wide && is_multisite() ) {

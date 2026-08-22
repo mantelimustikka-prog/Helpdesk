@@ -6,6 +6,7 @@
 namespace WPHelpdesk\Interfaces\Frontend;
 
 use WPHelpdesk\Domain\Attachment\AttachmentService;
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
@@ -68,6 +69,7 @@ class GuestTicketView extends HelpdeskPage {
 
 		$messages    = $this->getMessages( (int) $ticket['id'] );
 		$attachments = $this->attachment_service->getForTicket( (int) $ticket['id'] );
+		$status      = TicketStatus::toCanonical( (string) ( $ticket['status'] ?? '' ) );
 
 		$this->outputHeader( sprintf( __( 'Ticket %s', 'wp-helpdesk' ), esc_html( (string) $ticket['ticket_no'] ) ) );
 		?>
@@ -87,8 +89,8 @@ class GuestTicketView extends HelpdeskPage {
 					<p><strong><?php esc_html_e( 'Subject:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $ticket['subject'] ); ?></p>
 					<p>
 						<strong><?php esc_html_e( 'Status:', 'wp-helpdesk' ); ?></strong>
-						<span class="hd-status-badge hd-status-badge--<?php echo esc_attr( (string) $ticket['status'] ); ?>">
-							<?php echo esc_html( (string) $ticket['status'] ); ?>
+						<span class="hd-status-badge hd-status-badge--<?php echo esc_attr( $status ); ?>">
+							<?php echo esc_html( TicketStatus::label( $status ) ); ?>
 						</span>
 					</p>
 				</div>
@@ -118,6 +120,7 @@ class GuestTicketView extends HelpdeskPage {
 				<?php endif; ?>
 
 				<!-- Reply form -->
+				<?php if ( TicketStatus::CANONICAL_CLOSED !== $status ) : ?>
 				<h2 class="hd-section-title"><?php esc_html_e( 'Add a Reply', 'wp-helpdesk' ); ?></h2>
 				<form class="hd-reply-form" id="hd-guest-reply-form"
 					data-ticket-no="<?php echo esc_attr( (string) $ticket['ticket_no'] ); ?>"
@@ -154,6 +157,9 @@ class GuestTicketView extends HelpdeskPage {
 					<p class="hd-error-message" id="hd-guest-reply-error" aria-live="assertive" role="alert"></p>
 					<p class="hd-success-message hd-success-message--hidden" id="hd-guest-reply-success" aria-live="polite"></p>
 				</form>
+				<?php else : ?>
+					<p><?php esc_html_e( 'This ticket is closed and cannot be replied to.', 'wp-helpdesk' ); ?></p>
+				<?php endif; ?>
 			</div>
 		</div>
 

@@ -25,7 +25,7 @@ final class RetentionSettingsTest extends TestCase {
 			array(
 				'hd_general_ticket_number_start'     => '1000',
 				'hd_general_ticket_number_increment' => '1',
-				'hd_general_default_status'          => 'open',
+				'hd_general_default_status'          => 'new',
 				'hd_general_default_priority'        => 'normal',
 				'hd_general_auto_assign_mode'        => 'none',
 				'hd_general_timezone_mode'           => 'network',
@@ -42,7 +42,7 @@ final class RetentionSettingsTest extends TestCase {
 			array(
 				'hd_general_ticket_number_start'     => '1000',
 				'hd_general_ticket_number_increment' => '1',
-				'hd_general_default_status'          => 'open',
+				'hd_general_default_status'          => 'new',
 				'hd_general_default_priority'        => 'normal',
 				'hd_general_auto_assign_mode'        => 'none',
 				'hd_general_timezone_mode'           => 'network',
@@ -60,7 +60,7 @@ final class RetentionSettingsTest extends TestCase {
 			array(
 				'hd_general_ticket_number_start'     => '1000',
 				'hd_general_ticket_number_increment' => '1',
-				'hd_general_default_status'          => 'open',
+				'hd_general_default_status'          => 'new',
 				'hd_general_default_priority'        => 'normal',
 				'hd_general_auto_assign_mode'        => 'none',
 				'hd_general_timezone_mode'           => 'network',

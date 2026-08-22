@@ -14,6 +14,7 @@ use WPHelpdesk\Domain\Push\FirebasePushProvider;
 use WPHelpdesk\Domain\Push\PushService;
 use WPHelpdesk\Domain\Routing\RoutingService;
 use WPHelpdesk\Domain\SLA\SlaService;
+use WPHelpdesk\Domain\Ticket\TicketLifecycleService;
 use WPHelpdesk\Infrastructure\Logger;
 use WPHelpdesk\Interfaces\Admin\NetworkMenu;
 use WPHelpdesk\Interfaces\Frontend\FrontendRouter;
@@ -34,6 +35,7 @@ class Plugin {
 	protected KnowledgeBaseService $kb_service;
 	protected GdprHandler $gdpr_handler;
 	protected RetentionService $retention_service;
+	protected TicketLifecycleService $ticket_lifecycle_service;
 
 	public function __construct(
 		?NetworkMenu $network_menu = null,
@@ -48,7 +50,8 @@ class Plugin {
 		?RoutingService $routing_service = null,
 		?KnowledgeBaseService $kb_service = null,
 		?GdprHandler $gdpr_handler = null,
-		?RetentionService $retention_service = null
+		?RetentionService $retention_service = null,
+		?TicketLifecycleService $ticket_lifecycle_service = null
 	) {
 		$this->network_menu         = $network_menu ?: new NetworkMenu();
 		$this->routes               = $routes ?: new Routes();
@@ -63,6 +66,7 @@ class Plugin {
 		$this->kb_service           = $kb_service ?: new KnowledgeBaseService();
 		$this->gdpr_handler         = $gdpr_handler ?: new GdprHandler();
 		$this->retention_service    = $retention_service ?: new RetentionService();
+		$this->ticket_lifecycle_service = $ticket_lifecycle_service ?: new TicketLifecycleService();
 	}
 
 	/**
@@ -87,6 +91,7 @@ class Plugin {
 
 		// Ticket lifecycle hooks (notifications + push).
 		add_action( 'hd_ticket_replied', array( $this, 'handleTicketReplied' ), 10, 2 );
+		add_action( 'hd_ticket_replied', array( $this->ticket_lifecycle_service, 'syncStatusAfterReply' ), 20, 2 );
 		add_action( 'hd_ticket_status_changed', array( $this, 'handleTicketStatusChanged' ), 10, 3 );
 		add_action( 'hd_ticket_created', array( $this, 'handleTicketCreated' ), 10, 1 );
 		add_action( 'hd_ticket_assigned', array( $this, 'handleTicketAssigned' ), 10, 2 );
@@ -97,6 +102,8 @@ class Plugin {
 
 		// P3: Retention cron.
 		add_action( 'hd_retention_purge', array( $this->retention_service, 'purgeExpired' ) );
+		add_action( TicketLifecycleService::CRON_HOOK, array( $this->ticket_lifecycle_service, 'runAutoTransitions' ) );
+		TicketLifecycleService::scheduleCron();
 
 		// P3: GDPR export/erase hooks.
 		$this->gdpr_handler->register();

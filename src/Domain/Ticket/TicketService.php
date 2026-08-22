@@ -228,9 +228,7 @@ class TicketService {
 	 * @return string
 	 */
 	private function sanitizeStatus( string $status ): string {
-		$allowed = [ 'new', 'triaged', 'waiting_customer', 'in_progress', 'resolved', 'closed' ];
-
-		return in_array( $status, $allowed, true ) ? $status : 'new';
+		return TicketStatus::toStorage( $status );
 	}
 
 	/**

@@ -5,6 +5,7 @@
 
 namespace WPHelpdesk\Interfaces\Admin\Pages;
 
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Interfaces\Frontend\WooCommerceAccountHelpdesk;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
@@ -45,7 +46,7 @@ class DashboardPage {
 						<tbody>
 							<?php foreach ( $stats['by_status'] as $status => $count ) : ?>
 								<tr>
-									<td><?php echo esc_html( $status ); ?></td>
+									<td><?php echo esc_html( TicketStatus::label( $status ) ); ?></td>
 									<td><?php echo esc_html( (string) $count ); ?></td>
 								</tr>
 							<?php endforeach; ?>
@@ -140,8 +141,12 @@ class DashboardPage {
 		$by_status = array();
 		$total     = 0;
 		foreach ( $rows as $row ) {
-			$by_status[ (string) $row['status'] ] = (int) $row['cnt'];
-			$total                                += (int) $row['cnt'];
+			$canonical = TicketStatus::toCanonical( (string) $row['status'] );
+			if ( ! isset( $by_status[ $canonical ] ) ) {
+				$by_status[ $canonical ] = 0;
+			}
+			$by_status[ $canonical ] += (int) $row['cnt'];
+			$total                   += (int) $row['cnt'];
 		}
 
 		// SLA breach count – column may not exist on older DB, so suppress errors.
