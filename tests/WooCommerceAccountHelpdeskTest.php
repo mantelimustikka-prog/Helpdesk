@@ -279,6 +279,27 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertStringContainsString( '/helpdesk/request/HD-10011/', $output );
 	}
 
+	public function testRenderRequestsSubviewShowsBulkCloseAction(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'requests';
+		$this->ticket_repository->tickets     = array(
+			array(
+				'id'         => 11,
+				'ticket_no'  => 'HD-10011',
+				'user_id'    => 7,
+				'subject'    => 'Need billing help',
+				'status'     => 'in_progress',
+				'updated_at' => '2026-08-19 07:00:00',
+			),
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Close selected', $output );
+		self::assertStringContainsString( 'value="close_member_tickets_bulk"', $output );
+	}
+
 	public function testRenderDetailShowsMessagesAndReplyFormForOwnedTicket(): void {
 		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
 		$this->ticket_repository->ticket      = array(
@@ -306,6 +327,25 @@ final class WooCommerceAccountHelpdeskTest extends TestCase {
 		self::assertStringContainsString( 'Pending Client reply', $output );
 		self::assertStringContainsString( 'Support', $output );
 		self::assertStringContainsString( 'Send a reply', $output );
+	}
+
+	public function testRenderDetailShowsCloseTicketButtonForOpenTicket(): void {
+		$GLOBALS['wp_query_vars']['helpdesk'] = 'request/HD-10011';
+		$this->ticket_repository->ticket      = array(
+			'id'              => 11,
+			'ticket_no'       => 'HD-10011',
+			'user_id'         => 7,
+			'requester_email' => 'agent@example.test',
+			'subject'         => 'Need billing help',
+			'status'          => 'waiting_customer',
+		);
+
+		ob_start();
+		$this->integration->render();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Close Ticket', $output );
+		self::assertStringContainsString( 'value="close_member_ticket"', $output );
 	}
 
 	public function testRenderDetailBlocksUnownedTicket(): void {

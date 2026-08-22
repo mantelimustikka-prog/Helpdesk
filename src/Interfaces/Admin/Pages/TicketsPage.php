@@ -50,95 +50,97 @@ class TicketsPage {
 			}
 			?>
 
-			<form method="get" style="margin-bottom:16px;">
-				<input type="hidden" name="page" value="wp-helpdesk-tickets">
-				<label for="hd-status-filter"><strong><?php esc_html_e( 'Filter by status:', 'wp-helpdesk' ); ?></strong></label>
-				<select id="hd-status-filter" name="status_filter">
-					<option value=""><?php esc_html_e( 'All', 'wp-helpdesk' ); ?></option>
-					<?php foreach ( $status_options as $status_opt ) : ?>
-						<option value="<?php echo esc_attr( $status_opt ); ?>" <?php selected( $status_filter, $status_opt ); ?>>
-							<?php echo esc_html( TicketStatus::label( $status_opt ) ); ?>
-						</option>
-					<?php endforeach; ?>
-				</select>
-				<?php submit_button( __( 'Filter', 'wp-helpdesk' ), 'secondary small', 'filter_submit', false ); ?>
-			</form>
+			<?php if ( ! $selected_ticket ) : ?>
+				<form method="get" style="margin-bottom:16px;">
+					<input type="hidden" name="page" value="wp-helpdesk-tickets">
+					<label for="hd-status-filter"><strong><?php esc_html_e( 'Filter by status:', 'wp-helpdesk' ); ?></strong></label>
+					<select id="hd-status-filter" name="status_filter">
+						<option value=""><?php esc_html_e( 'All', 'wp-helpdesk' ); ?></option>
+						<?php foreach ( $status_options as $status_opt ) : ?>
+							<option value="<?php echo esc_attr( $status_opt ); ?>" <?php selected( $status_filter, $status_opt ); ?>>
+								<?php echo esc_html( TicketStatus::label( $status_opt ) ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+					<?php submit_button( __( 'Filter', 'wp-helpdesk' ), 'secondary small', 'filter_submit', false ); ?>
+				</form>
 
-			<div class="hd-card">
-				<h2><?php esc_html_e( 'Queue', 'wp-helpdesk' ); ?></h2>
-				<?php if ( empty( $tickets ) ) : ?>
-					<p><?php esc_html_e( 'No tickets found yet.', 'wp-helpdesk' ); ?></p>
-				<?php else : ?>
-					<form method="post" id="hd-bulk-form">
-						<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
-						<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
-							<div style="margin-bottom:8px;">
-								<select name="hd_bulk_status" style="margin-right:8px;">
-									<option value=""><?php esc_html_e( 'Select status…', 'wp-helpdesk' ); ?></option>
-									<?php foreach ( $status_options as $status_option ) : ?>
-										<option value="<?php echo esc_attr( $status_option ); ?>"><?php echo esc_html( TicketStatus::label( $status_option ) ); ?></option>
-									<?php endforeach; ?>
-								</select>
-								<button type="submit" class="button button-secondary" name="hd_ticket_action" value="bulk_status">
-									<?php esc_html_e( 'Change Status', 'wp-helpdesk' ); ?>
-								</button>
-								<button type="submit" class="button button-secondary" name="hd_ticket_action" value="bulk_delete" onclick="return confirm('<?php esc_attr_e( 'Delete selected tickets and all their attachments?', 'wp-helpdesk' ); ?>');">
-									<?php esc_html_e( 'Delete Selected', 'wp-helpdesk' ); ?>
-								</button>
-							</div>
-						<?php endif; ?>
-						<table class="widefat striped">
-							<thead>
-								<tr>
-									<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
-										<td class="check-column">
-											<input type="checkbox" id="hd-select-all" title="<?php esc_attr_e( 'Select all', 'wp-helpdesk' ); ?>">
-										</td>
-									<?php endif; ?>
-									<th><?php esc_html_e( 'Ticket', 'wp-helpdesk' ); ?></th>
-									<th><?php esc_html_e( 'Subject', 'wp-helpdesk' ); ?></th>
-									<th><?php esc_html_e( 'Requester', 'wp-helpdesk' ); ?></th>
-									<th><?php esc_html_e( 'Status', 'wp-helpdesk' ); ?></th>
-									<th><?php esc_html_e( 'Updated', 'wp-helpdesk' ); ?></th>
-								</tr>
-							</thead>
-							<tbody>
-								<?php foreach ( $tickets as $ticket ) : ?>
+				<div class="hd-card">
+					<h2><?php esc_html_e( 'Queue', 'wp-helpdesk' ); ?></h2>
+					<?php if ( empty( $tickets ) ) : ?>
+						<p><?php esc_html_e( 'No tickets found yet.', 'wp-helpdesk' ); ?></p>
+					<?php else : ?>
+						<form method="post" id="hd-bulk-form">
+							<?php wp_nonce_field( 'hd_ticket_action', 'hd_ticket_nonce' ); ?>
+							<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
+								<div style="margin-bottom:8px;">
+									<select name="hd_bulk_status" style="margin-right:8px;">
+										<option value=""><?php esc_html_e( 'Select status…', 'wp-helpdesk' ); ?></option>
+										<?php foreach ( $status_options as $status_option ) : ?>
+											<option value="<?php echo esc_attr( $status_option ); ?>"><?php echo esc_html( TicketStatus::label( $status_option ) ); ?></option>
+										<?php endforeach; ?>
+									</select>
+									<button type="submit" class="button button-secondary" name="hd_ticket_action" value="bulk_status">
+										<?php esc_html_e( 'Change Status', 'wp-helpdesk' ); ?>
+									</button>
+									<button type="submit" class="button button-secondary" name="hd_ticket_action" value="bulk_delete" onclick="return confirm('<?php esc_attr_e( 'Delete selected tickets and all their attachments?', 'wp-helpdesk' ); ?>');">
+										<?php esc_html_e( 'Delete Selected', 'wp-helpdesk' ); ?>
+									</button>
+								</div>
+							<?php endif; ?>
+							<table class="widefat striped">
+								<thead>
 									<tr>
 										<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
 											<td class="check-column">
-												<input type="checkbox" name="hd_ticket_ids[]" value="<?php echo esc_attr( (string) $ticket['id'] ); ?>">
+												<input type="checkbox" id="hd-select-all" title="<?php esc_attr_e( 'Select all', 'wp-helpdesk' ); ?>">
 											</td>
 										<?php endif; ?>
-										<td>
-											<a href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . (int) $ticket['id'] ) ); ?>">
-												<?php echo esc_html( (string) $ticket['ticket_no'] ); ?>
-											</a>
-										</td>
-										<td><?php echo esc_html( (string) $ticket['subject'] ); ?></td>
-										<td><?php echo esc_html( (string) $ticket['requester_name'] . ' (' . (string) $ticket['requester_email'] . ')' ); ?></td>
-										<td><?php echo esc_html( TicketStatus::label( (string) $ticket['status'] ) ); ?></td>
-										<td><?php echo esc_html( (string) $ticket['updated_at'] ); ?></td>
+										<th><?php esc_html_e( 'Ticket', 'wp-helpdesk' ); ?></th>
+										<th><?php esc_html_e( 'Subject', 'wp-helpdesk' ); ?></th>
+										<th><?php esc_html_e( 'Requester', 'wp-helpdesk' ); ?></th>
+										<th><?php esc_html_e( 'Status', 'wp-helpdesk' ); ?></th>
+										<th><?php esc_html_e( 'Updated', 'wp-helpdesk' ); ?></th>
 									</tr>
-								<?php endforeach; ?>
-							</tbody>
-						</table>
-					</form>
-					<script>
-						(function () {
-							var selectAll = document.getElementById('hd-select-all');
-							if (selectAll) {
-								selectAll.addEventListener('change', function () {
-									var checkboxes = document.querySelectorAll('#hd-bulk-form input[name="hd_ticket_ids[]"]');
-									for (var i = 0; i < checkboxes.length; i++) {
-										checkboxes[i].checked = selectAll.checked;
-									}
-								});
-							}
-						})();
-					</script>
-				<?php endif; ?>
-			</div>
+								</thead>
+								<tbody>
+									<?php foreach ( $tickets as $ticket ) : ?>
+										<tr>
+											<?php if ( current_user_can( 'hd_manage_tickets' ) ) : ?>
+												<td class="check-column">
+													<input type="checkbox" name="hd_ticket_ids[]" value="<?php echo esc_attr( (string) $ticket['id'] ); ?>">
+												</td>
+											<?php endif; ?>
+											<td>
+												<a href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-tickets&ticket_id=' . (int) $ticket['id'] ) ); ?>">
+													<?php echo esc_html( (string) $ticket['ticket_no'] ); ?>
+												</a>
+											</td>
+											<td><?php echo esc_html( (string) $ticket['subject'] ); ?></td>
+											<td><?php echo esc_html( (string) $ticket['requester_name'] . ' (' . (string) $ticket['requester_email'] . ')' ); ?></td>
+											<td><?php echo esc_html( TicketStatus::label( (string) $ticket['status'] ) ); ?></td>
+											<td><?php echo esc_html( (string) $ticket['updated_at'] ); ?></td>
+										</tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						</form>
+						<script>
+							(function () {
+								var selectAll = document.getElementById('hd-select-all');
+								if (selectAll) {
+									selectAll.addEventListener('change', function () {
+										var checkboxes = document.querySelectorAll('#hd-bulk-form input[name="hd_ticket_ids[]"]');
+										for (var i = 0; i < checkboxes.length; i++) {
+											checkboxes[i].checked = selectAll.checked;
+										}
+									});
+								}
+							})();
+						</script>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
 
 			<?php if ( $selected_ticket ) : ?>
 				<div class="hd-card" style="margin-top: 20px;">
