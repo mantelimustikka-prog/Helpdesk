@@ -289,6 +289,18 @@ class SettingsPage {
 		update_site_option( Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR, $admin_color ?: '' );
 		update_site_option( Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR, $client_color ?: '' );
 
+		$status_color_keys = array(
+			Constants::OPTION_APPEARANCE_STATUS_NEW_COLOR,
+			Constants::OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR,
+			Constants::OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR,
+			Constants::OPTION_APPEARANCE_STATUS_RESOLVED_COLOR,
+			Constants::OPTION_APPEARANCE_STATUS_CLOSED_COLOR,
+		);
+		foreach ( $status_color_keys as $option_key ) {
+			$color = sanitize_hex_color( (string) ( $_POST[ $option_key ] ?? '' ) );
+			update_site_option( $option_key, $color ?: '' );
+		}
+
 		add_settings_error(
 			'wp_helpdesk_settings',
 			'wp_helpdesk_settings_saved',
@@ -305,6 +317,14 @@ class SettingsPage {
 	private function renderAppearance(): void {
 		$admin_color  = (string) get_site_option( Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR, '' );
 		$client_color = (string) get_site_option( Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR, '' );
+
+		$status_colors = array(
+			Constants::OPTION_APPEARANCE_STATUS_NEW_COLOR           => (string) get_site_option( Constants::OPTION_APPEARANCE_STATUS_NEW_COLOR, '' ),
+			Constants::OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR => (string) get_site_option( Constants::OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR, '' ),
+			Constants::OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR => (string) get_site_option( Constants::OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR, '' ),
+			Constants::OPTION_APPEARANCE_STATUS_RESOLVED_COLOR      => (string) get_site_option( Constants::OPTION_APPEARANCE_STATUS_RESOLVED_COLOR, '' ),
+			Constants::OPTION_APPEARANCE_STATUS_CLOSED_COLOR        => (string) get_site_option( Constants::OPTION_APPEARANCE_STATUS_CLOSED_COLOR, '' ),
+		);
 		?>
 		<form method="post">
 			<?php wp_nonce_field( 'hd_settings_save', 'hd_settings_nonce' ); ?>
@@ -339,6 +359,76 @@ class SettingsPage {
 							class="small-text"
 						>
 						<p class="description"><?php esc_html_e( 'Text color for customer/client reply messages.', 'wp-helpdesk' ); ?></p>
+					</td>
+				</tr>
+			</table>
+
+			<h2><?php esc_html_e( 'Ticket Status Colors', 'wp-helpdesk' ); ?></h2>
+			<p class="description"><?php esc_html_e( 'Set the background color for each ticket status label. Enter a valid hex color (e.g. #1a73e8) or leave blank to use the default.', 'wp-helpdesk' ); ?></p>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_NEW_COLOR ); ?>"><?php esc_html_e( 'New', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input
+							type="text"
+							id="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_NEW_COLOR ); ?>"
+							name="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_NEW_COLOR ); ?>"
+							value="<?php echo esc_attr( $status_colors[ Constants::OPTION_APPEARANCE_STATUS_NEW_COLOR ] ); ?>"
+							placeholder="#000000"
+							class="small-text"
+						>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR ); ?>"><?php esc_html_e( 'Pending Agent Reply', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input
+							type="text"
+							id="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR ); ?>"
+							name="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR ); ?>"
+							value="<?php echo esc_attr( $status_colors[ Constants::OPTION_APPEARANCE_STATUS_PENDING_AGENT_COLOR ] ); ?>"
+							placeholder="#000000"
+							class="small-text"
+						>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR ); ?>"><?php esc_html_e( 'Pending Client Reply', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input
+							type="text"
+							id="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR ); ?>"
+							name="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR ); ?>"
+							value="<?php echo esc_attr( $status_colors[ Constants::OPTION_APPEARANCE_STATUS_PENDING_CLIENT_COLOR ] ); ?>"
+							placeholder="#000000"
+							class="small-text"
+						>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_RESOLVED_COLOR ); ?>"><?php esc_html_e( 'Resolved', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input
+							type="text"
+							id="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_RESOLVED_COLOR ); ?>"
+							name="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_RESOLVED_COLOR ); ?>"
+							value="<?php echo esc_attr( $status_colors[ Constants::OPTION_APPEARANCE_STATUS_RESOLVED_COLOR ] ); ?>"
+							placeholder="#000000"
+							class="small-text"
+						>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_CLOSED_COLOR ); ?>"><?php esc_html_e( 'Closed', 'wp-helpdesk' ); ?></label></th>
+					<td>
+						<input
+							type="text"
+							id="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_CLOSED_COLOR ); ?>"
+							name="<?php echo esc_attr( Constants::OPTION_APPEARANCE_STATUS_CLOSED_COLOR ); ?>"
+							value="<?php echo esc_attr( $status_colors[ Constants::OPTION_APPEARANCE_STATUS_CLOSED_COLOR ] ); ?>"
+							placeholder="#000000"
+							class="small-text"
+						>
 					</td>
 				</tr>
 			</table>

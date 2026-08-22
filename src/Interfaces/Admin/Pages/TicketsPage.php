@@ -127,7 +127,10 @@ class TicketsPage {
 											</td>
 											<td><?php echo esc_html( (string) $ticket['subject'] ); ?></td>
 											<td><?php echo esc_html( (string) $ticket['requester_name'] . ' (' . (string) $ticket['requester_email'] . ')' ); ?></td>
-											<td><?php echo esc_html( TicketStatus::label( (string) $ticket['status'] ) ); ?></td>
+											<td><?php
+											$canonical_status = TicketStatus::toCanonical( (string) $ticket['status'] );
+											echo '<span class="hd-status-badge hd-status-badge--' . esc_attr( $canonical_status ) . '">' . esc_html( TicketStatus::label( $canonical_status ) ) . '</span>';
+										?></td>
 											<td><?php echo esc_html( (string) $ticket['updated_at'] ); ?></td>
 										</tr>
 									<?php endforeach; ?>
@@ -182,7 +185,7 @@ class TicketsPage {
 							<span><?php echo esc_html( (string) $selected_ticket['subject'] ); ?></span>
 						</div>
 						<div class="hd-ticket-nav__meta">
-							<span class="hd-status-badge"><?php echo esc_html( TicketStatus::label( (string) $selected_ticket['status'] ) ); ?></span>
+							<span class="hd-status-badge hd-status-badge--<?php echo esc_attr( TicketStatus::toCanonical( (string) $selected_ticket['status'] ) ); ?>"><?php echo esc_html( TicketStatus::label( (string) $selected_ticket['status'] ) ); ?></span>
 							<?php if ( ! empty( $selected_ticket['requester_name'] ) ) : ?>
 								<span><?php echo esc_html( (string) $selected_ticket['requester_name'] ); ?></span>
 							<?php endif; ?>
@@ -199,7 +202,7 @@ class TicketsPage {
 					</h2>
 					<p><strong><?php esc_html_e( 'Subject:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['subject'] ); ?></p>
 					<p><strong><?php esc_html_e( 'Phone:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( (string) $selected_ticket['requester_phone'] ); ?></p>
-					<p><strong><?php esc_html_e( 'Status:', 'wp-helpdesk' ); ?></strong> <?php echo esc_html( TicketStatus::label( (string) $selected_ticket['status'] ) ); ?></p>
+					<p><strong><?php esc_html_e( 'Status:', 'wp-helpdesk' ); ?></strong> <span class="hd-status-badge hd-status-badge--<?php echo esc_attr( TicketStatus::toCanonical( (string) $selected_ticket['status'] ) ); ?>"><?php echo esc_html( TicketStatus::label( (string) $selected_ticket['status'] ) ); ?></span></p>
 					<?php $this->renderOrderRelationRow( $selected_ticket ); ?>
 
 					<h3><?php esc_html_e( 'Thread', 'wp-helpdesk' ); ?></h3>
