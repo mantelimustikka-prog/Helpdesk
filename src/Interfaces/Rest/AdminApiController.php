@@ -46,10 +46,10 @@ class AdminApiController {
 	protected function success( array $data, int $status = 200 ): WP_REST_Response {
 		return new WP_REST_Response(
 			array_merge(
+				$data,
 				array(
 					'success' => true,
-				),
-				$data
+				)
 			),
 			$status
 		);
