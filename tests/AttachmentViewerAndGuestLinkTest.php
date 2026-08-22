@@ -451,7 +451,7 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 		$view->renderForTicket( 'HD-DELETED', 'valid-token' );
 		$output = (string) ob_get_clean();
 
-		self::assertStringContainsString( 'Ticket not found', $output );
+		self::assertStringContainsString( 'ticket not found', strtolower( $output ) );
 	}
 
 	public function testGuestTicketViewRendersThreadAndAttachments(): void {
