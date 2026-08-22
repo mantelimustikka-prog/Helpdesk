@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -282,7 +283,23 @@ private fun TicketDetailSection(
 ) {
     var replyDraft by remember(uiState.selectedTicketId) { mutableStateOf("") }
     var statusDraft by remember(uiState.selectedTicketId) { mutableStateOf(uiState.ticketDetail?.ticket?.status ?: "") }
+    var userEditedStatus by remember(uiState.selectedTicketId) { mutableStateOf(false) }
     var noteDraft by remember(uiState.selectedTicketId) { mutableStateOf("") }
+    LaunchedEffect(uiState.ticketDetail?.ticket?.id, uiState.ticketDetail?.ticket?.status) {
+        val status = uiState.ticketDetail?.ticket?.status ?: return@LaunchedEffect
+        if (!userEditedStatus) {
+            statusDraft = status
+        }
+    }
+    LaunchedEffect(uiState.actionMessage) {
+        when (uiState.actionMessage) {
+            "Reply sent." -> replyDraft = ""
+            "Internal note added." -> noteDraft = ""
+            else -> if (uiState.actionMessage?.startsWith("Status updated to ") == true) {
+                userEditedStatus = false
+            }
+        }
+    }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -345,7 +362,6 @@ private fun TicketDetailSection(
                 Button(
                     onClick = {
                         onReplySubmit(replyDraft)
-                        replyDraft = ""
                     },
                     enabled = !uiState.isMutating
                 ) {
@@ -356,7 +372,10 @@ private fun TicketDetailSection(
                 Text("Status update", style = MaterialTheme.typography.titleSmall)
                 OutlinedTextField(
                     value = statusDraft,
-                    onValueChange = { statusDraft = it },
+                    onValueChange = {
+                        statusDraft = it
+                        userEditedStatus = true
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     label = { Text("Status") }
@@ -367,7 +386,7 @@ private fun TicketDetailSection(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = { onStatusSubmit(statusDraft.ifBlank { detail.ticket.status }) },
+                    onClick = { onStatusSubmit(statusDraft) },
                     enabled = !uiState.isMutating
                 ) {
                     Text("Update status")
@@ -385,7 +404,6 @@ private fun TicketDetailSection(
                 Button(
                     onClick = {
                         onNoteSubmit(noteDraft)
-                        noteDraft = ""
                     },
                     enabled = !uiState.isMutating
                 ) {

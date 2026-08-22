@@ -48,6 +48,8 @@ class HelpdeskRepository(
         } else {
             val thread = try {
                 api.getTicketMessages(ticketId).toThread()
+            } catch (throwable: CancellationException) {
+                throw throwable
             } catch (_: Throwable) {
                 emptyList()
             }
