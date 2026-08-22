@@ -29,12 +29,14 @@ class PublicTicketController {
 	protected TopicTransitionService $topic_transition_service;
 	protected KnowledgeBaseService $kb_service;
 	protected AttachmentService $attachment_service;
+	protected Logger $logger;
 
-	public function __construct( ?TopicService $topic_service = null, ?TopicTransitionService $topic_transition_service = null, ?KnowledgeBaseService $kb_service = null, ?AttachmentService $attachment_service = null ) {
+	public function __construct( ?TopicService $topic_service = null, ?TopicTransitionService $topic_transition_service = null, ?KnowledgeBaseService $kb_service = null, ?AttachmentService $attachment_service = null, ?Logger $logger = null ) {
 		$this->topic_service            = $topic_service ?: new TopicService();
 		$this->topic_transition_service = $topic_transition_service ?: new TopicTransitionService();
 		$this->kb_service               = $kb_service ?: new KnowledgeBaseService();
 		$this->attachment_service       = $attachment_service ?: new AttachmentService();
+		$this->logger                   = $logger ?: new Logger();
 	}
 
 	/**
@@ -505,7 +507,8 @@ class PublicTicketController {
 		$raw_topic_path = $data['topic_path'] ?? array();
 		$topic_id       = (int) ( $data['topic_id'] ?? 0 );
 		$topic_path     = $this->normaliseTopicPath( $raw_topic_path, $topic_id );
-		if ( $topic_id > 0 && ( ! is_array( $raw_topic_path ) || empty( $raw_topic_path ) || (int) end( $topic_path ) !== $topic_id ) ) {
+		$terminal_topic_id = $this->getTerminalTopicId( $topic_path );
+		if ( $topic_id > 0 && ( ! is_array( $raw_topic_path ) || empty( $raw_topic_path ) || $terminal_topic_id !== $topic_id ) ) {
 			$fallback_topic_path = $this->buildTopicPathFromHierarchy( $topic_id );
 			if ( ! empty( $fallback_topic_path ) ) {
 				$topic_path = $fallback_topic_path;
@@ -991,7 +994,7 @@ class PublicTicketController {
 				static fn( int $value ): bool => $value > 0
 			)
 		);
-		if ( empty( $path ) || (int) end( $path ) !== $topic_id ) {
+		if ( empty( $path ) || $this->getTerminalTopicId( $path ) !== $topic_id ) {
 			$path[] = $topic_id;
 		}
 
@@ -1010,7 +1013,7 @@ class PublicTicketController {
 			return true;
 		}
 
-		if ( empty( $topic_path ) || (int) end( $topic_path ) !== $topic_id ) {
+		if ( empty( $topic_path ) || $this->getTerminalTopicId( $topic_path ) !== $topic_id ) {
 			return $this->invalidTopicPathError(
 				'missing_or_terminal_topic_mismatch',
 				array(
@@ -1158,11 +1161,26 @@ class PublicTicketController {
 			$data['debug'] = $context;
 		}
 
-		( new Logger() )->info(
+		$this->logger->error(
 			'Topic path validation failed [' . $data['reason'] . '] ' . wp_json_encode( $context )
 		);
 
 		return new WP_Error( 'hd_invalid_topic_path', __( 'Selected topic path is invalid.', 'wp-helpdesk' ), $data );
+	}
+
+	/**
+	 * Return the terminal topic id from a normalized topic path.
+	 *
+	 * @param array<int, int> $topic_path Topic path.
+	 * @return int
+	 */
+	protected function getTerminalTopicId( array $topic_path ): int {
+		if ( empty( $topic_path ) ) {
+			return 0;
+		}
+
+		$last_key = array_key_last( $topic_path );
+		return (int) $topic_path[ $last_key ];
 	}
 
 	/**

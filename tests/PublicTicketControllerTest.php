@@ -352,7 +352,7 @@ final class PublicTicketControllerTest extends TestCase {
 		};
 
 		$controller = new class( $topic_service, $transition_service, new KnowledgeBaseService() ) extends PublicTicketController {
-			public function validateForTest( array $topic_path, int $topic_id ) {
+			public function validateForTest( array $topic_path, int $topic_id ): bool|WP_Error {
 				return $this->validateTopicPath( $topic_path, $topic_id );
 			}
 		};
