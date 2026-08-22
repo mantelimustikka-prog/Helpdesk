@@ -19,9 +19,7 @@ class HelpdeskPage {
 	 */
 	public function render(): void {
 		$this->outputHeader( __( 'Support Centre', 'wp-helpdesk' ) );
-		$allow_guest = 1 === (int) get_site_option( Constants::OPTION_GENERAL_ALLOW_GUEST, 1 );
-		$is_logged_in = is_user_logged_in();
-		$links        = $this->getCustomerActionLinks( $is_logged_in, $allow_guest );
+		$links = $this->getCustomerActionLinks();
 		?>
 		<div class="hd-wrap">
 			<h1 class="hd-title"><?php esc_html_e( 'Help Desk', 'wp-helpdesk' ); ?></h1>
@@ -34,19 +32,18 @@ class HelpdeskPage {
 	/**
 	 * Build the customer navigation links shown on the helpdesk hub page.
 	 *
-	 * @param bool $is_logged_in Whether the current visitor is logged in.
-	 * @param bool $allow_guest  Whether guest submissions are enabled.
 	 * @return array<int, array<string, string>>
 	 */
-	protected function getCustomerActionLinks( bool $is_logged_in, bool $allow_guest ): array {
+	protected function getCustomerActionLinks(): array {
 		$links = array();
 
-		if ( $is_logged_in ) {
+		if ( is_user_logged_in() ) {
 			$links[] = array(
 				'url'   => home_url( '/helpdesk/member/new/' ),
 				'label' => __( 'New Request', 'wp-helpdesk' ),
 			);
 		} else {
+			$allow_guest = 1 === (int) get_site_option( Constants::OPTION_GENERAL_ALLOW_GUEST, 1 );
 			if ( $allow_guest ) {
 				$links[] = array(
 					'url'   => home_url( '/helpdesk/new/' ),
@@ -56,7 +53,7 @@ class HelpdeskPage {
 		}
 
 		$links[] = array(
-			'url'   => $this->getMyRequestsUrl( $is_logged_in ),
+			'url'   => is_user_logged_in() ? home_url( '/helpdesk/requests/' ) : wp_login_url( home_url( '/helpdesk/requests/' ) ),
 			'label' => __( 'My Requests', 'wp-helpdesk' ),
 		);
 
@@ -75,18 +72,6 @@ class HelpdeskPage {
 		);
 
 		return $links;
-	}
-
-	/**
-	 * Get the requests page URL for the current user state.
-	 *
-	 * @param bool $is_logged_in Whether the current visitor is logged in.
-	 * @return string
-	 */
-	protected function getMyRequestsUrl( bool $is_logged_in ): string {
-		return $is_logged_in
-			? home_url( '/helpdesk/requests/' )
-			: wp_login_url( home_url( '/helpdesk/requests/' ) );
 	}
 
 	/**
