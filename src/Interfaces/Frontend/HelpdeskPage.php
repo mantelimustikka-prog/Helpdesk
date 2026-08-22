@@ -58,20 +58,8 @@ class HelpdeskPage {
 				);
 			}
 			$links[] = array(
-				'url'   => wp_login_url( home_url( '/helpdesk/member/new/' ) ),
-				'label' => __( 'Sign in', 'wp-helpdesk' ),
-			);
-			$links[] = array(
 				'url'   => wp_login_url( home_url( '/helpdesk/requests/' ) ),
 				'label' => __( 'My Requests', 'wp-helpdesk' ),
-			);
-		}
-
-		$kb_url = trim( (string) apply_filters( 'wp_helpdesk_frontend_kb_url', '' ) );
-		if ( $this->isHttpUrl( $kb_url ) ) {
-			$links[] = array(
-				'url'   => $kb_url,
-				'label' => __( 'Browse articles', 'wp-helpdesk' ),
 			);
 		}
 
