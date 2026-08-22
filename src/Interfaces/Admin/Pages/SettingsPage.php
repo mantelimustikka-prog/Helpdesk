@@ -5,6 +5,7 @@
 
 namespace WPHelpdesk\Interfaces\Admin\Pages;
 
+use WPHelpdesk\Domain\Notification\EmailTemplateDefaults;
 use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
@@ -472,6 +473,7 @@ class SettingsPage {
 	 */
 	private function renderEmailTemplates(): void {
 		$templates = $this->getEmailTemplateFields();
+		$variables = EmailTemplateDefaults::variables();
 		?>
 		<form method="post">
 			<?php wp_nonce_field( 'hd_settings_save', 'hd_settings_nonce' ); ?>
@@ -486,13 +488,33 @@ class SettingsPage {
 					<tr>
 						<th scope="row"><label for="<?php echo esc_attr( $template['body_field'] ); ?>"><?php esc_html_e( 'HTML Body', 'wp-helpdesk' ); ?></label></th>
 						<td>
-							<textarea id="<?php echo esc_attr( $template['body_field'] ); ?>" name="<?php echo esc_attr( $template['body_field'] ); ?>" rows="8" class="large-text code"><?php echo esc_textarea( (string) get_site_option( $template['body_option'], '' ) ); ?></textarea>
+							<textarea id="<?php echo esc_attr( $template['body_field'] ); ?>" name="<?php echo esc_attr( $template['body_field'] ); ?>" rows="8" class="large-text code" placeholder="<?php echo esc_attr( $template['default_body'] ); ?>"><?php echo esc_textarea( (string) get_site_option( $template['body_option'], '' ) ); ?></textarea>
 						</td>
 					</tr>
 				</table>
 			<?php endforeach; ?>
 			<?php submit_button( __( 'Save Settings', 'wp-helpdesk' ) ); ?>
 		</form>
+
+		<hr>
+		<h2><?php esc_html_e( 'Available Template Variables', 'wp-helpdesk' ); ?></h2>
+		<p><?php esc_html_e( 'Use the following placeholders in any Subject or HTML Body field above. They will be replaced with live ticket data when each email is sent.', 'wp-helpdesk' ); ?></p>
+		<table class="widefat striped" style="max-width:700px;">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Placeholder', 'wp-helpdesk' ); ?></th>
+					<th><?php esc_html_e( 'Description', 'wp-helpdesk' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $variables as $placeholder => $description ) : ?>
+					<tr>
+						<td><code><?php echo esc_html( $placeholder ); ?></code></td>
+						<td><?php echo esc_html( $description ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
 		<?php
 	}
 
@@ -883,6 +905,8 @@ class SettingsPage {
 	 * @return array<int, array<string, string>>
 	 */
 	private function getEmailTemplateFields(): array {
+		$subjects = EmailTemplateDefaults::subjects();
+		$bodies   = EmailTemplateDefaults::bodies();
 		return array(
 			array(
 				'label'           => __( 'Ticket Created (Client)', 'wp-helpdesk' ),
@@ -890,7 +914,8 @@ class SettingsPage {
 				'body_field'      => 'hd_email_tpl_ticket_created_body',
 				'subject_option'  => Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_SUBJECT,
 				'body_option'     => Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_BODY,
-				'default_subject' => 'Ticket created: {ticket_no}',
+				'default_subject' => $subjects[ Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_SUBJECT ],
+				'default_body'    => $bodies[ Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_BODY ],
 			),
 			array(
 				'label'           => __( 'Ticket Reply (Client)', 'wp-helpdesk' ),
@@ -898,7 +923,8 @@ class SettingsPage {
 				'body_field'      => 'hd_email_tpl_ticket_reply_body',
 				'subject_option'  => Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_SUBJECT,
 				'body_option'     => Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_BODY,
-				'default_subject' => 'Ticket reply: {ticket_no}',
+				'default_subject' => $subjects[ Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_SUBJECT ],
+				'default_body'    => $bodies[ Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_BODY ],
 			),
 			array(
 				'label'           => __( 'Ticket Status Changed (Client)', 'wp-helpdesk' ),
@@ -906,7 +932,8 @@ class SettingsPage {
 				'body_field'      => 'hd_email_tpl_status_changed_body',
 				'subject_option'  => Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_SUBJECT,
 				'body_option'     => Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_BODY,
-				'default_subject' => 'Ticket status updated: {ticket_no}',
+				'default_subject' => $subjects[ Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_SUBJECT ],
+				'default_body'    => $bodies[ Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_BODY ],
 			),
 			array(
 				'label'           => __( 'Ticket Created (Admin)', 'wp-helpdesk' ),
@@ -914,7 +941,8 @@ class SettingsPage {
 				'body_field'      => 'hd_email_tpl_ticket_created_admin_body',
 				'subject_option'  => Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT,
 				'body_option'     => Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY,
-				'default_subject' => 'New helpdesk ticket: {ticket_no}',
+				'default_subject' => $subjects[ Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT ],
+				'default_body'    => $bodies[ Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY ],
 			),
 		);
 	}

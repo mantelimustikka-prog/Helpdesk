@@ -75,7 +75,7 @@ class NotificationService {
 		$this->sendTemplateEmail(
 			$recipient_email,
 			Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_SUBJECT,
-			'Ticket created: {ticket_no}',
+			EmailTemplateDefaults::subject( Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_SUBJECT ),
 			Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_BODY,
 			Helpers::pluginPath( 'templates/emails/ticket-created.php' ),
 			array( 'ticket' => $ticket ),
@@ -92,11 +92,11 @@ class NotificationService {
 	 * @return void
 	 */
 	public function sendTicketReply( array $ticket, array $message, string $recipient_email ): void {
-		$ticket  = $this->ensureGuestTicketLink( $ticket );
+		$ticket = $this->ensureGuestTicketLink( $ticket );
 		$this->sendTemplateEmail(
 			$recipient_email,
 			Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_SUBJECT,
-			'Ticket reply: {ticket_no}',
+			EmailTemplateDefaults::subject( Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_SUBJECT ),
 			Constants::OPTION_EMAIL_TEMPLATE_TICKET_REPLY_BODY,
 			Helpers::pluginPath( 'templates/emails/ticket-reply.php' ),
 			array(
@@ -177,7 +177,7 @@ class NotificationService {
 		$this->sendTemplateEmail(
 			$recipient_email,
 			Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_SUBJECT,
-			'Ticket status updated: {ticket_no}',
+			EmailTemplateDefaults::subject( Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_SUBJECT ),
 			Constants::OPTION_EMAIL_TEMPLATE_STATUS_CHANGED_BODY,
 			Helpers::pluginPath( 'templates/emails/status-changed.php' ),
 			array(
@@ -204,7 +204,7 @@ class NotificationService {
 		$this->sendTemplateEmail(
 			$recipient,
 			Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT,
-			'New helpdesk ticket: {ticket_no}',
+			EmailTemplateDefaults::subject( Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_SUBJECT ),
 			Constants::OPTION_EMAIL_TEMPLATE_TICKET_CREATED_ADMIN_BODY,
 			Helpers::pluginPath( 'templates/emails/ticket-created.php' ),
 			array( 'ticket' => $ticket ),

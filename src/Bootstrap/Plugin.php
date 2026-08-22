@@ -7,6 +7,7 @@ namespace WPHelpdesk\Bootstrap;
 
 use WPHelpdesk\Domain\Attachment\AttachmentService;
 use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseService;
+use WPHelpdesk\Domain\Notification\EmailTemplateDefaults;
 use WPHelpdesk\Domain\Notification\NotificationService;
 use WPHelpdesk\Domain\Privacy\GdprHandler;
 use WPHelpdesk\Domain\Privacy\RetentionService;
@@ -79,6 +80,9 @@ class Plugin {
 
 		add_action( 'network_admin_menu', array( $this->network_menu, 'register' ) );
 		add_action( 'rest_api_init', array( $this->routes, 'register_rest_routes' ) );
+
+		// Seed empty email template settings from built-in defaults on first admin load.
+		add_action( 'admin_init', array( EmailTemplateDefaults::class, 'seedIfEmpty' ) );
 
 		$this->frontend_router->register();
 		// Defer WooCommerce My Account integration until `init` (priority 1) so
