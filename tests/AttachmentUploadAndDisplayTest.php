@@ -491,6 +491,40 @@ final class AttachmentUploadAndDisplayTest extends TestCase {
 		self::assertSame( 'hd_forbidden', $result->get_error_code() );
 	}
 
+	public function testPublicUploadAttachmentReturnsNotFoundForDeletedTicket(): void {
+		$GLOBALS['wp_valid_nonces']['wp_rest'] = 'valid_nonce';
+		$GLOBALS['wp_logged_in']               = false;
+
+		global $wpdb;
+		$wpdb = new class {
+			public string $base_prefix = 'wp_';
+			public string $sitemeta    = 'wp_sitemeta';
+
+			public function prepare( string $query, ...$args ): string {
+				return $query;
+			}
+			public function query( string $query ): int {
+				return 1;
+			}
+			public function get_var( string $query ) {
+				return 2001;
+			}
+			public function get_row( string $query, string $output = OBJECT ) {
+				return null;
+			}
+		};
+
+		$request = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid_nonce' );
+		$request->set_param( 'id', 999 );
+		$request->set_param( 'guest_token', 'token' );
+
+		$result = ( new PublicTicketController() )->uploadAttachment( $request );
+
+		self::assertInstanceOf( WP_Error::class, $result );
+		self::assertSame( 'hd_not_found', $result->get_error_code() );
+	}
+
 	// -------------------------------------------------------------------------
 	// Admin reply attachment upload: AttachmentService is called
 	// -------------------------------------------------------------------------
@@ -652,5 +686,26 @@ final class AttachmentUploadAndDisplayTest extends TestCase {
 		self::assertSame( 201, $response->status );
 		self::assertArrayHasKey( 'ticket_id', $response->data, 'submitGuestReply response must include ticket_id for attachment upload' );
 		self::assertSame( 55, $response->data['ticket_id'] );
+	}
+
+	public function testSubmitGuestReplyReturnsNotFoundForDeletedTicket(): void {
+		$GLOBALS['wp_valid_nonces']['wp_rest'] = 'valid_nonce';
+
+		$controller = new class extends PublicTicketController {
+			public function findTicketByTokenAndNo( string $ticket_no, string $guest_token ): ?array {
+				return null;
+			}
+		};
+
+		$request = new WP_REST_Request();
+		$request->set_header( 'X-WP-Nonce', 'valid_nonce' );
+		$request->set_param( 'ticket_no', 'HD-DELETED' );
+		$request->set_param( 'guest_token', 'token' );
+		$request->set_param( 'message', 'Message' );
+
+		$response = $controller->submitGuestReply( $request );
+
+		self::assertInstanceOf( WP_Error::class, $response );
+		self::assertSame( 'hd_not_found', $response->get_error_code() );
 	}
 }

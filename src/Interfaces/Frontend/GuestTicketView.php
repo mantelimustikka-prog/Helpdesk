@@ -178,14 +178,16 @@ class GuestTicketView extends HelpdeskPage {
 			return null;
 		}
 		$guest_token_hash = Helpers::hashGuestToken( $guest_token );
+		$network_id       = Helpers::getNetworkId();
 
 		global $wpdb;
 		$table = Schema::table( Constants::TABLE_TICKETS );
 		$row   = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE ticket_no = %s AND guest_token_hash = %s LIMIT 1",
+				"SELECT * FROM {$table} WHERE ticket_no = %s AND guest_token_hash = %s AND network_id = %d LIMIT 1",
 				$ticket_no,
-				$guest_token_hash
+				$guest_token_hash,
+				$network_id
 			),
 			ARRAY_A
 		);

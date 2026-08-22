@@ -6,6 +6,8 @@
 namespace WPHelpdesk\Domain\Ticket;
 
 use WPHelpdesk\Domain\Attachment\AttachmentService;
+use WPHelpdesk\Infrastructure\Database\Schema;
+use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
 
 class TicketService {
@@ -140,8 +142,33 @@ class TicketService {
 	public function deleteTicket( int $id ): bool {
 		$attachment_service = new AttachmentService();
 		$attachment_service->deleteForTicket( $id );
+		$this->deleteRelatedRecords( $id );
 
 		return $this->repository->delete( $id, $this->network_id );
+	}
+
+	/**
+	 * Delete ticket-thread rows that are not constrained by foreign keys.
+	 *
+	 * @param int $ticket_id Ticket id.
+	 * @return void
+	 */
+	private function deleteRelatedRecords( int $ticket_id ): void {
+		global $wpdb;
+
+		$messages_table = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+		$events_table   = Schema::table( Constants::TABLE_TICKET_EVENTS );
+
+		$wpdb->delete(
+			$messages_table,
+			[ 'ticket_id' => $ticket_id ],
+			[ '%d' ]
+		);
+		$wpdb->delete(
+			$events_table,
+			[ 'ticket_id' => $ticket_id ],
+			[ '%d' ]
+		);
 	}
 
 	/**

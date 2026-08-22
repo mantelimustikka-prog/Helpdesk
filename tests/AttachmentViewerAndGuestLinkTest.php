@@ -215,6 +215,7 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 		self::assertIsArray( $ticket );
 		self::assertSame( 'HD-777', $wpdb->prepared_args[0] );
 		self::assertSame( hash( 'sha256', $token ), $wpdb->prepared_args[1] );
+		self::assertSame( 1, $wpdb->prepared_args[2] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -437,6 +438,20 @@ final class AttachmentViewerAndGuestLinkTest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		self::assertStringContainsString( 'not found', strtolower( $output ) );
+	}
+
+	public function testDeletedGuestTicketIsNotViewable(): void {
+		$view = new class extends GuestTicketView {
+			protected function findTicket( string $ticket_no, string $guest_token ): ?array {
+				return null;
+			}
+		};
+
+		ob_start();
+		$view->renderForTicket( 'HD-DELETED', 'valid-token' );
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( 'Ticket not found', $output );
 	}
 
 	public function testGuestTicketViewRendersThreadAndAttachments(): void {
