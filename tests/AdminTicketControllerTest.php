@@ -200,6 +200,7 @@ final class AdminTicketControllerTest extends TestCase {
 		);
 		$controller = new FakeAdminTicketController( $ticket );
 		$wpdb       = new class {
+			public string $base_prefix = 'wp_';
 			public int $insert_id = 401;
 			/** @var array<string, mixed> */
 			public array $last_insert = array();
@@ -253,6 +254,7 @@ final class AdminTicketControllerTest extends TestCase {
 		);
 		$controller = new FakeAdminTicketController( $ticket );
 		$wpdb       = new class {
+			public string $base_prefix = 'wp_';
 			public int $insert_id = 501;
 			/** @var array<string, mixed> */
 			public array $last_insert = array();
@@ -307,6 +309,7 @@ final class AdminTicketControllerTest extends TestCase {
 		$updated['status'] = 'closed';
 		$controller        = new FakeAdminTicketController( $original, array(), array( $original, $updated ) );
 		$wpdb              = new class {
+			public string $base_prefix = 'wp_';
 			/** @var array<string, mixed> */
 			public array $last_update = array();
 
