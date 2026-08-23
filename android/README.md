@@ -24,6 +24,8 @@ Open the `/android` directory as a standalone Gradle project.
 ## Notes
 
 - Enter either the site root URL (`https://example.com`) or the full admin API base URL (`https://example.com/wp-json/helpdesk/v1/admin/`).
+- The ticket DTO supports both the documented contract payload (`data` + `pagination`) and the current plugin scaffold payload (`items` + `page`/`per_page`) so the first app iteration can work while the backend evolves.
+
 ## Image assets
 
 The `splash_background.png` (in `res/drawable/`) and the `ic_launcher*.png` files (in `res/mipmap-*/`) are **placeholder colour fills** committed as structural scaffolding.
