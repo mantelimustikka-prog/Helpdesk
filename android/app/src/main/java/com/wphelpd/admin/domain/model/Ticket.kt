@@ -14,13 +14,16 @@ data class Ticket(
     val lastMessageExcerpt: String?
 )
 
-fun String.canonicalTicketStatus(): String = when (lowercase()) {
-    "open"             -> "new"
-    "pending",
-    "triaged",
-    "in_progress"      -> "pending_agent_reply"
-    "waiting_customer" -> "pending_client_reply"
-    else               -> lowercase()
+fun String.canonicalTicketStatus(): String {
+    val normalizedStatus = lowercase()
+    return when (normalizedStatus) {
+        "open"             -> "new"
+        "pending",
+        "triaged",
+        "in_progress"      -> "pending_agent_reply"
+        "waiting_customer" -> "pending_client_reply"
+        else               -> normalizedStatus
+    }
 }
 
 fun String.ticketStatusLabel(): String {
