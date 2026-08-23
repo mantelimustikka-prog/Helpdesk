@@ -205,6 +205,48 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_mapsFlatResponseMessagesAndAttachments() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    id = 101,
+                    ticketNo = "HD-000101",
+                    subject = "Login issue",
+                    status = "open",
+                    assignedTo = JsonParser.parseString("""{"id":12,"name":"Admin User"}"""),
+                    messages = listOf(
+                        TicketThreadEntryDto(
+                            id = 9001,
+                            authorType = "customer",
+                            authorName = "Jane Smith",
+                            body = "I cannot sign in.",
+                            createdAt = "2026-08-22T10:15:00Z"
+                        )
+                    ),
+                    attachments = listOf(
+                        TicketAttachmentDto(
+                            id = 501,
+                            name = "screenshot.png",
+                            url = "https://example.test/screenshot.png",
+                            mimeType = "image/png"
+                        )
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().body).isEqualTo("I cannot sign in.")
+        assertThat(detail.attachments.single().name).isEqualTo("screenshot.png")
+        assertThat(detail.assignedToName).isEqualTo("Admin User")
+    }
+
+    @Test
     fun updateTicketStatus_usesResponseStatusWhenAvailable() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(
@@ -215,7 +257,11 @@ class HelpdeskRepositoryTest {
             )
         }
 
-        val result = repository.updateTicketStatus(config, ticketId = 101, status = "pending")
+        val result = repository.updateTicketStatus(
+            config,
+            ticketId = 101,
+            status = "pending_agent_reply"
+        )
 
         assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
         assertThat((result as NetworkResult.Success).value).isEqualTo("resolved")

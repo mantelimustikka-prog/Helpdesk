@@ -21,7 +21,13 @@ class HelpdeskRepository(
     private val apiProvider: (AuthConfig) -> HelpdeskAdminApi = ApiClientFactory::create
 ) {
     companion object {
-        val allowedStatuses: Set<String> = setOf("new", "open", "pending", "resolved", "closed")
+        val allowedStatuses: Set<String> = setOf(
+            "new",
+            "pending_agent_reply",
+            "pending_client_reply",
+            "resolved",
+            "closed"
+        )
     }
 
     suspend fun authCheck(config: AuthConfig): NetworkResult<AuthCheckResult> = execute {

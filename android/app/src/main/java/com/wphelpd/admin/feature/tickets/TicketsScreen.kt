@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -414,7 +415,8 @@ private fun TicketDetailScreen(
                         isEnabled = areDetailActionsEnabled,
                         isLoading = uiState.isUpdatingStatus,
                         errorMessage = uiState.statusUpdateError,
-                        onStatusChange = onStatusChange
+                        onStatusChange = onStatusChange,
+                        appearanceColors = appearanceColors
                     )
                 }
 
@@ -643,7 +645,8 @@ private fun StatusActions(
     isEnabled: Boolean,
     isLoading: Boolean,
     errorMessage: String?,
-    onStatusChange: (String) -> Unit
+    onStatusChange: (String) -> Unit,
+    appearanceColors: AppearanceColors = AppearanceColors.Empty
 ) {
     val actionsEnabled = isEnabled && !isLoading
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -662,13 +665,27 @@ private fun StatusActions(
             ) {
                 statusLabels.forEach { status ->
                     val isCurrent = status.equals(currentStatus, ignoreCase = true)
+                    val statusColor = appearanceColors.statusColor(status).toComposeColorOrNull()
                     if (isCurrent) {
-                        Button(onClick = {}, enabled = false) {
-                            Text(status.replaceFirstChar { it.uppercase() })
+                        Button(
+                            onClick = {},
+                            enabled = false,
+                            colors = ButtonDefaults.buttonColors(
+                                disabledContainerColor = statusColor ?: MaterialTheme.colorScheme.surfaceVariant,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
+                            Text(ticketStatusLabel(status))
                         }
                     } else {
-                        TextButton(onClick = { onStatusChange(status) }, enabled = actionsEnabled) {
-                            Text(status.replaceFirstChar { it.uppercase() })
+                        TextButton(
+                            onClick = { onStatusChange(status) },
+                            enabled = actionsEnabled,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = statusColor ?: MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text(ticketStatusLabel(status))
                         }
                     }
                 }
@@ -743,4 +760,18 @@ private fun String.toComposeColorOrNull(): Color? {
     } catch (_: NumberFormatException) {
         null
     }
+}
+
+private fun ticketStatusLabel(status: String): String = when (status.lowercase()) {
+    "new",
+    "open"                  -> "New"
+    "pending_agent_reply",
+    "pending",
+    "triaged",
+    "in_progress"           -> "Pending Agent Reply"
+    "pending_client_reply",
+    "waiting_customer"      -> "Pending Client Reply"
+    "resolved"              -> "Resolved"
+    "closed"                -> "Closed"
+    else                    -> status.replace('_', ' ').replaceFirstChar { it.uppercase() }
 }

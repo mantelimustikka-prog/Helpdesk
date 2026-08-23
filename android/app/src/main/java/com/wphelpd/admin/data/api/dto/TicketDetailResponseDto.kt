@@ -20,9 +20,13 @@ data class TicketDetailResponseDto(
     @SerializedName("customer_email") val customerEmail: String? = null,
     @SerializedName("requester_name") val requesterName: String? = null,
     @SerializedName("requester_email") val requesterEmail: String? = null,
+    @SerializedName("customer") val customer: TicketCustomerDto? = null,
+    @SerializedName("assigned_to") val assignedTo: JsonElement? = null,
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("updated_at") val updatedAt: String? = null,
-    @SerializedName("message_count") val messageCount: Int? = null
+    @SerializedName("message_count") val messageCount: Int? = null,
+    @SerializedName("messages") val messages: List<TicketThreadEntryDto>? = null,
+    @SerializedName("attachments") val attachments: List<TicketAttachmentDto>? = null
 ) {
     fun toTicketDetail(): TicketDetail {
         check(success != false) { "Ticket detail request failed." }
@@ -37,9 +41,13 @@ data class TicketDetailResponseDto(
                 customerEmail = customerEmail,
                 requesterName = requesterName,
                 requesterEmail = requesterEmail,
+                customer = customer,
+                assignedTo = assignedTo,
                 createdAt = createdAt,
                 updatedAt = updatedAt,
-                messageCount = messageCount ?: 0
+                messageCount = messageCount ?: 0,
+                messages = messages,
+                attachments = attachments
             ).toModel()
     }
 }

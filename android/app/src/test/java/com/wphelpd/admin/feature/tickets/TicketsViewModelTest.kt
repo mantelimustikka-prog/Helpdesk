@@ -24,6 +24,7 @@ import com.wphelpd.admin.data.api.dto.TicketMessagesResponseDto
 import com.wphelpd.admin.data.api.dto.TicketThreadEntryDto
 import com.wphelpd.admin.data.api.dto.UserDto
 import com.wphelpd.admin.data.repository.HelpdeskRepository
+import com.wphelpd.admin.domain.model.AppearanceColors
 import com.wphelpd.admin.domain.model.statusLabel
 import com.wphelpd.admin.domain.model.Ticket as TicketModel
 import java.io.IOException
@@ -133,6 +134,42 @@ class TicketsViewModelTest {
         assertThat(state.ticketDetail?.thread).hasSize(2)
         assertThat(state.ticketDetail?.thread?.first()?.body).isEqualTo("I need a password reset.")
         assertThat(state.ticketDetail?.thread?.last()?.authorType).isEqualTo("agent")
+        assertThat(state.detailErrorMessage).isNull()
+        assertThat(state.isDetailLoading).isFalse()
+    }
+
+    @Test
+    fun selectTicket_loadsThreadFromFlatDetailResponseMessages() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    ticketDetailResponse = TicketDetailResponseDto(
+                        success = true,
+                        id = 202,
+                        ticketNo = "HD-000202",
+                        subject = "Password reset",
+                        status = "open",
+                        messages = listOf(
+                            TicketThreadEntryDto(
+                                id = 7001,
+                                authorType = "customer",
+                                authorName = "Bob Smith",
+                                body = "I need a password reset.",
+                                createdAt = "2026-08-22T11:00:00Z"
+                            )
+                        )
+                    )
+                )
+            }
+        )
+
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.thread).hasSize(1)
+        assertThat(state.ticketDetail?.thread?.single()?.body).isEqualTo("I need a password reset.")
         assertThat(state.detailErrorMessage).isNull()
         assertThat(state.isDetailLoading).isFalse()
     }
@@ -1090,8 +1127,13 @@ class TicketsViewModelTest {
     fun statusLabel_returnsHumanReadableLabels() {
         val slugs = mapOf(
             "new"                  to "New",
+            "open"                 to "New",
             "pending_agent_reply"  to "Pending Agent Reply",
+            "pending"              to "Pending Agent Reply",
+            "triaged"              to "Pending Agent Reply",
+            "in_progress"          to "Pending Agent Reply",
             "pending_client_reply" to "Pending Client Reply",
+            "waiting_customer"     to "Pending Client Reply",
             "resolved"             to "Resolved",
             "closed"               to "Closed"
         )
@@ -1103,6 +1145,23 @@ class TicketsViewModelTest {
             )
             assertThat(ticket.statusLabel()).isEqualTo(expected)
         }
+    }
+
+    @Test
+    fun appearanceColors_statusColorSupportsLegacyStatusAliases() {
+        val colors = AppearanceColors(
+            statusNewColor = "#111111",
+            statusPendingAgentColor = "#222222",
+            statusPendingClientColor = "#333333",
+            statusResolvedColor = "#444444",
+            statusClosedColor = "#555555"
+        )
+
+        assertThat(colors.statusColor("open")).isEqualTo("#111111")
+        assertThat(colors.statusColor("pending")).isEqualTo("#222222")
+        assertThat(colors.statusColor("triaged")).isEqualTo("#222222")
+        assertThat(colors.statusColor("in_progress")).isEqualTo("#222222")
+        assertThat(colors.statusColor("waiting_customer")).isEqualTo("#333333")
     }
 }
 
