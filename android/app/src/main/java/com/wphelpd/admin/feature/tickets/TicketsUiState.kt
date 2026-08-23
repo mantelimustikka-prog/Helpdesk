@@ -34,4 +34,5 @@ data class TicketsUiState(
     val noteError: String? = null
 ) {
     val canSubmit: Boolean = !isLoading && siteUrl.isNotBlank() && username.isNotBlank() && applicationPassword.isNotBlank()
+    val isDetailActionInProgress: Boolean = isReplying || isUpdatingStatus || isAddingNote
 }

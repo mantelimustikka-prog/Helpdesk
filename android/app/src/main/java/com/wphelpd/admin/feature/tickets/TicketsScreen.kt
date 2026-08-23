@@ -311,7 +311,10 @@ private fun TicketDetailScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onRefreshDetail, enabled = !uiState.isDetailLoading) {
+                    TextButton(
+                        onClick = onRefreshDetail,
+                        enabled = !uiState.isDetailLoading && !uiState.isDetailActionInProgress
+                    ) {
                         Text("Refresh")
                     }
                 }
@@ -342,13 +345,17 @@ private fun TicketDetailScreen(
                         modifier = Modifier.padding(top = 8.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    TextButton(onClick = onRefreshDetail) {
+                    TextButton(
+                        onClick = onRefreshDetail,
+                        enabled = !uiState.isDetailLoading && !uiState.isDetailActionInProgress
+                    ) {
                         Text("Retry")
                     }
                 }
             }
 
             uiState.ticketDetail?.let { detail ->
+                val areDetailActionsEnabled = !uiState.isDetailActionInProgress
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
                     TicketMetadata(detail)
@@ -365,6 +372,7 @@ private fun TicketDetailScreen(
                 item {
                     ReplyComposer(
                         text = uiState.replyText,
+                        isEnabled = areDetailActionsEnabled,
                         isLoading = uiState.isReplying,
                         errorMessage = uiState.replyError,
                         onTextChange = onReplyTextChange,
@@ -375,6 +383,7 @@ private fun TicketDetailScreen(
                 item {
                     StatusActions(
                         currentStatus = detail.ticket.status,
+                        isEnabled = areDetailActionsEnabled,
                         isLoading = uiState.isUpdatingStatus,
                         errorMessage = uiState.statusUpdateError,
                         onStatusChange = onStatusChange
@@ -384,6 +393,7 @@ private fun TicketDetailScreen(
                 item {
                     NoteComposer(
                         text = uiState.noteText,
+                        isEnabled = areDetailActionsEnabled,
                         isLoading = uiState.isAddingNote,
                         errorMessage = uiState.noteError,
                         onTextChange = onNoteTextChange,
@@ -538,6 +548,7 @@ private fun ThreadEntryCard(entry: TicketThreadEntry) {
 @Composable
 private fun ReplyComposer(
     text: String,
+    isEnabled: Boolean,
     isLoading: Boolean,
     errorMessage: String?,
     onTextChange: (String) -> Unit,
@@ -553,7 +564,7 @@ private fun ReplyComposer(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
                 label = { Text("Message") },
-                enabled = !isLoading
+                enabled = isEnabled
             )
             errorMessage?.let {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -561,7 +572,7 @@ private fun ReplyComposer(
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = onSubmit, enabled = !isLoading && text.isNotBlank()) {
+                Button(onClick = onSubmit, enabled = isEnabled && text.isNotBlank()) {
                     Text("Send reply")
                 }
                 if (isLoading) {
@@ -578,6 +589,7 @@ private val statusLabels: List<String> = HelpdeskRepository.allowedStatuses.sort
 @Composable
 private fun StatusActions(
     currentStatus: String,
+    isEnabled: Boolean,
     isLoading: Boolean,
     errorMessage: String?,
     onStatusChange: (String) -> Unit
@@ -603,7 +615,7 @@ private fun StatusActions(
                             Text(status.replaceFirstChar { it.uppercase() })
                         }
                     } else {
-                        TextButton(onClick = { onStatusChange(status) }, enabled = !isLoading) {
+                        TextButton(onClick = { onStatusChange(status) }, enabled = isEnabled) {
                             Text(status.replaceFirstChar { it.uppercase() })
                         }
                     }
@@ -620,6 +632,7 @@ private fun StatusActions(
 @Composable
 private fun NoteComposer(
     text: String,
+    isEnabled: Boolean,
     isLoading: Boolean,
     errorMessage: String?,
     onTextChange: (String) -> Unit,
@@ -635,7 +648,7 @@ private fun NoteComposer(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
                 label = { Text("Note") },
-                enabled = !isLoading
+                enabled = isEnabled
             )
             errorMessage?.let {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -643,7 +656,7 @@ private fun NoteComposer(
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = onSubmit, enabled = !isLoading && text.isNotBlank()) {
+                Button(onClick = onSubmit, enabled = isEnabled && text.isNotBlank()) {
                     Text("Add note")
                 }
                 if (isLoading) {
@@ -654,4 +667,3 @@ private fun NoteComposer(
         }
     }
 }
-
