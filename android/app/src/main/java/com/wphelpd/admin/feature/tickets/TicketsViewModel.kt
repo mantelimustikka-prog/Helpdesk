@@ -3,6 +3,7 @@ package com.wphelpd.admin.feature.tickets
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.wphelpd.admin.core.config.ServerConfigRepository
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.core.network.NetworkResult
 import com.wphelpd.admin.data.repository.HelpdeskRepository
@@ -13,10 +14,24 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class TicketsViewModel(
-    private val repository: HelpdeskRepository = HelpdeskRepository()
+    private val repository: HelpdeskRepository = HelpdeskRepository(),
+    private val serverConfigRepository: ServerConfigRepository? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(TicketsUiState())
     val uiState: StateFlow<TicketsUiState> = _uiState.asStateFlow()
+
+    init {
+        serverConfigRepository?.load()?.let { saved ->
+            updateState {
+                copy(
+                    siteUrl = saved.siteUrl,
+                    username = saved.username,
+                    applicationPassword = saved.applicationPassword,
+                    wpNonce = saved.wpNonce
+                )
+            }
+        }
+    }
 
     fun updateSiteUrl(value: String) = updateState { copy(siteUrl = value) }
     fun updateUsername(value: String) = updateState { copy(username = value) }
@@ -53,6 +68,7 @@ class TicketsViewModel(
                     }
                 }
                 is NetworkResult.Success -> {
+                    serverConfigRepository?.save(config)
                     updateState { copy(currentUser = authResult.value) }
                     refreshTickets(config)
                 }
@@ -148,9 +164,14 @@ class TicketsViewModel(
     )
 
     companion object {
-        fun factory(repository: HelpdeskRepository = HelpdeskRepository()): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+        fun factory(
+            repository: HelpdeskRepository = HelpdeskRepository(),
+            serverConfigRepository: ServerConfigRepository? = null
+        ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T = TicketsViewModel(repository) as T
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                TicketsViewModel(repository, serverConfigRepository) as T
         }
     }
 }
+

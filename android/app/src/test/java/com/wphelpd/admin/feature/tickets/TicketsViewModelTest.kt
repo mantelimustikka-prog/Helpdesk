@@ -1,6 +1,8 @@
 package com.wphelpd.admin.feature.tickets
 
 import com.google.common.truth.Truth.assertThat
+import com.wphelpd.admin.core.config.ServerConfigRepository
+import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.data.api.HelpdeskAdminApi
 import com.wphelpd.admin.data.api.dto.AuthCheckResponseDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
@@ -97,6 +99,81 @@ class TicketsViewModelTest {
         assertThat(state.detailErrorMessage).isEqualTo("Unable to reach the WP HelpD server.")
         assertThat(state.isDetailLoading).isFalse()
     }
+
+    @Test
+    fun viewModel_restoresSavedConfigIntoUiStateOnInit() {
+        val saved = AuthConfig(
+            siteUrl = "https://saved.example.com",
+            username = "savedUser",
+            applicationPassword = "savedPass",
+            wpNonce = "savedNonce"
+        )
+        val fakeConfigRepo = FakeServerConfigRepository(initial = saved)
+
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi() },
+            serverConfigRepository = fakeConfigRepo
+        )
+
+        val state = viewModel.uiState.value
+        assertThat(state.siteUrl).isEqualTo("https://saved.example.com")
+        assertThat(state.username).isEqualTo("savedUser")
+        assertThat(state.applicationPassword).isEqualTo("savedPass")
+        assertThat(state.wpNonce).isEqualTo("savedNonce")
+    }
+
+    @Test
+    fun connectAndLoadTickets_savesConfigWhenAuthSucceeds() = runTest {
+        val fakeConfigRepo = FakeServerConfigRepository()
+
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi() },
+            serverConfigRepository = fakeConfigRepo
+        )
+
+        viewModel.updateSiteUrl("https://example.com")
+        viewModel.updateUsername("admin")
+        viewModel.updateApplicationPassword("secret")
+        viewModel.connectAndLoadTickets()
+        advanceUntilIdle()
+
+        val saved = fakeConfigRepo.load()
+        assertThat(saved).isNotNull()
+        assertThat(saved!!.siteUrl).isEqualTo("https://example.com")
+        assertThat(saved.username).isEqualTo("admin")
+        assertThat(saved.applicationPassword).isEqualTo("secret")
+    }
+
+    @Test
+    fun connectAndLoadTickets_doesNotSaveConfigWhenAuthFails() = runTest {
+        val fakeConfigRepo = FakeServerConfigRepository()
+
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi(authThrowable = IOException("auth failed")) },
+            serverConfigRepository = fakeConfigRepo
+        )
+
+        viewModel.updateSiteUrl("https://example.com")
+        viewModel.updateUsername("admin")
+        viewModel.updateApplicationPassword("wrong")
+        viewModel.connectAndLoadTickets()
+        advanceUntilIdle()
+
+        assertThat(fakeConfigRepo.load()).isNull()
+    }
+
+    @Test
+    fun viewModel_handlesNoSavedConfigGracefully() {
+        val fakeConfigRepo = FakeServerConfigRepository(initial = null)
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi() },
+            serverConfigRepository = fakeConfigRepo
+        )
+        val state = viewModel.uiState.value
+        assertThat(state.siteUrl).isEmpty()
+        assertThat(state.username).isEmpty()
+        assertThat(state.applicationPassword).isEmpty()
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -122,12 +199,16 @@ private class FakeHelpdeskAdminApi(
             status = "open"
         )
     ),
-    private val detailThrowable: Throwable? = null
+    private val detailThrowable: Throwable? = null,
+    private val authThrowable: Throwable? = null
 ) : HelpdeskAdminApi {
-    override suspend fun authCheck(): AuthCheckResponseDto = AuthCheckResponseDto(
-        success = true,
-        user = UserDto(id = 1, name = "Agent", email = "agent@example.test")
-    )
+    override suspend fun authCheck(): AuthCheckResponseDto {
+        authThrowable?.let { throw it }
+        return AuthCheckResponseDto(
+            success = true,
+            user = UserDto(id = 1, name = "Agent", email = "agent@example.test")
+        )
+    }
 
     override suspend fun getTickets(
         page: Int,
@@ -153,4 +234,12 @@ private class FakeHelpdeskAdminApi(
         StatusUpdateResponseDto(success = true)
 
     override suspend fun addTicketNote(id: Int, request: NoteRequestDto): NoteResponseDto = NoteResponseDto(success = true)
+}
+
+private class FakeServerConfigRepository(initial: AuthConfig? = null) : ServerConfigRepository {
+    private var stored: AuthConfig? = initial
+
+    override fun load(): AuthConfig? = stored
+    override fun save(config: AuthConfig) { stored = config }
+    override fun clear() { stored = null }
 }

@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wphelpd.admin.core.ui.theme.WpHelpdTheme
+import com.wphelpd.admin.core.config.SecureServerConfigRepository
 import com.wphelpd.admin.feature.applock.AppLockManager
 import com.wphelpd.admin.feature.applock.AppLockViewModel
 import com.wphelpd.admin.feature.applock.CreatePasswordScreen
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val lockManager = AppLockManager(applicationContext)
+        val serverConfigRepository = SecureServerConfigRepository(applicationContext)
         setContent {
             WpHelpdTheme {
                 val lockViewModel: AppLockViewModel =
@@ -36,7 +38,7 @@ class MainActivity : ComponentActivity() {
                     }
                     lockState.isUnlocked -> {
                         val ticketsViewModel: TicketsViewModel =
-                            viewModel(factory = TicketsViewModel.factory())
+                            viewModel(factory = TicketsViewModel.factory(serverConfigRepository = serverConfigRepository))
                         TicketsRoute(viewModel = ticketsViewModel)
                     }
                     lockState.isFirstRun -> {
