@@ -339,6 +339,52 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_usesWrappedMessagesWhenWrappedItemsAreEmpty() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "items": [],
+                          "messages": [
+                            {
+                              "id": 8203,
+                              "author_type": "agent",
+                              "author_name": "Admin User",
+                              "body": "Fallback from empty wrapped items.",
+                              "created_at": "2026-08-22T12:40:00Z",
+                              "is_internal": 0
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().id).isEqualTo(8203)
+        assertThat(detail.thread.single().body).isEqualTo("Fallback from empty wrapped items.")
+    }
+
+    @Test
     fun fetchTicketDetail_mapsFlatResponseMessagesAndAttachments() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(

@@ -180,7 +180,6 @@ private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {
 private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEntryDto>? {
     if (value == null || !value.isJsonArray) return null
     val entries = value.asJsonArray
-    if (entries.size() == 0) return emptyList()
     return entries.mapNotNull { entry ->
         if (!entry.isJsonObject) return@mapNotNull null
         val payload = entry.asJsonObject
