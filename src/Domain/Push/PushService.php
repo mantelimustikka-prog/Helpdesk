@@ -30,7 +30,12 @@ class PushService {
 			$this->getAdminTokens(),
 			'New ticket created',
 			(string) ( $ticket['subject'] ?? '' ),
-			array( 'ticket_id' => (int) ( $ticket['id'] ?? 0 ) )
+			array(
+				'event_type'      => 'ticket_created',
+				'ticket_id'       => (int) ( $ticket['id'] ?? 0 ),
+				'deep_link'       => sprintf( 'wphelpd://ticket/%d', (int) ( $ticket['id'] ?? 0 ) ),
+				'notification_id' => sprintf( 'ticket_created:%d', (int) ( $ticket['id'] ?? 0 ) ),
+			)
 		);
 	}
 
@@ -50,7 +55,16 @@ class PushService {
 			$this->getAdminTokens(),
 			'New ticket reply',
 			wp_trim_words( wp_strip_all_tags( (string) ( $message['body'] ?? '' ) ), 20 ),
-			array( 'ticket_id' => (int) ( $ticket['id'] ?? 0 ) )
+			array(
+				'event_type'      => 'ticket_replied',
+				'ticket_id'       => (int) ( $ticket['id'] ?? 0 ),
+				'deep_link'       => sprintf( 'wphelpd://ticket/%d', (int) ( $ticket['id'] ?? 0 ) ),
+				'notification_id' => sprintf(
+					'ticket_replied:%d:%d',
+					(int) ( $ticket['id'] ?? 0 ),
+					(int) ( $message['id'] ?? 0 )
+				),
+			)
 		);
 	}
 

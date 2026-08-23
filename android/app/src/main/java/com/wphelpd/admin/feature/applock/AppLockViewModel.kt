@@ -36,7 +36,7 @@ class AppLockViewModel(
         }
         viewModelScope.launch(Dispatchers.IO) {
             repository.setPassword(password)
-            _uiState.update { it.copy(isUnlocked = true, errorMessage = null) }
+            _uiState.update { it.copy(isFirstRun = false, isUnlocked = true, errorMessage = null) }
         }
     }
 
@@ -44,11 +44,15 @@ class AppLockViewModel(
     fun unlock(password: String) {
         viewModelScope.launch(Dispatchers.IO) {
             if (repository.verifyPassword(password)) {
-                _uiState.update { it.copy(isUnlocked = true, errorMessage = null) }
+                _uiState.update { it.copy(isFirstRun = false, isUnlocked = true, errorMessage = null) }
             } else {
                 _uiState.update { it.copy(errorMessage = "Incorrect password.") }
             }
         }
+    }
+
+    fun lock() {
+        _uiState.update { it.copy(isUnlocked = false, errorMessage = null) }
     }
 
     fun clearError() {

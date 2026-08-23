@@ -6,6 +6,8 @@ import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.core.network.NetworkResult
 import com.wphelpd.admin.data.api.HelpdeskAdminApi
 import com.wphelpd.admin.data.api.dto.AuthCheckResponseDto
+import com.wphelpd.admin.data.api.dto.DeviceTokenRequestDto
+import com.wphelpd.admin.data.api.dto.DeviceTokenResponseDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
 import com.wphelpd.admin.data.api.dto.NoteResponseDto
 import com.wphelpd.admin.data.api.dto.PaginationDto
@@ -228,6 +230,54 @@ class HelpdeskRepositoryTest {
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
         assertThat((result as NetworkResult.Failure).message).contains("Status must be one of:")
     }
+
+    @Test
+    fun registerDeviceToken_callsApiWithExpectedPayload() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            deviceTokenRegisterResponse = DeviceTokenResponseDto(registered = true)
+        )
+        val repository = HelpdeskRepository { api }
+
+        val result = repository.registerDeviceToken(
+            config = config,
+            deviceToken = "fcm-token-123",
+            appVersion = "0.1.0"
+        )
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat((result as NetworkResult.Success).value).isTrue()
+        assertThat(api.lastRegisterRequest).isEqualTo(
+            DeviceTokenRequestDto(
+                deviceToken = "fcm-token-123",
+                platform = "android",
+                appVersion = "0.1.0"
+            )
+        )
+    }
+
+    @Test
+    fun unregisterDeviceToken_callsApiWithExpectedPayload() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            deviceTokenUnregisterResponse = DeviceTokenResponseDto(registered = false)
+        )
+        val repository = HelpdeskRepository { api }
+
+        val result = repository.unregisterDeviceToken(
+            config = config,
+            deviceToken = "fcm-token-123",
+            appVersion = "0.1.0"
+        )
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat((result as NetworkResult.Success).value).isFalse()
+        assertThat(api.lastUnregisterRequest).isEqualTo(
+            DeviceTokenRequestDto(
+                deviceToken = "fcm-token-123",
+                platform = "android",
+                appVersion = "0.1.0"
+            )
+        )
+    }
 }
 
 private class FakeHelpdeskAdminApi(
@@ -249,8 +299,13 @@ private class FakeHelpdeskAdminApi(
     private val ticketMessagesResponse: TicketMessagesResponseDto = TicketMessagesResponseDto(items = emptyList()),
     private val replyResponse: ReplyResponseDto = ReplyResponseDto(success = true),
     private val statusResponse: StatusUpdateResponseDto = StatusUpdateResponseDto(success = true),
-    private val noteResponse: NoteResponseDto = NoteResponseDto(success = true)
+    private val noteResponse: NoteResponseDto = NoteResponseDto(success = true),
+    private val deviceTokenRegisterResponse: DeviceTokenResponseDto = DeviceTokenResponseDto(registered = true),
+    private val deviceTokenUnregisterResponse: DeviceTokenResponseDto = DeviceTokenResponseDto(registered = false)
 ) : HelpdeskAdminApi {
+    var lastRegisterRequest: DeviceTokenRequestDto? = null
+    var lastUnregisterRequest: DeviceTokenRequestDto? = null
+
     override suspend fun authCheck(): AuthCheckResponseDto = authResponse
 
     override suspend fun getTickets(
@@ -269,4 +324,14 @@ private class FakeHelpdeskAdminApi(
     override suspend fun updateTicketStatus(id: Int, request: StatusUpdateRequestDto): StatusUpdateResponseDto = statusResponse
 
     override suspend fun addTicketNote(id: Int, request: NoteRequestDto): NoteResponseDto = noteResponse
+
+    override suspend fun registerDeviceToken(request: DeviceTokenRequestDto): DeviceTokenResponseDto {
+        lastRegisterRequest = request
+        return deviceTokenRegisterResponse
+    }
+
+    override suspend fun unregisterDeviceToken(request: DeviceTokenRequestDto): DeviceTokenResponseDto {
+        lastUnregisterRequest = request
+        return deviceTokenUnregisterResponse
+    }
 }

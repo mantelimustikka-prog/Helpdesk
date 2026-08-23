@@ -48,6 +48,7 @@ class AppLockViewModelTest {
         vm.createPassword("abcd", "abcd")
         advanceUntilIdle()
         assertThat(vm.uiState.value.isUnlocked).isTrue()
+        assertThat(vm.uiState.value.isFirstRun).isFalse()
         assertThat(vm.uiState.value.errorMessage).isNull()
     }
 
@@ -109,6 +110,21 @@ class AppLockViewModelTest {
         vm.clearError()
 
         assertThat(vm.uiState.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun lock_afterUnlock_relocksWithoutReturningToFirstRun() = runTest {
+        val repo = FakeAppLockRepository(hasPassword = true, correctPassword = "secret")
+        val vm = AppLockViewModel(repo)
+        advanceUntilIdle()
+        vm.unlock("secret")
+        advanceUntilIdle()
+        assertThat(vm.uiState.value.isUnlocked).isTrue()
+
+        vm.lock()
+
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
+        assertThat(vm.uiState.value.isFirstRun).isFalse()
     }
 }
 

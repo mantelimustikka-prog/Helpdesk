@@ -4,6 +4,7 @@ import com.wphelpd.admin.core.network.ApiClientFactory
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.core.network.NetworkResult
 import com.wphelpd.admin.data.api.HelpdeskAdminApi
+import com.wphelpd.admin.data.api.dto.DeviceTokenRequestDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
 import com.wphelpd.admin.data.api.dto.ReplyRequestDto
 import com.wphelpd.admin.data.api.dto.StatusUpdateRequestDto
@@ -96,6 +97,40 @@ class HelpdeskRepository(
             .addTicketNote(ticketId, NoteRequestDto(note = note))
             .requireResult()
             .toThreadEntryOrNull()
+    }
+
+    suspend fun registerDeviceToken(
+        config: AuthConfig,
+        deviceToken: String,
+        appVersion: String,
+        platform: String = "android"
+    ): NetworkResult<Boolean> = execute {
+        apiProvider(config)
+            .registerDeviceToken(
+                DeviceTokenRequestDto(
+                    deviceToken = deviceToken,
+                    platform = platform,
+                    appVersion = appVersion
+                )
+            )
+            .registered
+    }
+
+    suspend fun unregisterDeviceToken(
+        config: AuthConfig,
+        deviceToken: String,
+        appVersion: String,
+        platform: String = "android"
+    ): NetworkResult<Boolean> = execute {
+        apiProvider(config)
+            .unregisterDeviceToken(
+                DeviceTokenRequestDto(
+                    deviceToken = deviceToken,
+                    platform = platform,
+                    appVersion = appVersion
+                )
+            )
+            .registered
     }
 
     private suspend fun <T> execute(block: suspend () -> T): NetworkResult<T> = try {

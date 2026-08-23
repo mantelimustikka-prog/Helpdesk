@@ -4,6 +4,7 @@ import com.wphelpd.admin.domain.model.CurrentUser
 import com.wphelpd.admin.domain.model.Pagination
 import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.Ticket
+import com.wphelpd.admin.core.network.AuthConfig
 
 data class TicketsUiState(
     val siteUrl: String = "",
@@ -36,4 +37,11 @@ data class TicketsUiState(
 ) {
     val canSubmit: Boolean = !isLoading && siteUrl.isNotBlank() && username.isNotBlank() && applicationPassword.isNotBlank()
     val isDetailActionInProgress: Boolean = isReplying || isUpdatingStatus || isAddingNote
+
+    fun toAuthConfig(): AuthConfig = AuthConfig(
+        siteUrl = siteUrl,
+        username = username,
+        applicationPassword = applicationPassword,
+        wpNonce = wpNonce
+    )
 }
