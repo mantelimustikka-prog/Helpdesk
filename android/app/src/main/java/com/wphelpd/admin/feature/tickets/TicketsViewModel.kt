@@ -76,37 +76,35 @@ class TicketsViewModel(
     }
 
     fun selectTicket(ticketId: Int) {
-        updateState {
-            copy(
-                selectedTicketId = ticketId,
-                ticketDetail = null,
-                isDetailLoading = true,
-                detailErrorMessage = null
-            )
-        }
+        val selection = updateSelection(ticketId)
+        val config = _uiState.value.toAuthConfig()
         viewModelScope.launch {
             loadTicketDetail(
-                config = _uiState.value.toAuthConfig(),
-                ticketId = ticketId,
-                expectedSelectedTicketId = ticketId
+                config = config,
+                selection = selection
             )
         }
     }
 
     fun refreshSelectedTicket() {
-        val ticketId = _uiState.value.selectedTicketId ?: return
+        val state = _uiState.value
+        val ticketId = state.selectedTicketId ?: return
+        if (state.isDetailLoading || state.isDetailActionInProgress) return
+        val selection = currentSelection(ticketId) ?: return
+        val config = state.toAuthConfig()
         viewModelScope.launch {
             loadTicketDetail(
-                config = _uiState.value.toAuthConfig(),
-                ticketId = ticketId,
-                expectedSelectedTicketId = ticketId
+                config = config,
+                selection = selection
             )
         }
     }
 
     fun clearSelectedTicket() {
         updateState {
+            val nextSessionId = selectionSessionId + 1
             copy(
+                selectionSessionId = nextSessionId,
                 selectedTicketId = null,
                 ticketDetail = null,
                 isDetailLoading = false,
@@ -128,7 +126,8 @@ class TicketsViewModel(
     fun submitReply() {
         val state = _uiState.value
         val ticketId = state.selectedTicketId ?: return
-        if (state.isReplying) return
+        val selection = currentSelection(ticketId) ?: return
+        if (state.isDetailActionInProgress) return
         val message = state.replyText.trim()
         if (message.isEmpty()) {
             updateState { copy(replyError = "Reply cannot be empty.") }
@@ -136,7 +135,7 @@ class TicketsViewModel(
         }
         var started = false
         updateState {
-            if (isReplying) this else {
+            if (isDetailActionInProgress) this else {
                 started = true
                 copy(isReplying = true, replyError = null)
             }
@@ -144,12 +143,16 @@ class TicketsViewModel(
         if (!started) return
         viewModelScope.launch {
             when (val result = repository.replyToTicket(state.toAuthConfig(), ticketId, message)) {
-                is NetworkResult.Failure -> updateState {
+                is NetworkResult.Failure -> updateStateForSelection(selection) {
                     copy(isReplying = false, replyError = result.message)
                 }
                 is NetworkResult.Success -> {
-                    updateState { copy(isReplying = false, replyText = "", replyError = null) }
-                    refreshTicketDetailIfStillSelected(state.toAuthConfig(), ticketId)
+                    if (updateStateForSelection(selection) {
+                            copy(isReplying = false, replyText = "", replyError = null)
+                        }
+                    ) {
+                        refreshTicketDetailIfStillSelected(state.toAuthConfig(), selection)
+                    }
                 }
             }
         }
@@ -158,10 +161,11 @@ class TicketsViewModel(
     fun updateTicketStatus(status: String) {
         val state = _uiState.value
         val ticketId = state.selectedTicketId ?: return
-        if (state.isUpdatingStatus) return
+        val selection = currentSelection(ticketId) ?: return
+        if (state.isDetailActionInProgress) return
         var started = false
         updateState {
-            if (isUpdatingStatus) this else {
+            if (isDetailActionInProgress) this else {
                 started = true
                 copy(isUpdatingStatus = true, statusUpdateError = null)
             }
@@ -169,12 +173,16 @@ class TicketsViewModel(
         if (!started) return
         viewModelScope.launch {
             when (val result = repository.updateTicketStatus(state.toAuthConfig(), ticketId, status)) {
-                is NetworkResult.Failure -> updateState {
+                is NetworkResult.Failure -> updateStateForSelection(selection) {
                     copy(isUpdatingStatus = false, statusUpdateError = result.message)
                 }
                 is NetworkResult.Success -> {
-                    updateState { copy(isUpdatingStatus = false, statusUpdateError = null) }
-                    refreshTicketDetailIfStillSelected(state.toAuthConfig(), ticketId)
+                    if (updateStateForSelection(selection) {
+                            copy(isUpdatingStatus = false, statusUpdateError = null)
+                        }
+                    ) {
+                        refreshTicketDetailIfStillSelected(state.toAuthConfig(), selection)
+                    }
                 }
             }
         }
@@ -185,7 +193,8 @@ class TicketsViewModel(
     fun submitNote() {
         val state = _uiState.value
         val ticketId = state.selectedTicketId ?: return
-        if (state.isAddingNote) return
+        val selection = currentSelection(ticketId) ?: return
+        if (state.isDetailActionInProgress) return
         val note = state.noteText.trim()
         if (note.isEmpty()) {
             updateState { copy(noteError = "Note cannot be empty.") }
@@ -193,7 +202,7 @@ class TicketsViewModel(
         }
         var started = false
         updateState {
-            if (isAddingNote) this else {
+            if (isDetailActionInProgress) this else {
                 started = true
                 copy(isAddingNote = true, noteError = null)
             }
@@ -201,12 +210,16 @@ class TicketsViewModel(
         if (!started) return
         viewModelScope.launch {
             when (val result = repository.addInternalNote(state.toAuthConfig(), ticketId, note)) {
-                is NetworkResult.Failure -> updateState {
+                is NetworkResult.Failure -> updateStateForSelection(selection) {
                     copy(isAddingNote = false, noteError = result.message)
                 }
                 is NetworkResult.Success -> {
-                    updateState { copy(isAddingNote = false, noteText = "", noteError = null) }
-                    refreshTicketDetailIfStillSelected(state.toAuthConfig(), ticketId)
+                    if (updateStateForSelection(selection) {
+                            copy(isAddingNote = false, noteText = "", noteError = null)
+                        }
+                    ) {
+                        refreshTicketDetailIfStillSelected(state.toAuthConfig(), selection)
+                    }
                 }
             }
         }
@@ -243,21 +256,20 @@ class TicketsViewModel(
 
     private suspend fun loadTicketDetail(
         config: AuthConfig,
-        ticketId: Int,
-        showLoading: Boolean = true,
-        expectedSelectedTicketId: Int? = null
+        selection: TicketSelection,
+        showLoading: Boolean = true
     ) {
-        if (showLoading) {
-            updateState { copy(isDetailLoading = true, detailErrorMessage = null) }
-        } else {
-            updateState { copy(detailErrorMessage = null) }
+        val started = updateStateForSelection(selection) {
+            if (showLoading) {
+                copy(isDetailLoading = true, detailErrorMessage = null)
+            } else {
+                copy(detailErrorMessage = null)
+            }
         }
-        val detailResult = repository.fetchTicketDetail(config, ticketId)
-        expectedSelectedTicketId?.let { selectedTicketId ->
-            if (_uiState.value.selectedTicketId != selectedTicketId) return
-        }
+        if (!started) return
+        val detailResult = repository.fetchTicketDetail(config, selection.ticketId)
         when (detailResult) {
-            is NetworkResult.Failure -> updateState {
+            is NetworkResult.Failure -> updateStateForSelection(selection) {
                 copy(
                     isDetailLoading = false,
                     ticketDetail = null,
@@ -265,7 +277,7 @@ class TicketsViewModel(
                 )
             }
 
-            is NetworkResult.Success -> updateState {
+            is NetworkResult.Success -> updateStateForSelection(selection) {
                 copy(
                     isDetailLoading = false,
                     ticketDetail = detailResult.value,
@@ -275,14 +287,65 @@ class TicketsViewModel(
         }
     }
 
-    private suspend fun refreshTicketDetailIfStillSelected(config: AuthConfig, ticketId: Int) {
-        if (_uiState.value.selectedTicketId != ticketId) return
+    private suspend fun refreshTicketDetailIfStillSelected(config: AuthConfig, selection: TicketSelection) {
+        if (!isSelectionCurrent(selection)) return
         loadTicketDetail(
             config = config,
-            ticketId = ticketId,
-            showLoading = false,
-            expectedSelectedTicketId = ticketId
+            selection = selection,
+            showLoading = false
         )
+    }
+
+    private fun updateSelection(ticketId: Int): TicketSelection {
+        updateState {
+            val nextSessionId = selectionSessionId + 1
+            copy(
+                selectionSessionId = nextSessionId,
+                selectedTicketId = ticketId,
+                ticketDetail = null,
+                isDetailLoading = true,
+                detailErrorMessage = null,
+                replyText = "",
+                isReplying = false,
+                replyError = null,
+                isUpdatingStatus = false,
+                statusUpdateError = null,
+                noteText = "",
+                isAddingNote = false,
+                noteError = null
+            )
+        }
+        val state = _uiState.value
+        check(state.selectedTicketId == ticketId)
+        return TicketSelection(ticketId = ticketId, sessionId = state.selectionSessionId)
+    }
+
+    private fun currentSelection(ticketId: Int): TicketSelection? {
+        val state = _uiState.value
+        return if (state.selectedTicketId == ticketId) {
+            TicketSelection(ticketId = ticketId, sessionId = state.selectionSessionId)
+        } else {
+            null
+        }
+    }
+
+    private fun isSelectionCurrent(selection: TicketSelection): Boolean {
+        val state = _uiState.value
+        return state.matches(selection)
+    }
+
+    private fun updateStateForSelection(
+        selection: TicketSelection,
+        transform: TicketsUiState.() -> TicketsUiState
+    ): Boolean {
+        _uiState.update { currentState ->
+            if (currentState.matches(selection)) {
+                currentState.transform()
+            } else {
+                currentState
+            }
+        }
+        return _uiState.value.matches(selection)
     }
 
     private fun updateState(transform: TicketsUiState.() -> TicketsUiState) {
@@ -302,22 +365,31 @@ class TicketsViewModel(
         saveConfigOnSuccess: Boolean,
         isBootstrap: Boolean
     ) {
+        updateState {
+            val nextSessionId = selectionSessionId + 1
+            copy(
+                isBootstrapping = isBootstrap,
+                isLoading = true,
+                requiresSetup = false,
+                errorMessage = null,
+                tickets = emptyList(),
+                pagination = null,
+                selectionSessionId = nextSessionId,
+                selectedTicketId = null,
+                ticketDetail = null,
+                isDetailLoading = false,
+                detailErrorMessage = null,
+                replyText = "",
+                isReplying = false,
+                replyError = null,
+                isUpdatingStatus = false,
+                statusUpdateError = null,
+                noteText = "",
+                isAddingNote = false,
+                noteError = null
+            )
+        }
         viewModelScope.launch {
-            updateState {
-                copy(
-                    isBootstrapping = isBootstrap,
-                    isLoading = true,
-                    requiresSetup = false,
-                    errorMessage = null,
-                    tickets = emptyList(),
-                    pagination = null,
-                    selectedTicketId = null,
-                    ticketDetail = null,
-                    isDetailLoading = false,
-                    detailErrorMessage = null
-                )
-            }
-
             when (val authResult = repository.authCheck(config)) {
                 is NetworkResult.Failure -> {
                     val message = if (isBootstrap) {
@@ -365,6 +437,15 @@ class TicketsViewModel(
         username = username,
         applicationPassword = applicationPassword,
         wpNonce = wpNonce
+    )
+
+    private fun TicketsUiState.matches(selection: TicketSelection): Boolean =
+        selectedTicketId == selection.ticketId &&
+            selectionSessionId == selection.sessionId
+
+    private data class TicketSelection(
+        val ticketId: Int,
+        val sessionId: Long
     )
 
     companion object {

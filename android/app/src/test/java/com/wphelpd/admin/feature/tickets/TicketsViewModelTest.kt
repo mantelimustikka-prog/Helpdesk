@@ -265,6 +265,37 @@ class TicketsViewModelTest {
     }
 
     @Test
+    fun selectTicket_ignoresStaleDetailResultAfterReSelectingSameTicket() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Fresh ticket")
+            ),
+            ticketDetailResponseSequenceById = mapOf(
+                101 to listOf(
+                    ticketDetailResponse(id = 101, subject = "Stale ticket"),
+                    ticketDetailResponse(id = 101, subject = "Fresh ticket")
+                )
+            ),
+            ticketDetailDelaySequenceById = mapOf(
+                101 to listOf(50L, 0L)
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        runCurrent()
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(101)
+        assertThat(state.ticketDetail?.ticket?.subject).isEqualTo("Fresh ticket")
+        assertThat(api.ticketDetailRequestsById[101]).isEqualTo(2)
+    }
+
+    @Test
     fun submitReply_clearsReplyTextAndRefreshesDetailOnSuccess() = runTest {
         val viewModel = TicketsViewModel(
             repository = HelpdeskRepository {
@@ -331,6 +362,67 @@ class TicketsViewModelTest {
         viewModel.submitReply()
 
         assertThat(viewModel.uiState.value.replyError).isEqualTo("Reply cannot be empty.")
+    }
+
+    @Test
+    fun submitReply_setsLoadingStateAndResetsActionStateWhenSelectionChanges() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            replyDelayMs = 50,
+            replyThrowable = IOException("network error"),
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Ticket 101"),
+                202 to ticketDetailResponse(id = 202, subject = "Ticket 202")
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateReplyText("My reply.")
+        viewModel.submitReply()
+
+        assertThat(viewModel.uiState.value.isReplying).isTrue()
+
+        viewModel.selectTicket(202)
+
+        val switchingState = viewModel.uiState.value
+        assertThat(switchingState.selectedTicketId).isEqualTo(202)
+        assertThat(switchingState.replyText).isEmpty()
+        assertThat(switchingState.isReplying).isFalse()
+        assertThat(switchingState.replyError).isNull()
+        assertThat(switchingState.isDetailLoading).isTrue()
+
+        advanceUntilIdle()
+
+        val finalState = viewModel.uiState.value
+        assertThat(finalState.selectedTicketId).isEqualTo(202)
+        assertThat(finalState.ticketDetail?.ticket?.id).isEqualTo(202)
+        assertThat(finalState.replyError).isNull()
+    }
+
+    @Test
+    fun detailActions_blockOtherMutationsWhileRequestIsInFlight() = runTest {
+        val api = FakeHelpdeskAdminApi(replyDelayMs = 50)
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateReplyText("My reply.")
+        viewModel.updateNoteText("My note.")
+        viewModel.submitReply()
+        viewModel.updateTicketStatus("resolved")
+        viewModel.submitNote()
+        advanceUntilIdle()
+
+        assertThat(api.replyCallCount).isEqualTo(1)
+        assertThat(api.statusUpdateCallCount).isEqualTo(0)
+        assertThat(api.noteCallCount).isEqualTo(0)
     }
 
     @Test
@@ -406,6 +498,26 @@ class TicketsViewModelTest {
         assertThat(state.selectedTicketId).isEqualTo(202)
         assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
         assertThat(api.ticketDetailRequestsById[101]).isEqualTo(2)
+    }
+
+    @Test
+    fun updateTicketStatus_setsLoadingStateWhileRequestIsInFlight() = runTest {
+        val api = FakeHelpdeskAdminApi(statusDelayMs = 50)
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateTicketStatus("resolved")
+
+        val state = viewModel.uiState.value
+        assertThat(state.isUpdatingStatus).isTrue()
+        assertThat(state.statusUpdateError).isNull()
+
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.isUpdatingStatus).isFalse()
     }
 
     @Test
@@ -532,6 +644,36 @@ class TicketsViewModelTest {
     }
 
     @Test
+    fun updateTicketStatus_ignoresFailureAfterSelectionChanges() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            statusDelayMs = 50,
+            statusThrowable = IOException("server down"),
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Ticket 101"),
+                202 to ticketDetailResponse(id = 202, subject = "Ticket 202")
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateTicketStatus("resolved")
+        assertThat(viewModel.uiState.value.isUpdatingStatus).isTrue()
+
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
+        assertThat(state.isUpdatingStatus).isFalse()
+        assertThat(state.statusUpdateError).isNull()
+    }
+
+    @Test
     fun submitNote_clearsNoteTextAndRefreshesDetailOnSuccess() = runTest {
         val viewModel = TicketsViewModel(
             repository = HelpdeskRepository {
@@ -598,6 +740,27 @@ class TicketsViewModelTest {
         viewModel.submitNote()
 
         assertThat(viewModel.uiState.value.noteError).isEqualTo("Note cannot be empty.")
+    }
+
+    @Test
+    fun submitNote_setsLoadingStateWhileRequestIsInFlight() = runTest {
+        val api = FakeHelpdeskAdminApi(noteDelayMs = 50)
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateNoteText("My note.")
+        viewModel.submitNote()
+
+        val state = viewModel.uiState.value
+        assertThat(state.isAddingNote).isTrue()
+        assertThat(state.noteError).isNull()
+
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.isAddingNote).isFalse()
     }
 
     @Test
@@ -676,6 +839,37 @@ class TicketsViewModelTest {
     }
 
     @Test
+    fun submitNote_ignoresFailureAfterSelectionChanges() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            noteDelayMs = 50,
+            noteThrowable = IOException("offline"),
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Ticket 101"),
+                202 to ticketDetailResponse(id = 202, subject = "Ticket 202")
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateNoteText("My note.")
+        viewModel.submitNote()
+        assertThat(viewModel.uiState.value.isAddingNote).isTrue()
+
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
+        assertThat(state.isAddingNote).isFalse()
+        assertThat(state.noteError).isNull()
+    }
+
+    @Test
     fun startupBootstrap_routesToSetupWithRetryMessageWhenServerIsUnreachable() = runTest {
         val saved = AuthConfig(
             siteUrl = "https://saved.example.com",
@@ -732,7 +926,9 @@ private class FakeHelpdeskAdminApi(
         )
     ),
     private val ticketDetailResponsesById: Map<Int, TicketDetailResponseDto> = emptyMap(),
+    private val ticketDetailResponseSequenceById: Map<Int, List<TicketDetailResponseDto>> = emptyMap(),
     private val ticketDetailDelayMsById: Map<Int, Long> = emptyMap(),
+    private val ticketDetailDelaySequenceById: Map<Int, List<Long>> = emptyMap(),
     private val detailThrowable: Throwable? = null,
     private val authThrowable: Throwable? = null,
     private val replyResponse: ReplyResponseDto = ReplyResponseDto(success = true),
@@ -773,12 +969,17 @@ private class FakeHelpdeskAdminApi(
     )
 
     override suspend fun getTicket(id: Int): TicketDetailResponseDto {
-        ticketDetailRequestsById[id] = (ticketDetailRequestsById[id] ?: 0) + 1
-        ticketDetailDelayMsById[id]?.let { delayMs ->
-            if (delayMs > 0) delay(delayMs)
+        val requestIndex = ticketDetailRequestsById[id] ?: 0
+        ticketDetailRequestsById[id] = requestIndex + 1
+        val delayMs = ticketDetailDelaySequenceById[id]?.getOrNull(requestIndex)
+            ?: ticketDetailDelayMsById[id]
+        if (delayMs != null && delayMs > 0) {
+            delay(delayMs)
         }
         detailThrowable?.let { throw it }
-        return ticketDetailResponsesById[id] ?: ticketDetailResponse
+        return ticketDetailResponseSequenceById[id]?.getOrNull(requestIndex)
+            ?: ticketDetailResponsesById[id]
+            ?: ticketDetailResponse
     }
 
     override suspend fun getTicketMessages(id: Int): TicketMessagesResponseDto = TicketMessagesResponseDto(items = emptyList())
