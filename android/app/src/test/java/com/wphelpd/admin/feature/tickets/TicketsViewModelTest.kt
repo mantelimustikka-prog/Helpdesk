@@ -5,6 +5,8 @@ import com.wphelpd.admin.core.config.ServerConfigRepository
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.data.api.HelpdeskAdminApi
 import com.wphelpd.admin.data.api.dto.AuthCheckResponseDto
+import com.wphelpd.admin.data.api.dto.DeviceTokenRequestDto
+import com.wphelpd.admin.data.api.dto.DeviceTokenResponseDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
 import com.wphelpd.admin.data.api.dto.NoteResponseDto
 import com.wphelpd.admin.data.api.dto.PaginationDto
@@ -940,6 +942,55 @@ class TicketsViewModelTest {
         assertThat(state.currentUser).isNull()
         assertThat(state.errorMessage).isEqualTo(httpsRequiredMsg)
     }
+
+    @Test
+    fun clearSensitiveSessionState_removesProtectedTicketData() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi() }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.ticketDetail).isNotNull()
+
+        viewModel.clearSensitiveSessionState()
+
+        val state = viewModel.uiState.value
+        assertThat(state.currentUser).isNull()
+        assertThat(state.tickets).isEmpty()
+        assertThat(state.selectedTicketId).isNull()
+        assertThat(state.ticketDetail).isNull()
+        assertThat(state.replyText).isEmpty()
+        assertThat(state.noteText).isEmpty()
+    }
+
+    @Test
+    fun logout_clearsSavedConfigAndSession() = runTest {
+        val saved = AuthConfig(
+            siteUrl = "https://saved.example.com",
+            username = "savedUser",
+            applicationPassword = "savedPass",
+            wpNonce = "savedNonce"
+        )
+        val fakeConfigRepo = FakeServerConfigRepository(initial = saved)
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi() },
+            serverConfigRepository = fakeConfigRepo
+        )
+        advanceUntilIdle()
+
+        viewModel.logout()
+
+        val state = viewModel.uiState.value
+        assertThat(fakeConfigRepo.load()).isNull()
+        assertThat(state.requiresSetup).isTrue()
+        assertThat(state.siteUrl).isEmpty()
+        assertThat(state.username).isEmpty()
+        assertThat(state.applicationPassword).isEmpty()
+        assertThat(state.currentUser).isNull()
+        assertThat(state.tickets).isEmpty()
+        assertThat(state.ticketDetail).isNull()
+    }
 }
 
 private fun unauthorizedHttpException(): HttpException = HttpException(
@@ -1051,6 +1102,12 @@ private class FakeHelpdeskAdminApi(
         noteThrowable?.let { throw it }
         return noteResponse
     }
+
+    override suspend fun registerDeviceToken(request: DeviceTokenRequestDto): DeviceTokenResponseDto =
+        DeviceTokenResponseDto(registered = true)
+
+    override suspend fun unregisterDeviceToken(request: DeviceTokenRequestDto): DeviceTokenResponseDto =
+        DeviceTokenResponseDto(registered = false)
 }
 
 private fun ticketDetailResponse(id: Int, subject: String): TicketDetailResponseDto = TicketDetailResponseDto(

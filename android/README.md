@@ -14,6 +14,10 @@ This directory contains the initial Android admin client scaffold for the WP Hel
   - `POST /tickets/{id}/reply`
   - `POST /tickets/{id}/status`
   - `POST /tickets/{id}/note`
+- Push scaffolding:
+  - `POST /devices/register`
+  - `POST /devices/unregister`
+  - FCM background notifications for `ticket_created` and `ticket_replied` payloads
 - Compose UI + `TicketsViewModel` for auth check, loading and error states, ticket list, ticket detail, and reply/status/note actions
 - JVM unit tests for auth and ticket response mapping
 

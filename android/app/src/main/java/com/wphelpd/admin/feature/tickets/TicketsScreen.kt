@@ -46,7 +46,10 @@ import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.TicketThreadEntry
 
 @Composable
-fun TicketsRoute(viewModel: TicketsViewModel) {
+fun TicketsRoute(
+    viewModel: TicketsViewModel,
+    onLogout: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     BackHandler(enabled = uiState.selectedTicketId != null) {
@@ -68,7 +71,8 @@ fun TicketsRoute(viewModel: TicketsViewModel) {
         onSubmitReply = viewModel::submitReply,
         onStatusChange = viewModel::updateTicketStatus,
         onNoteTextChange = viewModel::updateNoteText,
-        onSubmitNote = viewModel::submitNote
+        onSubmitNote = viewModel::submitNote,
+        onLogout = onLogout
     )
 }
 
@@ -88,7 +92,8 @@ fun TicketsScreen(
     onSubmitReply: () -> Unit = {},
     onStatusChange: (String) -> Unit = {},
     onNoteTextChange: (String) -> Unit = {},
-    onSubmitNote: () -> Unit = {}
+    onSubmitNote: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
     when {
         uiState.currentUser == null || uiState.requiresSetup -> {
@@ -98,7 +103,8 @@ fun TicketsScreen(
                 onUsernameChange = onUsernameChange,
                 onApplicationPasswordChange = onApplicationPasswordChange,
                 onWpNonceChange = onWpNonceChange,
-                onConnect = onConnect
+                onConnect = onConnect,
+                onLogout = onLogout
             )
         }
         uiState.selectedTicketId != null -> {
@@ -110,14 +116,16 @@ fun TicketsScreen(
                 onSubmitReply = onSubmitReply,
                 onStatusChange = onStatusChange,
                 onNoteTextChange = onNoteTextChange,
-                onSubmitNote = onSubmitNote
+                onSubmitNote = onSubmitNote,
+                onLogout = onLogout
             )
         }
         else -> {
             TicketListScreen(
                 uiState = uiState,
                 onRefreshList = onRefreshList,
-                onTicketSelected = onTicketSelected
+                onTicketSelected = onTicketSelected,
+                onLogout = onLogout
             )
         }
     }
@@ -131,7 +139,8 @@ private fun ServerSetupScreen(
     onUsernameChange: (String) -> Unit,
     onApplicationPasswordChange: (String) -> Unit,
     onWpNonceChange: (String) -> Unit,
-    onConnect: () -> Unit
+    onConnect: () -> Unit,
+    onLogout: () -> Unit
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("WP HelpD — Connect") }) }
@@ -185,6 +194,10 @@ private fun ServerSetupScreen(
                         Button(onClick = onConnect, enabled = uiState.canSubmit) {
                             Text("Connect")
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = onLogout) {
+                            Text("Clear session")
+                        }
                     }
                 }
             }
@@ -215,13 +228,17 @@ private fun ServerSetupScreen(
 private fun TicketListScreen(
     uiState: TicketsUiState,
     onRefreshList: () -> Unit,
-    onTicketSelected: (Int) -> Unit
+    onTicketSelected: (Int) -> Unit,
+    onLogout: () -> Unit
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Tickets") },
                 actions = {
+                    TextButton(onClick = onLogout) {
+                        Text("Logout")
+                    }
                     TextButton(onClick = onRefreshList, enabled = !uiState.isLoading) {
                         Text("Refresh")
                     }
@@ -296,7 +313,8 @@ private fun TicketDetailScreen(
     onSubmitReply: () -> Unit,
     onStatusChange: (String) -> Unit,
     onNoteTextChange: (String) -> Unit,
-    onSubmitNote: () -> Unit
+    onSubmitNote: () -> Unit,
+    onLogout: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -311,6 +329,9 @@ private fun TicketDetailScreen(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onLogout) {
+                        Text("Logout")
+                    }
                     TextButton(
                         onClick = onRefreshDetail,
                         enabled = !uiState.isDetailLoading && !uiState.isDetailActionInProgress

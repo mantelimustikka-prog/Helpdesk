@@ -1,6 +1,8 @@
 package com.wphelpd.admin.data.api
 
 import com.wphelpd.admin.data.api.dto.AuthCheckResponseDto
+import com.wphelpd.admin.data.api.dto.DeviceTokenRequestDto
+import com.wphelpd.admin.data.api.dto.DeviceTokenResponseDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
 import com.wphelpd.admin.data.api.dto.NoteResponseDto
 import com.wphelpd.admin.data.api.dto.ReplyRequestDto
@@ -51,4 +53,14 @@ interface HelpdeskAdminApi {
         @Path("id") id: Int,
         @Body request: NoteRequestDto
     ): NoteResponseDto
+
+    @POST("devices/register")
+    suspend fun registerDeviceToken(
+        @Body request: DeviceTokenRequestDto
+    ): DeviceTokenResponseDto
+
+    @POST("devices/unregister")
+    suspend fun unregisterDeviceToken(
+        @Body request: DeviceTokenRequestDto
+    ): DeviceTokenResponseDto
 }

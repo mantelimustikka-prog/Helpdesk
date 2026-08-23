@@ -19,31 +19,12 @@ class TicketsViewModel(
     private val repository: HelpdeskRepository = HelpdeskRepository(),
     private val serverConfigRepository: ServerConfigRepository = NoOpServerConfigRepository
 ) : ViewModel() {
+    private var shouldRestoreFromSavedConfig: Boolean = false
     private val _uiState = MutableStateFlow(TicketsUiState())
     val uiState: StateFlow<TicketsUiState> = _uiState.asStateFlow()
 
     init {
-        val savedConfig = serverConfigRepository.load()
-        if (savedConfig == null) {
-            updateState {
-                copy(
-                    isBootstrapping = false,
-                    requiresSetup = true,
-                    errorMessage = "Saved server configuration was not found. Enter your WordPress credentials to continue."
-                )
-            }
-        } else {
-            updateState {
-                copy(
-                    siteUrl = savedConfig.siteUrl,
-                    username = savedConfig.username,
-                    applicationPassword = savedConfig.applicationPassword,
-                    wpNonce = savedConfig.wpNonce,
-                    isBootstrapping = true
-                )
-            }
-            bootstrapFromSavedConfig(savedConfig)
-        }
+        restoreSessionFromSavedConfig()
     }
 
     fun updateSiteUrl(value: String) = updateState { copy(siteUrl = value) }
@@ -118,6 +99,80 @@ class TicketsViewModel(
                 isAddingNote = false,
                 noteError = null
             )
+        }
+    }
+
+    fun clearSensitiveSessionState() {
+        shouldRestoreFromSavedConfig = true
+        updateState {
+            val nextSessionId = selectionSessionId + 1
+            copy(
+                currentUser = null,
+                tickets = emptyList(),
+                pagination = null,
+                selectionSessionId = nextSessionId,
+                selectedTicketId = null,
+                ticketDetail = null,
+                isDetailLoading = false,
+                detailErrorMessage = null,
+                replyText = "",
+                isReplying = false,
+                replyError = null,
+                isUpdatingStatus = false,
+                statusUpdateError = null,
+                noteText = "",
+                isAddingNote = false,
+                noteError = null,
+                errorMessage = null,
+                isLoading = false,
+                isBootstrapping = false
+            )
+        }
+    }
+
+    fun logout() {
+        serverConfigRepository.clear()
+        clearSensitiveSessionState()
+        updateState {
+            copy(
+                siteUrl = "",
+                username = "",
+                applicationPassword = "",
+                wpNonce = "",
+                requiresSetup = true,
+                errorMessage = "Session cleared. Enter your WordPress credentials to continue."
+            )
+        }
+    }
+
+    fun restoreSessionFromSavedConfig() {
+        shouldRestoreFromSavedConfig = false
+        val savedConfig = serverConfigRepository.load()
+        if (savedConfig == null) {
+            updateState {
+                copy(
+                    isBootstrapping = false,
+                    requiresSetup = true,
+                    errorMessage = "Saved server configuration was not found. Enter your WordPress credentials to continue."
+                )
+            }
+            return
+        }
+        updateState {
+            copy(
+                siteUrl = savedConfig.siteUrl,
+                username = savedConfig.username,
+                applicationPassword = savedConfig.applicationPassword,
+                wpNonce = savedConfig.wpNonce,
+                isBootstrapping = true
+            )
+        }
+        bootstrapFromSavedConfig(savedConfig)
+    }
+
+    fun restoreSessionFromSavedConfigIfNeeded() {
+        if (shouldRestoreFromSavedConfig) {
+            restoreSessionFromSavedConfig()
         }
     }
 
@@ -431,13 +486,6 @@ class TicketsViewModel(
                 result.message
         }
     }
-
-    private fun TicketsUiState.toAuthConfig(): AuthConfig = AuthConfig(
-        siteUrl = siteUrl,
-        username = username,
-        applicationPassword = applicationPassword,
-        wpNonce = wpNonce
-    )
 
     private fun TicketsUiState.matches(selection: TicketSelection): Boolean =
         selectedTicketId == selection.ticketId &&
