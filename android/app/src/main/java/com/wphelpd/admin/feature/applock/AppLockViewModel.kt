@@ -11,11 +11,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class AppLockViewModel(
-    private val repository: AppLockRepository
+    private val repository: AppLockRepository,
+    private val relockTimeoutMillis: Long = DEFAULT_RELOCK_TIMEOUT_MILLIS,
+    private val lockOnBackground: Boolean = true,
+    private val currentTimeMillis: () -> Long = { System.currentTimeMillis() }
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AppLockUiState())
     val uiState: StateFlow<AppLockUiState> = _uiState.asStateFlow()
+    private var backgroundedAtMillis: Long? = null
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -36,7 +40,7 @@ class AppLockViewModel(
         }
         viewModelScope.launch(Dispatchers.IO) {
             repository.setPassword(password)
-            _uiState.update { it.copy(isUnlocked = true, errorMessage = null) }
+            _uiState.update { it.copy(isFirstRun = false, isUnlocked = true, errorMessage = null) }
         }
     }
 
@@ -55,9 +59,30 @@ class AppLockViewModel(
         _uiState.update { it.copy(errorMessage = null) }
     }
 
+    fun onAppBackgrounded() {
+        val currentState = _uiState.value
+        if (!currentState.isUnlocked || currentState.isFirstRun) return
+        backgroundedAtMillis = currentTimeMillis()
+        if (lockOnBackground) {
+            _uiState.update { it.copy(isUnlocked = false, errorMessage = null) }
+        }
+    }
+
+    fun onAppForegrounded() {
+        val backgroundedAt = backgroundedAtMillis ?: return
+        backgroundedAtMillis = null
+        val currentState = _uiState.value
+        if (!currentState.isUnlocked || currentState.isFirstRun) return
+        val elapsed = currentTimeMillis() - backgroundedAt
+        if (relockTimeoutMillis <= 0L || elapsed >= relockTimeoutMillis) {
+            _uiState.update { it.copy(isUnlocked = false, errorMessage = null) }
+        }
+    }
+
     companion object {
         /** Minimum password length enforced by product requirements. */
         private const val MIN_PASSWORD_LENGTH = 4
+        private const val DEFAULT_RELOCK_TIMEOUT_MILLIS = 0L
 
         fun factory(repository: AppLockRepository): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {

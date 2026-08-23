@@ -48,6 +48,7 @@ class AppLockViewModelTest {
         vm.createPassword("abcd", "abcd")
         advanceUntilIdle()
         assertThat(vm.uiState.value.isUnlocked).isTrue()
+        assertThat(vm.uiState.value.isFirstRun).isFalse()
         assertThat(vm.uiState.value.errorMessage).isNull()
     }
 
@@ -93,6 +94,44 @@ class AppLockViewModelTest {
         advanceUntilIdle()
         assertThat(vm.uiState.value.isUnlocked).isFalse()
         assertThat(vm.uiState.value.errorMessage).isNotNull()
+    }
+
+    @Test
+    fun onAppBackgrounded_whenUnlocked_relocksImmediately() = runTest {
+        val repo = FakeAppLockRepository(hasPassword = true, correctPassword = "secret")
+        val vm = AppLockViewModel(repo)
+        advanceUntilIdle()
+        vm.unlock("secret")
+        advanceUntilIdle()
+
+        vm.onAppBackgrounded()
+
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
+    }
+
+    @Test
+    fun onAppForegrounded_relocksOnlyAfterTimeout_whenBackgroundLockDisabled() = runTest {
+        var now = 1_000L
+        val repo = FakeAppLockRepository(hasPassword = true, correctPassword = "secret")
+        val vm = AppLockViewModel(
+            repository = repo,
+            relockTimeoutMillis = 5_000L,
+            lockOnBackground = false,
+            currentTimeMillis = { now }
+        )
+        advanceUntilIdle()
+        vm.unlock("secret")
+        advanceUntilIdle()
+
+        vm.onAppBackgrounded()
+        now += 4_000L
+        vm.onAppForegrounded()
+        assertThat(vm.uiState.value.isUnlocked).isTrue()
+
+        vm.onAppBackgrounded()
+        now += 5_000L
+        vm.onAppForegrounded()
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
     }
 }
 

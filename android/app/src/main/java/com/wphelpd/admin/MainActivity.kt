@@ -3,6 +3,9 @@ package com.wphelpd.admin
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wphelpd.admin.core.ui.theme.WpHelpdTheme
@@ -28,6 +31,7 @@ import com.wphelpd.admin.R
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val activity = this
         val lockManager = AppLockManager(applicationContext)
         val serverConfigRepository = SecureServerConfigRepository(applicationContext)
         setContent {
@@ -35,6 +39,21 @@ class MainActivity : ComponentActivity() {
                 val lockViewModel: AppLockViewModel =
                     viewModel(factory = AppLockViewModel.factory(lockManager))
                 val lockState = lockViewModel.uiState.collectAsStateWithLifecycle().value
+                DisposableEffect(lockViewModel) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        when (event) {
+                            Lifecycle.Event.ON_STOP -> {
+                                if (!activity.isChangingConfigurations) {
+                                    lockViewModel.onAppBackgrounded()
+                                }
+                            }
+                            Lifecycle.Event.ON_START -> lockViewModel.onAppForegrounded()
+                            else -> Unit
+                        }
+                    }
+                    activity.lifecycle.addObserver(observer)
+                    onDispose { activity.lifecycle.removeObserver(observer) }
+                }
 
                 when {
                     lockState.isInitialising -> {
