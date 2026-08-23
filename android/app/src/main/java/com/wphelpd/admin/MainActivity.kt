@@ -19,6 +19,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.ViewModelProvider
 import com.google.firebase.messaging.FirebaseMessaging
 import com.wphelpd.admin.core.config.SecureServerConfigRepository
 import com.wphelpd.admin.core.ui.theme.WpHelpdTheme
@@ -40,6 +44,14 @@ class MainActivity : ComponentActivity() {
     private val pendingTicketId = MutableStateFlow<Int?>(null)
     private lateinit var lockViewModel: AppLockViewModel
     private lateinit var ticketsViewModel: TicketsViewModel
+    private val processLifecycleObserver = object : DefaultLifecycleObserver {
+        override fun onStop(owner: LifecycleOwner) {
+            if (AppLockLifecyclePolicy.shouldRelockOnProcessStop(lockViewModel.uiState.value.isUnlocked)) {
+                ticketsViewModel.clearSensitiveSessionState()
+                lockViewModel.lock()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,14 +60,22 @@ class MainActivity : ComponentActivity() {
         val serverConfigRepository = SecureServerConfigRepository(applicationContext)
         val pushTokenStateStore = PushTokenStateStore(applicationContext)
         val pushTokenSyncManager = PushTokenSyncManager(stateStore = pushTokenStateStore)
-        lockViewModel = AppLockViewModel(lockManager)
-        ticketsViewModel = TicketsViewModel(serverConfigRepository = serverConfigRepository)
+        lockViewModel = ViewModelProvider(
+            this,
+            AppLockViewModel.factory(lockManager)
+        )[AppLockViewModel::class.java]
+        ticketsViewModel = ViewModelProvider(
+            this,
+            TicketsViewModel.factory(serverConfigRepository = serverConfigRepository)
+        )[TicketsViewModel::class.java]
         FirebaseMessaging.getInstance().token
             .addOnSuccessListener { token ->
                 if (token.isNotBlank()) {
                     pushTokenStateStore.saveCurrentToken(token)
                 }
             }
+        ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
+        ProcessLifecycleOwner.get().lifecycle.addObserver(processLifecycleObserver)
 
         setContent {
             WpHelpdTheme {
@@ -146,21 +166,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-
-            override fun onStop() {
-                super.onStop()
-                if (!::lockViewModel.isInitialized || !::ticketsViewModel.isInitialized) return
-                if (
-                    AppLockLifecyclePolicy.shouldRelockOnStop(
-                        isUnlocked = lockViewModel.uiState.value.isUnlocked,
-                        isChangingConfigurations = isChangingConfigurations
-                    )
-                ) {
-                    ticketsViewModel.clearSensitiveSessionState()
-                    lockViewModel.lock()
-                }
-            }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
     }
 
     override fun onNewIntent(intent: Intent) {
