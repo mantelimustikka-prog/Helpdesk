@@ -83,6 +83,8 @@ final class AdminAuthControllerTest extends TestCase {
 		self::assertSame( '', $appearance['admin_reply_color'] );
 		self::assertSame( '', $appearance['client_reply_color'] );
 		self::assertSame( '', $appearance['status_new_color'] );
+		self::assertSame( '', $appearance['status_pending_agent_color'] );
+		self::assertSame( '', $appearance['status_pending_client_color'] );
 		self::assertSame( '', $appearance['status_resolved_color'] );
 		self::assertSame( '', $appearance['status_closed_color'] );
 	}

@@ -721,14 +721,17 @@ private fun NoteComposer(
     }
 }
 
+// Parses a CSS-style hex color string ("#rrggbb" or "#aarrggbb") into a Compose Color.
+// The server (WordPress sanitize_hex_color) emits 6-character values; the 8-character branch
+// assumes the optional alpha is in aarrggbb order (not rrggbbaa).
 private fun String.toComposeColorOrNull(): Color? {
     val hex = this.trim()
     if (hex.isEmpty()) return null
     return try {
         val normalized = if (hex.startsWith("#")) hex.substring(1) else hex
         val argb = when (normalized.length) {
-            6 -> "FF$normalized".toLong(16)
-            8 -> normalized.toLong(16)
+            6 -> "FF$normalized".toLong(16) // prepend opaque alpha → 0xFFRRGGBB
+            8 -> normalized.toLong(16)      // caller supplies alpha as first two digits (aarrggbb)
             else -> return null
         }
         Color(
