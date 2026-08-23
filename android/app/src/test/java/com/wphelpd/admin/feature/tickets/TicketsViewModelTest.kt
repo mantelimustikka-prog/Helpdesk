@@ -30,10 +30,14 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
+import retrofit2.HttpException
+import retrofit2.Response
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TicketsViewModelTest {
@@ -120,6 +124,7 @@ class TicketsViewModelTest {
         assertThat(state.username).isEqualTo("savedUser")
         assertThat(state.applicationPassword).isEqualTo("savedPass")
         assertThat(state.wpNonce).isEqualTo("savedNonce")
+        assertThat(state.isBootstrapping).isTrue()
     }
 
     @Test
@@ -142,6 +147,7 @@ class TicketsViewModelTest {
         assertThat(saved!!.siteUrl).isEqualTo("https://example.com")
         assertThat(saved.username).isEqualTo("admin")
         assertThat(saved.applicationPassword).isEqualTo("secret")
+        assertThat(viewModel.uiState.value.requiresSetup).isFalse()
     }
 
     @Test
@@ -173,8 +179,89 @@ class TicketsViewModelTest {
         assertThat(state.siteUrl).isEmpty()
         assertThat(state.username).isEmpty()
         assertThat(state.applicationPassword).isEmpty()
+        assertThat(state.isBootstrapping).isFalse()
+        assertThat(state.requiresSetup).isTrue()
+        assertThat(state.errorMessage).contains("Saved server configuration was not found")
+    }
+
+    @Test
+    fun startupBootstrap_loadsTicketsAutomaticallyWhenSavedConfigIsValid() = runTest {
+        val saved = AuthConfig(
+            siteUrl = "https://saved.example.com",
+            username = "savedUser",
+            applicationPassword = "savedPass"
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi() },
+            serverConfigRepository = FakeServerConfigRepository(initial = saved)
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.isBootstrapping).isFalse()
+        assertThat(state.requiresSetup).isFalse()
+        assertThat(state.currentUser?.name).isEqualTo("Agent")
+        assertThat(state.tickets).isNotEmpty()
+    }
+
+    @Test
+    fun startupBootstrap_routesToSetupWhenSavedCredentialsAreInvalid() = runTest {
+        val saved = AuthConfig(
+            siteUrl = "https://saved.example.com",
+            username = "savedUser",
+            applicationPassword = "wrongPass"
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(authThrowable = unauthorizedHttpException())
+            },
+            serverConfigRepository = FakeServerConfigRepository(initial = saved)
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.isBootstrapping).isFalse()
+        assertThat(state.requiresSetup).isTrue()
+        assertThat(state.currentUser).isNull()
+        assertThat(state.errorMessage).isEqualTo(
+            "Saved credentials are invalid. Please update them and authenticate again."
+        )
+    }
+
+    @Test
+    fun startupBootstrap_routesToSetupWithRetryMessageWhenServerIsUnreachable() = runTest {
+        val saved = AuthConfig(
+            siteUrl = "https://saved.example.com",
+            username = "savedUser",
+            applicationPassword = "savedPass"
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(authThrowable = IOException("offline"))
+            },
+            serverConfigRepository = FakeServerConfigRepository(initial = saved)
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.isBootstrapping).isFalse()
+        assertThat(state.requiresSetup).isTrue()
+        assertThat(state.currentUser).isNull()
+        assertThat(state.errorMessage).isEqualTo(
+            "Unable to reach the WP HelpD server. Check your connection and retry."
+        )
     }
 }
+
+private fun unauthorizedHttpException(): HttpException = HttpException(
+    Response.error<String>(
+        401,
+        """{"message":"Unauthorized"}""".toResponseBody("application/json".toMediaType())
+    )
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 private class MainDispatcherRule(
