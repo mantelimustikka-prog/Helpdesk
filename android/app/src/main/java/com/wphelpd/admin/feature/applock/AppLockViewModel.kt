@@ -70,9 +70,9 @@ class AppLockViewModel(
 
     fun onAppForegrounded() {
         val backgroundedAt = backgroundedAtMillis ?: return
+        backgroundedAtMillis = null
         val currentState = _uiState.value
         if (!currentState.isUnlocked || currentState.isFirstRun) return
-        backgroundedAtMillis = null
         val elapsed = currentTimeMillis() - backgroundedAt
         if (relockTimeoutMillis > 0L && elapsed >= relockTimeoutMillis) {
             _uiState.update { it.copy(isUnlocked = false, errorMessage = null) }
