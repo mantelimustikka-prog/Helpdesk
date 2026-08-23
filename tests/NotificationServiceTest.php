@@ -124,7 +124,7 @@ final class NotificationServiceTest extends TestCase {
 		self::assertSame( 1, preg_match( '#/helpdesk/ticket/HD-900004/[0-9a-f]{64}/#', $mail ) );
 	}
 
-	public function testSendTicketReplyKeepsLoggedInFlowUnchangedWithoutTicketLink(): void {
+	public function testSendTicketReplyIncludesMemberLinkForLoggedInUser(): void {
 		$service = new NotificationService();
 
 		$service->sendTicketReply(
@@ -139,7 +139,7 @@ final class NotificationServiceTest extends TestCase {
 		);
 
 		$mail = $GLOBALS['wp_mail_calls'][0]['message'] ?? '';
-		self::assertStringContainsString( 'Please log in to continue the conversation.', $mail );
-		self::assertStringNotContainsString( '/helpdesk/ticket/HD-900003/', $mail );
+		self::assertStringContainsString( 'View and continue this ticket', $mail );
+		self::assertStringContainsString( '/helpdesk/request/HD-900003/', $mail );
 	}
 }
