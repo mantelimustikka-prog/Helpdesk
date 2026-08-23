@@ -326,6 +326,6 @@ final class AdminTicketControllerTest extends TestCase {
 		self::assertTrue( $response->data['success'] );
 		self::assertSame( 7, $response->data['data']['id'] );
 		self::assertSame( 'closed', $response->data['data']['status'] );
-		self::assertSame( '2026-08-18 21:14:13', $wpdb->last_update['closed_at'] );
+		self::assertSame( current_time( 'mysql' ), $wpdb->last_update['closed_at'] );
 	}
 }
