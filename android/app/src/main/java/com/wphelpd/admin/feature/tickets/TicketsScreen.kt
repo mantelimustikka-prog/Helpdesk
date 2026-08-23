@@ -554,6 +554,7 @@ private fun ReplyComposer(
     onTextChange: (String) -> Unit,
     onSubmit: () -> Unit
 ) {
+    val inputEnabled = isEnabled && !isLoading
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Reply", style = MaterialTheme.typography.titleSmall)
@@ -564,7 +565,7 @@ private fun ReplyComposer(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
                 label = { Text("Message") },
-                enabled = isEnabled
+                enabled = inputEnabled
             )
             errorMessage?.let {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -572,7 +573,7 @@ private fun ReplyComposer(
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = onSubmit, enabled = isEnabled && text.isNotBlank()) {
+                Button(onClick = onSubmit, enabled = inputEnabled && text.isNotBlank()) {
                     Text("Send reply")
                 }
                 if (isLoading) {
@@ -594,6 +595,7 @@ private fun StatusActions(
     errorMessage: String?,
     onStatusChange: (String) -> Unit
 ) {
+    val actionsEnabled = isEnabled && !isLoading
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Change status", style = MaterialTheme.typography.titleSmall)
@@ -615,7 +617,7 @@ private fun StatusActions(
                             Text(status.replaceFirstChar { it.uppercase() })
                         }
                     } else {
-                        TextButton(onClick = { onStatusChange(status) }, enabled = isEnabled) {
+                        TextButton(onClick = { onStatusChange(status) }, enabled = actionsEnabled) {
                             Text(status.replaceFirstChar { it.uppercase() })
                         }
                     }
@@ -638,6 +640,7 @@ private fun NoteComposer(
     onTextChange: (String) -> Unit,
     onSubmit: () -> Unit
 ) {
+    val inputEnabled = isEnabled && !isLoading
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Internal note", style = MaterialTheme.typography.titleSmall)
@@ -648,7 +651,7 @@ private fun NoteComposer(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
                 label = { Text("Note") },
-                enabled = isEnabled
+                enabled = inputEnabled
             )
             errorMessage?.let {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -656,7 +659,7 @@ private fun NoteComposer(
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = onSubmit, enabled = isEnabled && text.isNotBlank()) {
+                Button(onClick = onSubmit, enabled = inputEnabled && text.isNotBlank()) {
                     Text("Add note")
                 }
                 if (isLoading) {

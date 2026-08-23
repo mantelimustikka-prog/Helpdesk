@@ -21,7 +21,6 @@ class TicketsViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(TicketsUiState())
     val uiState: StateFlow<TicketsUiState> = _uiState.asStateFlow()
-    private var selectedTicketSessionId: Long = 0
 
     init {
         val savedConfig = serverConfigRepository.load()
@@ -90,7 +89,7 @@ class TicketsViewModel(
     fun refreshSelectedTicket() {
         val state = _uiState.value
         val ticketId = state.selectedTicketId ?: return
-        if (state.isDetailActionInProgress) return
+        if (state.isDetailLoading || state.isDetailActionInProgress) return
         val selection = currentSelection(ticketId) ?: return
         val config = state.toAuthConfig()
         viewModelScope.launch {
@@ -102,9 +101,10 @@ class TicketsViewModel(
     }
 
     fun clearSelectedTicket() {
-        advanceSelectionSession()
         updateState {
+            val nextSessionId = selectionSessionId + 1
             copy(
+                selectionSessionId = nextSessionId,
                 selectedTicketId = null,
                 ticketDetail = null,
                 isDetailLoading = false,
@@ -259,16 +259,17 @@ class TicketsViewModel(
         selection: TicketSelection,
         showLoading: Boolean = true
     ) {
-        if (!isSelectionCurrent(selection)) return
-        if (showLoading) {
-            updateState { copy(isDetailLoading = true, detailErrorMessage = null) }
-        } else {
-            updateState { copy(detailErrorMessage = null) }
+        val started = updateStateForSelection(selection) {
+            if (showLoading) {
+                copy(isDetailLoading = true, detailErrorMessage = null)
+            } else {
+                copy(detailErrorMessage = null)
+            }
         }
+        if (!started) return
         val detailResult = repository.fetchTicketDetail(config, selection.ticketId)
-        if (!isSelectionCurrent(selection)) return
         when (detailResult) {
-            is NetworkResult.Failure -> updateState {
+            is NetworkResult.Failure -> updateStateForSelection(selection) {
                 copy(
                     isDetailLoading = false,
                     ticketDetail = null,
@@ -276,7 +277,7 @@ class TicketsViewModel(
                 )
             }
 
-            is NetworkResult.Success -> updateState {
+            is NetworkResult.Success -> updateStateForSelection(selection) {
                 copy(
                     isDetailLoading = false,
                     ticketDetail = detailResult.value,
@@ -296,9 +297,10 @@ class TicketsViewModel(
     }
 
     private fun updateSelection(ticketId: Int): TicketSelection {
-        val selection = TicketSelection(ticketId = ticketId, sessionId = advanceSelectionSession())
         updateState {
+            val nextSessionId = selectionSessionId + 1
             copy(
+                selectionSessionId = nextSessionId,
                 selectedTicketId = ticketId,
                 ticketDetail = null,
                 isDetailLoading = true,
@@ -313,34 +315,37 @@ class TicketsViewModel(
                 noteError = null
             )
         }
-        return selection
+        val state = _uiState.value
+        check(state.selectedTicketId == ticketId)
+        return TicketSelection(ticketId = ticketId, sessionId = state.selectionSessionId)
     }
 
-    private fun currentSelection(ticketId: Int): TicketSelection? =
-        if (_uiState.value.selectedTicketId == ticketId) {
-            TicketSelection(ticketId = ticketId, sessionId = selectedTicketSessionId)
+    private fun currentSelection(ticketId: Int): TicketSelection? {
+        val state = _uiState.value
+        return if (state.selectedTicketId == ticketId) {
+            TicketSelection(ticketId = ticketId, sessionId = state.selectionSessionId)
         } else {
             null
         }
+    }
 
-    private fun isSelectionCurrent(selection: TicketSelection): Boolean =
-        _uiState.value.selectedTicketId == selection.ticketId &&
-            selectedTicketSessionId == selection.sessionId
+    private fun isSelectionCurrent(selection: TicketSelection): Boolean {
+        val state = _uiState.value
+        return state.matches(selection)
+    }
 
     private fun updateStateForSelection(
         selection: TicketSelection,
         transform: TicketsUiState.() -> TicketsUiState
     ): Boolean {
-        if (!isSelectionCurrent(selection)) {
-            return false
+        _uiState.update { currentState ->
+            if (currentState.matches(selection)) {
+                currentState.transform()
+            } else {
+                currentState
+            }
         }
-        updateState(transform)
-        return true
-    }
-
-    private fun advanceSelectionSession(): Long {
-        selectedTicketSessionId += 1
-        return selectedTicketSessionId
+        return _uiState.value.matches(selection)
     }
 
     private fun updateState(transform: TicketsUiState.() -> TicketsUiState) {
@@ -360,22 +365,31 @@ class TicketsViewModel(
         saveConfigOnSuccess: Boolean,
         isBootstrap: Boolean
     ) {
+        updateState {
+            val nextSessionId = selectionSessionId + 1
+            copy(
+                isBootstrapping = isBootstrap,
+                isLoading = true,
+                requiresSetup = false,
+                errorMessage = null,
+                tickets = emptyList(),
+                pagination = null,
+                selectionSessionId = nextSessionId,
+                selectedTicketId = null,
+                ticketDetail = null,
+                isDetailLoading = false,
+                detailErrorMessage = null,
+                replyText = "",
+                isReplying = false,
+                replyError = null,
+                isUpdatingStatus = false,
+                statusUpdateError = null,
+                noteText = "",
+                isAddingNote = false,
+                noteError = null
+            )
+        }
         viewModelScope.launch {
-            updateState {
-                copy(
-                    isBootstrapping = isBootstrap,
-                    isLoading = true,
-                    requiresSetup = false,
-                    errorMessage = null,
-                    tickets = emptyList(),
-                    pagination = null,
-                    selectedTicketId = null,
-                    ticketDetail = null,
-                    isDetailLoading = false,
-                    detailErrorMessage = null
-                )
-            }
-
             when (val authResult = repository.authCheck(config)) {
                 is NetworkResult.Failure -> {
                     val message = if (isBootstrap) {
@@ -424,6 +438,10 @@ class TicketsViewModel(
         applicationPassword = applicationPassword,
         wpNonce = wpNonce
     )
+
+    private fun TicketsUiState.matches(selection: TicketSelection): Boolean =
+        selectedTicketId == selection.ticketId &&
+            selectionSessionId == selection.sessionId
 
     private data class TicketSelection(
         val ticketId: Int,

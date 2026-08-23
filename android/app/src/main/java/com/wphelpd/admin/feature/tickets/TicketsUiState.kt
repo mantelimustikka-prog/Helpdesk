@@ -17,6 +17,7 @@ data class TicketsUiState(
     val currentUser: CurrentUser? = null,
     val tickets: List<Ticket> = emptyList(),
     val pagination: Pagination? = null,
+    val selectionSessionId: Long = 0,
     val selectedTicketId: Int? = null,
     val ticketDetail: TicketDetail? = null,
     val isDetailLoading: Boolean = false,
