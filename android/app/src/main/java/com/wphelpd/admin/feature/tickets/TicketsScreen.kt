@@ -638,7 +638,7 @@ private fun ReplyComposer(
     }
 }
 
-private val statusLabels: List<String> = HelpdeskRepository.allowedStatuses.sorted()
+private val statusLabels: List<String> = HelpdeskRepository.statusOptions
 
 @Composable
 private fun StatusActions(
@@ -761,18 +761,4 @@ private fun String.toComposeColorOrNull(): Color? {
     } catch (_: NumberFormatException) {
         null
     }
-}
-
-private fun ticketStatusLabel(status: String): String = when (status.lowercase()) {
-    "new",
-    "open"                  -> "New"
-    "pending_agent_reply",
-    "pending",
-    "triaged",
-    "in_progress"           -> "Pending Agent Reply"
-    "pending_client_reply",
-    "waiting_customer"      -> "Pending Client Reply"
-    "resolved"              -> "Resolved"
-    "closed"                -> "Closed"
-    else                    -> status.replace('_', ' ').replaceFirstChar { it.uppercase() }
 }

@@ -80,15 +80,17 @@ class PushService {
 			return;
 		}
 
+		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+
 		$this->provider->send(
 			$this->getAdminTokens(),
 			'Ticket status changed',
 			sprintf( 'Ticket %s is now %s.', (string) ( $ticket['ticket_no'] ?? '' ), $new_status ),
 			array(
 				'event_type'      => 'status_changed',
-				'ticket_id'       => (int) ( $ticket['id'] ?? 0 ),
-				'deep_link'       => sprintf( 'wphelpd://ticket/%d', (int) ( $ticket['id'] ?? 0 ) ),
-				'notification_id' => sprintf( 'status_changed:%d:%s', (int) ( $ticket['id'] ?? 0 ), sanitize_key( $new_status ) ),
+				'ticket_id'       => $ticket_id,
+				'deep_link'       => sprintf( 'wphelpd://ticket/%d', $ticket_id ),
+				'notification_id' => sprintf( 'status_changed:%d:%s', $ticket_id, sanitize_key( $new_status ) ),
 			)
 		);
 	}
@@ -105,15 +107,17 @@ class PushService {
 			return;
 		}
 
+		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+
 		$this->provider->send(
 			$this->getUserTokens( $assigned_to ),
 			'Ticket assigned',
 			sprintf( 'Ticket %s has been assigned to you.', (string) ( $ticket['ticket_no'] ?? '' ) ),
 			array(
 				'event_type'      => 'ticket_assigned',
-				'ticket_id'       => (int) ( $ticket['id'] ?? 0 ),
-				'deep_link'       => sprintf( 'wphelpd://ticket/%d', (int) ( $ticket['id'] ?? 0 ) ),
-				'notification_id' => sprintf( 'ticket_assigned:%d:%d', (int) ( $ticket['id'] ?? 0 ), $assigned_to ),
+				'ticket_id'       => $ticket_id,
+				'deep_link'       => sprintf( 'wphelpd://ticket/%d', $ticket_id ),
+				'notification_id' => sprintf( 'ticket_assigned:%d:%d', $ticket_id, $assigned_to ),
 			)
 		);
 	}

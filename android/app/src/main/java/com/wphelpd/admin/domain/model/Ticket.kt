@@ -14,16 +14,28 @@ data class Ticket(
     val lastMessageExcerpt: String?
 )
 
-fun Ticket.statusLabel(): String = when (status.lowercase()) {
-    "new",
-    "open"                  -> "New"
-    "pending_agent_reply",
-    "pending",
-    "triaged",
-    "in_progress"           -> "Pending Agent Reply"
-    "pending_client_reply",
-    "waiting_customer"      -> "Pending Client Reply"
-    "resolved"              -> "Resolved"
-    "closed"                -> "Closed"
-    else                    -> status.replace('_', ' ').replaceFirstChar { it.uppercase() }
+fun String.canonicalTicketStatus(): String {
+    val normalizedStatus = lowercase()
+    return when (normalizedStatus) {
+        "open"             -> "new"
+        "pending",
+        "triaged",
+        "in_progress"      -> "pending_agent_reply"
+        "waiting_customer" -> "pending_client_reply"
+        else               -> normalizedStatus
+    }
 }
+
+fun String.ticketStatusLabel(): String {
+    val canonicalStatus = canonicalTicketStatus()
+    return when (canonicalStatus) {
+        "new"                  -> "New"
+        "pending_agent_reply"  -> "Pending Agent Reply"
+        "pending_client_reply" -> "Pending Client Reply"
+        "resolved"             -> "Resolved"
+        "closed"               -> "Closed"
+        else                   -> canonicalStatus.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    }
+}
+
+fun Ticket.statusLabel(): String = status.ticketStatusLabel()

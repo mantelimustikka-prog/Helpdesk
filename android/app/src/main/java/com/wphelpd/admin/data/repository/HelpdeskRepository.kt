@@ -21,12 +21,19 @@ class HelpdeskRepository(
     private val apiProvider: (AuthConfig) -> HelpdeskAdminApi = ApiClientFactory::create
 ) {
     companion object {
-        val allowedStatuses: Set<String> = setOf(
+        val statusOptions: List<String> = listOf(
             "new",
             "pending_agent_reply",
             "pending_client_reply",
             "resolved",
             "closed"
+        )
+        private val knownStatuses: Set<String> = statusOptions.toSet() + setOf(
+            "open",
+            "pending",
+            "triaged",
+            "in_progress",
+            "waiting_customer"
         )
     }
 
@@ -89,8 +96,8 @@ class HelpdeskRepository(
         ticketId: Int,
         status: String
     ): NetworkResult<String> = execute {
-        require(status in allowedStatuses) {
-            "Status must be one of: ${allowedStatuses.joinToString()}."
+        require(status in knownStatuses) {
+            "Status must be one of: ${knownStatuses.sorted().joinToString()}."
         }
         apiProvider(config)
             .updateTicketStatus(ticketId, StatusUpdateRequestDto(status = status))
