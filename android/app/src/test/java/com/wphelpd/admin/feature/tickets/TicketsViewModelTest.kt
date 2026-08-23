@@ -23,6 +23,8 @@ import com.wphelpd.admin.data.api.dto.TicketMessagesResponseDto
 import com.wphelpd.admin.data.api.dto.TicketThreadEntryDto
 import com.wphelpd.admin.data.api.dto.UserDto
 import com.wphelpd.admin.data.repository.HelpdeskRepository
+import com.wphelpd.admin.domain.model.statusLabel
+import com.wphelpd.admin.domain.model.Ticket as TicketModel
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -990,6 +992,41 @@ class TicketsViewModelTest {
         assertThat(state.currentUser).isNull()
         assertThat(state.tickets).isEmpty()
         assertThat(state.ticketDetail).isNull()
+    }
+
+    @Test
+    fun ticketDetailResponseDto_mapsRequesterNameAndEmailFromFlatResponse() {
+        val dto = TicketDetailResponseDto(
+            success = true,
+            id = 42,
+            ticketNo = "HD-000042",
+            subject = "Cannot login",
+            status = "pending_client_reply",
+            requesterName = "Alice Smith",
+            requesterEmail = "alice@example.test"
+        )
+        val detail = dto.toTicketDetail()
+        assertThat(detail.ticket.customerName).isEqualTo("Alice Smith")
+        assertThat(detail.ticket.customerEmail).isEqualTo("alice@example.test")
+    }
+
+    @Test
+    fun statusLabel_returnsHumanReadableLabels() {
+        val slugs = mapOf(
+            "new"                  to "New",
+            "pending_agent_reply"  to "Pending Agent Reply",
+            "pending_client_reply" to "Pending Client Reply",
+            "resolved"             to "Resolved",
+            "closed"               to "Closed"
+        )
+        slugs.forEach { (slug, expected) ->
+            val ticket = TicketModel(
+                id = 1, ticketNo = "HD-1", subject = "s", status = slug,
+                priority = null, customerName = null, customerEmail = null,
+                createdAt = null, updatedAt = null, messageCount = 0, lastMessageExcerpt = null
+            )
+            assertThat(ticket.statusLabel()).isEqualTo(expected)
+        }
     }
 }
 

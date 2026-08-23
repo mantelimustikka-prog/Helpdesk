@@ -13,3 +13,12 @@ data class Ticket(
     val messageCount: Int,
     val lastMessageExcerpt: String?
 )
+
+fun Ticket.statusLabel(): String = when (status) {
+    "new"                  -> "New"
+    "pending_agent_reply"  -> "Pending Agent Reply"
+    "pending_client_reply" -> "Pending Client Reply"
+    "resolved"             -> "Resolved"
+    "closed"               -> "Closed"
+    else                   -> status.replace('_', ' ').replaceFirstChar { it.uppercase() }
+}

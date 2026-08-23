@@ -78,6 +78,16 @@ class Routes {
 
 		register_rest_route(
 			$namespace,
+			'/tickets/(?P<id>\d+)/messages',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this->admin_ticket_controller, 'getMessages' ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
 			'/tickets/(?P<id>\d+)/reply',
 			array(
 				'methods'             => 'POST',
