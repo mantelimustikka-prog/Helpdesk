@@ -28,7 +28,7 @@ class HelpdeskRepository(
             "resolved",
             "closed"
         )
-        val allowedStatuses: Set<String> = statusOptions.toSet() + setOf(
+        private val knownStatuses: Set<String> = statusOptions.toSet() + setOf(
             "open",
             "pending",
             "triaged",
@@ -96,8 +96,8 @@ class HelpdeskRepository(
         ticketId: Int,
         status: String
     ): NetworkResult<String> = execute {
-        require(status in allowedStatuses) {
-            "Status must be one of: ${allowedStatuses.joinToString()}."
+        require(status in knownStatuses) {
+            "Status must be one of: ${statusOptions.joinToString()}."
         }
         apiProvider(config)
             .updateTicketStatus(ticketId, StatusUpdateRequestDto(status = status))
