@@ -13,9 +13,9 @@ data class AppearanceColors(
         "new"                  -> statusNewColor
         "pending_agent_reply"  -> statusPendingAgentColor
         "pending_client_reply" -> statusPendingClientColor
-        "resolved"             -> statusResolvedColor
-        "closed"               -> statusClosedColor
-        else                   -> ""
+        "resolved"              -> statusResolvedColor
+        "closed"                -> statusClosedColor
+        else                    -> ""
     }
 
     companion object {

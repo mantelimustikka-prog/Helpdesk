@@ -135,6 +135,16 @@ final class SettingsPageTest extends TestCase {
 		self::assertSame( '{"client_email":"new@example.test"}', $GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] );
 	}
 
+	public function testIntegrationsRenderDefaultsToFcmV1WhenModeIsUnset(): void {
+		$_GET['tab'] = 'integrations';
+		ob_start();
+		$this->page->render();
+		$output = (string) ob_get_clean();
+
+		self::assertStringContainsString( '<option value="v1" selected="selected">', $output );
+		self::assertStringContainsString( 'FCM v1 is the default and recommended delivery mode.', $output );
+	}
+
 	public function testApiFlagsPersistAndAllowedOriginsAreSanitized(): void {
 		$this->submit(
 			'integrations',

@@ -8,7 +8,7 @@ data class PushNotificationPayload(
 )
 
 object PushNotificationPayloadParser {
-    private val supportedEvents = setOf("ticket_created", "ticket_replied")
+    private val supportedEvents = setOf("ticket_created", "ticket_replied", "status_changed", "ticket_assigned")
 
     fun parse(data: Map<String, String>): PushNotificationPayload? {
         val eventType = (data["event_type"] ?: data["event"])?.trim()?.lowercase() ?: return null

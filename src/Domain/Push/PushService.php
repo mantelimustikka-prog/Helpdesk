@@ -80,11 +80,18 @@ class PushService {
 			return;
 		}
 
+		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+
 		$this->provider->send(
 			$this->getAdminTokens(),
 			'Ticket status changed',
 			sprintf( 'Ticket %s is now %s.', (string) ( $ticket['ticket_no'] ?? '' ), $new_status ),
-			array( 'ticket_id' => (int) ( $ticket['id'] ?? 0 ) )
+			array(
+				'event_type'      => 'status_changed',
+				'ticket_id'       => $ticket_id,
+				'deep_link'       => sprintf( 'wphelpd://ticket/%d', $ticket_id ),
+				'notification_id' => sprintf( 'status_changed:%d:%s', $ticket_id, sanitize_key( $new_status ) ),
+			)
 		);
 	}
 
@@ -100,11 +107,18 @@ class PushService {
 			return;
 		}
 
+		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+
 		$this->provider->send(
 			$this->getUserTokens( $assigned_to ),
 			'Ticket assigned',
 			sprintf( 'Ticket %s has been assigned to you.', (string) ( $ticket['ticket_no'] ?? '' ) ),
-			array( 'ticket_id' => (int) ( $ticket['id'] ?? 0 ) )
+			array(
+				'event_type'      => 'ticket_assigned',
+				'ticket_id'       => $ticket_id,
+				'deep_link'       => sprintf( 'wphelpd://ticket/%d', $ticket_id ),
+				'notification_id' => sprintf( 'ticket_assigned:%d:%d', $ticket_id, $assigned_to ),
+			)
 		);
 	}
 
@@ -181,7 +195,7 @@ class PushService {
 	 * @return bool
 	 */
 	protected function hasValidConfiguration(): bool {
-		$mode = (string) get_site_option( Constants::OPTION_FCM_MODE, 'legacy' );
+		$mode = (string) get_site_option( Constants::OPTION_FCM_MODE, 'v1' );
 
 		if ( 'legacy' === $mode ) {
 			return '' !== trim( (string) get_site_option( Constants::OPTION_FCM_SERVER_KEY, '' ) );
