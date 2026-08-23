@@ -48,7 +48,6 @@ import com.wphelpd.admin.domain.model.TicketAttachment
 import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.TicketThreadEntry
 import com.wphelpd.admin.domain.model.statusLabel
-import com.wphelpd.admin.domain.model.ticketStatusLabel
 
 @Composable
 fun TicketsRoute(
@@ -676,11 +675,7 @@ private fun StatusActions(
                                 disabledContentColor = MaterialTheme.colorScheme.onSurface
                             )
                         ) {
-<<<<<<< HEAD
-                            Text(ticketStatusLabel(status))
-=======
                             Text(status.ticketStatusLabel())
->>>>>>> origin/main
                         }
                     } else {
                         TextButton(
@@ -690,11 +685,7 @@ private fun StatusActions(
                                 contentColor = statusColor ?: MaterialTheme.colorScheme.primary
                             )
                         ) {
-<<<<<<< HEAD
-                            Text(ticketStatusLabel(status))
-=======
                             Text(status.ticketStatusLabel())
->>>>>>> origin/main
                         }
                     }
                 }
