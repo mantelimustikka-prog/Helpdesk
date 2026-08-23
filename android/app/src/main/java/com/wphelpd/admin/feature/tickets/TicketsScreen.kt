@@ -762,16 +762,19 @@ private fun String.toComposeColorOrNull(): Color? {
     }
 }
 
-private fun ticketStatusLabel(status: String): String = when (status.lowercase()) {
-    "new",
-    "open"                  -> "New"
-    "pending_agent_reply",
-    "pending",
-    "triaged",
-    "in_progress"           -> "Pending Agent Reply"
-    "pending_client_reply",
-    "waiting_customer"      -> "Pending Client Reply"
-    "resolved"              -> "Resolved"
-    "closed"                -> "Closed"
-    else                    -> status.replace('_', ' ').replaceFirstChar { it.uppercase() }
+private fun ticketStatusLabel(status: String): String {
+    val normalizedStatus = status.lowercase()
+    return when (normalizedStatus) {
+        "new",
+        "open"                  -> "New"
+        "pending_agent_reply",
+        "pending",
+        "triaged",
+        "in_progress"           -> "Pending Agent Reply"
+        "pending_client_reply",
+        "waiting_customer"      -> "Pending Client Reply"
+        "resolved"              -> "Resolved"
+        "closed"                -> "Closed"
+        else                    -> normalizedStatus.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    }
 }
