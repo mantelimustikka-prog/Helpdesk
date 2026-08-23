@@ -259,6 +259,197 @@ class TicketsViewModelTest {
         assertThat(state.ticketDetail).isNull()
         assertThat(state.isDetailLoading).isFalse()
         assertThat(state.detailErrorMessage).isNull()
+        assertThat(state.replyText).isEmpty()
+        assertThat(state.noteText).isEmpty()
+    }
+
+    @Test
+    fun submitReply_clearsReplyTextAndRefreshesDetailOnSuccess() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    ticketDetailResponse = TicketDetailResponseDto(
+                        success = true,
+                        data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
+                    ),
+                    replyResponse = ReplyResponseDto(success = true)
+                )
+            }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateReplyText("This is my reply.")
+        viewModel.submitReply()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.replyText).isEmpty()
+        assertThat(state.isReplying).isFalse()
+        assertThat(state.replyError).isNull()
+        assertThat(state.ticketDetail).isNotNull()
+    }
+
+    @Test
+    fun submitReply_setsReplyErrorOnFailure() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    ticketDetailResponse = TicketDetailResponseDto(
+                        success = true,
+                        data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
+                    ),
+                    replyThrowable = IOException("network error")
+                )
+            }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateReplyText("My reply.")
+        viewModel.submitReply()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.isReplying).isFalse()
+        assertThat(state.replyError).isEqualTo("Unable to reach the WP HelpD server.")
+    }
+
+    @Test
+    fun submitReply_setsErrorWhenMessageIsBlank() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi() }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateReplyText("   ")
+        viewModel.submitReply()
+
+        assertThat(viewModel.uiState.value.replyError).isEqualTo("Reply cannot be empty.")
+    }
+
+    @Test
+    fun updateTicketStatus_refreshesDetailOnSuccess() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    ticketDetailResponse = TicketDetailResponseDto(
+                        success = true,
+                        data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
+                    ),
+                    statusResponse = StatusUpdateResponseDto(success = true, status = "resolved")
+                )
+            }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateTicketStatus("resolved")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.isUpdatingStatus).isFalse()
+        assertThat(state.statusUpdateError).isNull()
+        assertThat(state.ticketDetail).isNotNull()
+    }
+
+    @Test
+    fun updateTicketStatus_setsErrorOnFailure() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    ticketDetailResponse = TicketDetailResponseDto(
+                        success = true,
+                        data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
+                    ),
+                    statusThrowable = IOException("server down")
+                )
+            }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateTicketStatus("resolved")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.isUpdatingStatus).isFalse()
+        assertThat(state.statusUpdateError).isEqualTo("Unable to reach the WP HelpD server.")
+    }
+
+    @Test
+    fun submitNote_clearsNoteTextAndRefreshesDetailOnSuccess() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    ticketDetailResponse = TicketDetailResponseDto(
+                        success = true,
+                        data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
+                    ),
+                    noteResponse = NoteResponseDto(success = true)
+                )
+            }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateNoteText("Internal note text.")
+        viewModel.submitNote()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.noteText).isEmpty()
+        assertThat(state.isAddingNote).isFalse()
+        assertThat(state.noteError).isNull()
+        assertThat(state.ticketDetail).isNotNull()
+    }
+
+    @Test
+    fun submitNote_setsNoteErrorOnFailure() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    ticketDetailResponse = TicketDetailResponseDto(
+                        success = true,
+                        data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
+                    ),
+                    noteThrowable = IOException("offline")
+                )
+            }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateNoteText("My note.")
+        viewModel.submitNote()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.isAddingNote).isFalse()
+        assertThat(state.noteError).isEqualTo("Unable to reach the WP HelpD server.")
+    }
+
+    @Test
+    fun submitNote_setsErrorWhenNoteIsBlank() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi() }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateNoteText("  ")
+        viewModel.submitNote()
+
+        assertThat(viewModel.uiState.value.noteError).isEqualTo("Note cannot be empty.")
     }
 
     @Test
@@ -318,7 +509,13 @@ private class FakeHelpdeskAdminApi(
         )
     ),
     private val detailThrowable: Throwable? = null,
-    private val authThrowable: Throwable? = null
+    private val authThrowable: Throwable? = null,
+    private val replyResponse: ReplyResponseDto = ReplyResponseDto(success = true),
+    private val replyThrowable: Throwable? = null,
+    private val statusResponse: StatusUpdateResponseDto = StatusUpdateResponseDto(success = true),
+    private val statusThrowable: Throwable? = null,
+    private val noteResponse: NoteResponseDto = NoteResponseDto(success = true),
+    private val noteThrowable: Throwable? = null
 ) : HelpdeskAdminApi {
     override suspend fun authCheck(): AuthCheckResponseDto {
         authThrowable?.let { throw it }
@@ -346,12 +543,20 @@ private class FakeHelpdeskAdminApi(
 
     override suspend fun getTicketMessages(id: Int): TicketMessagesResponseDto = TicketMessagesResponseDto(items = emptyList())
 
-    override suspend fun replyToTicket(id: Int, request: ReplyRequestDto): ReplyResponseDto = ReplyResponseDto(success = true)
+    override suspend fun replyToTicket(id: Int, request: ReplyRequestDto): ReplyResponseDto {
+        replyThrowable?.let { throw it }
+        return replyResponse
+    }
 
-    override suspend fun updateTicketStatus(id: Int, request: StatusUpdateRequestDto): StatusUpdateResponseDto =
-        StatusUpdateResponseDto(success = true)
+    override suspend fun updateTicketStatus(id: Int, request: StatusUpdateRequestDto): StatusUpdateResponseDto {
+        statusThrowable?.let { throw it }
+        return statusResponse
+    }
 
-    override suspend fun addTicketNote(id: Int, request: NoteRequestDto): NoteResponseDto = NoteResponseDto(success = true)
+    override suspend fun addTicketNote(id: Int, request: NoteRequestDto): NoteResponseDto {
+        noteThrowable?.let { throw it }
+        return noteResponse
+    }
 }
 
 private class FakeServerConfigRepository(initial: AuthConfig? = null) : ServerConfigRepository {
