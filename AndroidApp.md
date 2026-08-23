@@ -18,7 +18,7 @@ The app should be a secure, admin-focused client for customer service operations
 
 ### Now
 
-Focus on the highest-risk and most user-visible foundation work first.
+Stabilize the app shell and lock behavior so the security baseline is reliable.
 
 - Stabilize the app shell and fix crash issues
 - Verify app-lock lifecycle behavior on real devices
@@ -28,7 +28,7 @@ Focus on the highest-risk and most user-visible foundation work first.
 
 ### Next
 
-Complete the documented MVP flows needed for a usable admin client.
+Complete the MVP admin workflows and notification path against the live backend.
 
 - Implement or verify server connection setup
 - Connect to `/wp-json/helpdesk/v1/admin/` with secure authentication
@@ -40,7 +40,7 @@ Complete the documented MVP flows needed for a usable admin client.
 
 ### Later
 
-Add the documented future enhancements after the core app is stable and the MVP is complete.
+Add post-MVP enhancements after stability, security, and core workflows are consistently reliable.
 
 - Biometric unlock
 - Offline caching
@@ -49,6 +49,13 @@ Add the documented future enhancements after the core app is stable and the MVP 
 - Agent assignment workflows
 - Knowledge base shortcuts
 - Multi-account support
+
+### Roadmap guardrails
+
+- The mandatory local app password lock remains non-negotiable at every stage.
+- MVP delivery is centered on secure backend access, ticket list/detail, replies, status updates, and push notifications.
+- Notes, attachments, and search should be shipped in Next only where implementation is already supported or very close behind.
+- Later items are intentionally out of MVP scope and should not delay core admin flow completion.
 
 ## Core Requirement: App Password Lock
 
@@ -228,13 +235,15 @@ To support the app properly, the plugin should expose clean admin endpoints such
 
 The recommended first version of the app should include:
 
-- App password lock on first launch
+- Mandatory local app password lock (first launch setup + required unlock before content)
 - Server connection setup
+- Secure authentication to `/wp-json/helpdesk/v1/admin/`
 - Ticket list
 - Ticket detail view
 - Replying to tickets
 - Status changes
 - Push notifications
+- Sensitive data cleanup on logout
 
 ## Future Enhancements
 
