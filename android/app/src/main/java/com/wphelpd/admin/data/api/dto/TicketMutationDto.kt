@@ -179,7 +179,9 @@ private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {
 
 private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEntryDto>? {
     if (value == null || !value.isJsonArray) return null
-    return value.asJsonArray.mapNotNull { entry ->
+    val entries = value.asJsonArray
+    if (entries.size() == 0) return emptyList()
+    return entries.mapNotNull { entry ->
         if (!entry.isJsonObject) return@mapNotNull null
         val payload = entry.asJsonObject
         val id = payload.intOrNull("id") ?: return@mapNotNull null
@@ -193,7 +195,7 @@ private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEn
             createdAt = payload.stringOrNull("created_at"),
             isInternal = payload.intOrNull("is_internal")
         )
-    }
+    }.ifEmpty { null }
 }
 
 private fun JsonObject.stringOrNull(name: String): String? {

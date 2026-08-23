@@ -291,6 +291,54 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_usesWrappedMessagesWhenWrappedItemsAreUnusable() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "items": [
+                            { "author_type": "agent", "body": "missing id should be skipped" }
+                          ],
+                          "messages": [
+                            {
+                              "id": 8202,
+                              "author_type": "agent",
+                              "author_name": "Admin User",
+                              "body": "Fallback to wrapped messages entry.",
+                              "created_at": "2026-08-22T12:35:00Z",
+                              "is_internal": 0
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().id).isEqualTo(8202)
+        assertThat(detail.thread.single().body).isEqualTo("Fallback to wrapped messages entry.")
+    }
+
+    @Test
     fun fetchTicketDetail_mapsFlatResponseMessagesAndAttachments() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(
