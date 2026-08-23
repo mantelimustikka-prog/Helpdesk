@@ -1,9 +1,8 @@
 package com.wphelpd.admin.data.api.dto
 
-import com.google.gson.Gson
 import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
-import com.google.gson.reflect.TypeToken
 import com.wphelpd.admin.domain.model.TicketThreadEntry
 
 data class ReplyRequestDto(
@@ -180,10 +179,29 @@ private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {
 
 private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEntryDto>? {
     if (value == null || !value.isJsonArray) return null
-    return runCatching {
-        gson.fromJson<List<TicketThreadEntryDto>>(value, ticketThreadEntryListType)
-    }.getOrNull()
+    return value.asJsonArray.mapNotNull { entry ->
+        if (!entry.isJsonObject) return@mapNotNull null
+        val payload = entry.asJsonObject
+        val id = payload.intOrNull("id") ?: return@mapNotNull null
+        val authorType = payload.stringOrNull("author_type") ?: return@mapNotNull null
+        val body = payload.stringOrNull("body") ?: return@mapNotNull null
+        TicketThreadEntryDto(
+            id = id,
+            authorType = authorType,
+            authorName = payload.stringOrNull("author_name"),
+            body = body,
+            createdAt = payload.stringOrNull("created_at"),
+            isInternal = payload.intOrNull("is_internal")
+        )
+    }
 }
 
-private val gson = Gson()
-private val ticketThreadEntryListType = object : TypeToken<List<TicketThreadEntryDto>>() {}.type
+private fun JsonObject.stringOrNull(name: String): String? {
+    val value = get(name) ?: return null
+    return if (value.isJsonNull) null else value.asString
+}
+
+private fun JsonObject.intOrNull(name: String): Int? {
+    val value = get(name) ?: return null
+    return if (value.isJsonNull) null else value.asInt
+}
