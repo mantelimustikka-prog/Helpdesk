@@ -893,6 +893,53 @@ class TicketsViewModelTest {
             "Unable to reach the WP HelpD server. Check your connection and retry."
         )
     }
+
+    @Test
+    fun connectAndLoadTickets_rejectsHttpUrlWithClearMessage() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { FakeHelpdeskAdminApi() }
+        )
+
+        viewModel.updateSiteUrl("http://example.com")
+        viewModel.updateUsername("admin")
+        viewModel.updateApplicationPassword("secret")
+        viewModel.connectAndLoadTickets()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.requiresSetup).isTrue()
+        assertThat(state.errorMessage).isEqualTo("Use an HTTPS site URL for WP HelpD.")
+        assertThat(state.isLoading).isFalse()
+        assertThat(state.currentUser).isNull()
+    }
+
+    @Test
+    fun startupBootstrap_routesToSetupWhenSavedConfigHasHttpUrl() = runTest {
+        val saved = AuthConfig(
+            siteUrl = "http://not-https.example.com",
+            username = "savedUser",
+            applicationPassword = "savedPass"
+        )
+        // Mirror the real ApiClientFactory behaviour: adminApiUrl() throws
+        // IllegalArgumentException with this message when the URL is not HTTPS.
+        // Using a single constant here ensures the lambda and the assertion agree.
+        val httpsRequiredMsg = "WP HelpD requires an HTTPS site URL."
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { config ->
+                require(config.siteUrl.trim().startsWith("https://")) { httpsRequiredMsg }
+                FakeHelpdeskAdminApi()
+            },
+            serverConfigRepository = FakeServerConfigRepository(initial = saved)
+        )
+
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.isBootstrapping).isFalse()
+        assertThat(state.requiresSetup).isTrue()
+        assertThat(state.currentUser).isNull()
+        assertThat(state.errorMessage).isEqualTo(httpsRequiredMsg)
+    }
 }
 
 private fun unauthorizedHttpException(): HttpException = HttpException(
