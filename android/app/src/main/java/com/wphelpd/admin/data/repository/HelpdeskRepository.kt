@@ -97,7 +97,7 @@ class HelpdeskRepository(
         status: String
     ): NetworkResult<String> = execute {
         require(status in knownStatuses) {
-            "Status must be one of: ${statusOptions.joinToString()}."
+            "Status must be one of: ${knownStatuses.joinToString()}."
         }
         apiProvider(config)
             .updateTicketStatus(ticketId, StatusUpdateRequestDto(status = status))
