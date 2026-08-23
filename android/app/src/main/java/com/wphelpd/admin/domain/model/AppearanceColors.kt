@@ -9,7 +9,7 @@ data class AppearanceColors(
     val statusResolvedColor: String = "",
     val statusClosedColor: String = ""
 ) {
-    fun statusColor(status: String): String = when (status.lowercase()) {
+    fun statusColor(status: String): String = when (status.canonicalTicketStatus()) {
         "new"                  -> statusNewColor
         "pending_agent_reply"  -> statusPendingAgentColor
         "pending_client_reply" -> statusPendingClientColor
