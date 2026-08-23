@@ -120,6 +120,11 @@ class NotificationService {
 
 		$ticket_no = (string) $ticket['ticket_no'];
 
+		if ( ! empty( $ticket['user_id'] ) ) {
+			$ticket['ticket_link'] = home_url( '/helpdesk/request/' . rawurlencode( $ticket_no ) . '/' );
+			return $ticket;
+		}
+
 		if ( ! empty( $ticket['guest_token'] ) ) {
 			$ticket['ticket_link'] = $this->buildGuestTicketUrl( $ticket_no, (string) $ticket['guest_token'] );
 			return $ticket;
