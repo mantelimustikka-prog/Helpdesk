@@ -57,6 +57,23 @@ Add post-MVP enhancements after stability, security, and core workflows are cons
 - Notes, attachments, and search should be shipped in Next only where implementation is already supported or very close behind.
 - Later items are intentionally out of MVP scope and should not delay core admin flow completion.
 
+## Current scaffold status (post PR #108)
+
+Implemented in the Android scaffold today:
+
+- App password setup + unlock gate
+- Server setup + auth check against `/wp-json/helpdesk/v1/admin/`
+- Ticket list + ticket detail
+- Reply, status change, and internal note actions
+- Attachment display from ticket payloads
+- Push scaffold for `ticket_created` / `ticket_replied`, device register/unregister, and deep-link open flow
+
+Follow-ups still required:
+
+- Validate app-lock lifecycle behavior on physical devices (background/relaunch/notification-open/logout)
+- Validate push delivery and routing end-to-end against production-like FCM + backend setup
+- Keep endpoint contract compatibility in sync as plugin payloads evolve
+
 ## Core Requirement: App Password Lock
 
 The app must **always require a local password to open**.
@@ -107,11 +124,11 @@ The app should support the daily work of a customer service admin.
 - Reply to tickets
 - Add internal notes
 - Change ticket status
-- Assign or reassign tickets
+- Assign or reassign tickets (Later, after MVP completion)
 - View attachments
 - Search tickets
 - View customer information
-- Create new tickets
+- Create new tickets (Later, after MVP completion)
 - Receive push notifications for new tickets and replies
 
 ## Suggested App Screens
@@ -150,12 +167,12 @@ The app should support the daily work of a customer service admin.
   - reply
   - add note
   - change status
-  - assign agent
+  - assign agent (Later, after MVP completion)
 
 ### 6. Compose Reply
 
 - Plain-text or markdown reply editor
-- Optional attachment support
+- Optional attachment support (send/upload path is post-MVP unless backend support is finalized)
 
 ### 7. Settings
 
@@ -242,6 +259,7 @@ The recommended first version of the app should include:
 - Ticket detail view
 - Replying to tickets
 - Status changes
+- Internal notes
 - Push notifications
 - Sensitive data cleanup on logout
 
