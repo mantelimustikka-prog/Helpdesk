@@ -53,7 +53,7 @@ class HelpdeskRepositoryTest {
         val result = repository.authCheck(config)
 
         assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
-        val user = (result as NetworkResult.Success).value
+        val user = (result as NetworkResult.Success).value.user
         assertThat(user.name).isEqualTo("Agent Smith")
         assertThat(user.roles).containsExactly("administrator")
     }
