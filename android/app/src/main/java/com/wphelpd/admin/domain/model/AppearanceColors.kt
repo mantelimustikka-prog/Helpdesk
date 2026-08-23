@@ -9,18 +9,13 @@ data class AppearanceColors(
     val statusResolvedColor: String = "",
     val statusClosedColor: String = ""
 ) {
-    fun statusColor(status: String): String = when (status.lowercase()) {
-        "new",
-        "open"                  -> statusNewColor
-        "pending_agent_reply",
-        "pending",
-        "triaged",
-        "in_progress"           -> statusPendingAgentColor
-        "pending_client_reply",
-        "waiting_customer"      -> statusPendingClientColor
-        "resolved"              -> statusResolvedColor
-        "closed"                -> statusClosedColor
-        else                    -> ""
+    fun statusColor(status: String): String = when (status.canonicalTicketStatus()) {
+        "new"                  -> statusNewColor
+        "pending_agent_reply"  -> statusPendingAgentColor
+        "pending_client_reply" -> statusPendingClientColor
+        "resolved"             -> statusResolvedColor
+        "closed"               -> statusClosedColor
+        else                   -> ""
     }
 
     companion object {

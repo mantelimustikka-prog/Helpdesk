@@ -48,6 +48,7 @@ import com.wphelpd.admin.domain.model.TicketAttachment
 import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.TicketThreadEntry
 import com.wphelpd.admin.domain.model.statusLabel
+import com.wphelpd.admin.domain.model.ticketStatusLabel
 
 @Composable
 fun TicketsRoute(
@@ -759,22 +760,5 @@ private fun String.toComposeColorOrNull(): Color? {
         )
     } catch (_: NumberFormatException) {
         null
-    }
-}
-
-private fun ticketStatusLabel(status: String): String {
-    val normalizedStatus = status.lowercase()
-    return when (normalizedStatus) {
-        "new",
-        "open"                  -> "New"
-        "pending_agent_reply",
-        "pending",
-        "triaged",
-        "in_progress"           -> "Pending Agent Reply"
-        "pending_client_reply",
-        "waiting_customer"      -> "Pending Client Reply"
-        "resolved"              -> "Resolved"
-        "closed"                -> "Closed"
-        else                    -> normalizedStatus.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 }
