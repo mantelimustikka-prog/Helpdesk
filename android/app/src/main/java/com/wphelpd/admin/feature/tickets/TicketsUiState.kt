@@ -1,5 +1,6 @@
 package com.wphelpd.admin.feature.tickets
 
+import com.wphelpd.admin.domain.model.AppearanceColors
 import com.wphelpd.admin.domain.model.CurrentUser
 import com.wphelpd.admin.domain.model.Pagination
 import com.wphelpd.admin.domain.model.TicketDetail
@@ -16,6 +17,7 @@ data class TicketsUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val currentUser: CurrentUser? = null,
+    val appearanceColors: AppearanceColors = AppearanceColors.Empty,
     val tickets: List<Ticket> = emptyList(),
     val pagination: Pagination? = null,
     val selectionSessionId: Long = 0,

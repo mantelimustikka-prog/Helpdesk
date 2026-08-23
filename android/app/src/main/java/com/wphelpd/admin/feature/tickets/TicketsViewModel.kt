@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.wphelpd.admin.core.config.ServerConfigRepository
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.core.network.NetworkResult
+import com.wphelpd.admin.data.repository.AuthCheckResult
 import com.wphelpd.admin.data.repository.HelpdeskRepository
 import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -466,7 +467,7 @@ class TicketsViewModel(
                     if (saveConfigOnSuccess) {
                         serverConfigRepository.save(config)
                     }
-                    updateState { copy(currentUser = authResult.value) }
+                    updateState { copy(currentUser = authResult.value.user, appearanceColors = authResult.value.appearanceColors) }
                     refreshTickets(config)
                 }
             }

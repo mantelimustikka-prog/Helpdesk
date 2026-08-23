@@ -5,6 +5,7 @@ import com.wphelpd.admin.core.config.ServerConfigRepository
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.data.api.HelpdeskAdminApi
 import com.wphelpd.admin.data.api.dto.AuthCheckResponseDto
+import com.wphelpd.admin.data.api.dto.AppearanceColorsDto
 import com.wphelpd.admin.data.api.dto.DeviceTokenRequestDto
 import com.wphelpd.admin.data.api.dto.DeviceTokenResponseDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
@@ -171,6 +172,34 @@ class TicketsViewModelTest {
         advanceUntilIdle()
 
         assertThat(fakeConfigRepo.load()).isNull()
+    }
+
+    @Test
+    fun connectAndLoadTickets_storesAppearanceColorsFromAuthResponse() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    authAppearance = AppearanceColorsDto(
+                        adminReplyColor = "#1a73e8",
+                        clientReplyColor = "#34a853",
+                        statusNewColor = "#ea4335",
+                        statusResolvedColor = "#fbbc04"
+                    )
+                )
+            }
+        )
+
+        viewModel.updateSiteUrl("https://example.com")
+        viewModel.updateUsername("admin")
+        viewModel.updateApplicationPassword("secret")
+        viewModel.connectAndLoadTickets()
+        advanceUntilIdle()
+
+        val colors = viewModel.uiState.value.appearanceColors
+        assertThat(colors.adminReplyColor).isEqualTo("#1a73e8")
+        assertThat(colors.clientReplyColor).isEqualTo("#34a853")
+        assertThat(colors.statusNewColor).isEqualTo("#ea4335")
+        assertThat(colors.statusResolvedColor).isEqualTo("#fbbc04")
     }
 
     @Test
@@ -1066,6 +1095,7 @@ private class FakeHelpdeskAdminApi(
     private val ticketDetailDelaySequenceById: Map<Int, List<Long>> = emptyMap(),
     private val detailThrowable: Throwable? = null,
     private val authThrowable: Throwable? = null,
+    private val authAppearance: AppearanceColorsDto? = null,
     private val replyResponse: ReplyResponseDto = ReplyResponseDto(success = true),
     private val replyThrowable: Throwable? = null,
     private val replyDelayMs: Long = 0,
@@ -1088,7 +1118,8 @@ private class FakeHelpdeskAdminApi(
         authThrowable?.let { throw it }
         return AuthCheckResponseDto(
             success = true,
-            user = UserDto(id = 1, name = "Agent", email = "agent@example.test")
+            user = UserDto(id = 1, name = "Agent", email = "agent@example.test"),
+            appearance = authAppearance
         )
     }
 

@@ -8,6 +8,7 @@ import com.wphelpd.admin.data.api.dto.DeviceTokenRequestDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
 import com.wphelpd.admin.data.api.dto.ReplyRequestDto
 import com.wphelpd.admin.data.api.dto.StatusUpdateRequestDto
+import com.wphelpd.admin.domain.model.AppearanceColors
 import com.wphelpd.admin.domain.model.CurrentUser
 import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.TicketThreadEntry
@@ -23,8 +24,12 @@ class HelpdeskRepository(
         val allowedStatuses: Set<String> = setOf("new", "open", "pending", "resolved", "closed")
     }
 
-    suspend fun authCheck(config: AuthConfig): NetworkResult<CurrentUser> = execute {
-        apiProvider(config).authCheck().requireUser()
+    suspend fun authCheck(config: AuthConfig): NetworkResult<AuthCheckResult> = execute {
+        val response = apiProvider(config).authCheck()
+        AuthCheckResult(
+            user = response.requireUser(),
+            appearanceColors = response.toAppearanceColors()
+        )
     }
 
     suspend fun fetchTickets(
@@ -151,3 +156,8 @@ private fun Throwable.toReadableMessage(): String = when (this) {
     is IOException -> "Unable to reach the WP HelpD server."
     else -> message ?: "Unexpected WP HelpD error."
 }
+
+data class AuthCheckResult(
+    val user: CurrentUser,
+    val appearanceColors: AppearanceColors
+)

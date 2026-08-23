@@ -36,10 +36,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wphelpd.admin.data.repository.HelpdeskRepository
+import com.wphelpd.admin.domain.model.AppearanceColors
 import com.wphelpd.admin.domain.model.Ticket
 import com.wphelpd.admin.domain.model.TicketAttachment
 import com.wphelpd.admin.domain.model.TicketDetail
@@ -118,7 +120,8 @@ fun TicketsScreen(
                 onStatusChange = onStatusChange,
                 onNoteTextChange = onNoteTextChange,
                 onSubmitNote = onSubmitNote,
-                onLogout = onLogout
+                onLogout = onLogout,
+                appearanceColors = uiState.appearanceColors
             )
         }
         else -> {
@@ -126,7 +129,8 @@ fun TicketsScreen(
                 uiState = uiState,
                 onRefreshList = onRefreshList,
                 onTicketSelected = onTicketSelected,
-                onLogout = onLogout
+                onLogout = onLogout,
+                appearanceColors = uiState.appearanceColors
             )
         }
     }
@@ -230,7 +234,8 @@ private fun TicketListScreen(
     uiState: TicketsUiState,
     onRefreshList: () -> Unit,
     onTicketSelected: (Int) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    appearanceColors: AppearanceColors = AppearanceColors.Empty
 ) {
     Scaffold(
         topBar = {
@@ -296,7 +301,7 @@ private fun TicketListScreen(
             }
 
             items(uiState.tickets, key = Ticket::id) { ticket ->
-                TicketCard(ticket = ticket, onClick = { onTicketSelected(ticket.id) })
+                TicketCard(ticket = ticket, onClick = { onTicketSelected(ticket.id) }, appearanceColors = appearanceColors)
             }
 
             item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -315,7 +320,8 @@ private fun TicketDetailScreen(
     onStatusChange: (String) -> Unit,
     onNoteTextChange: (String) -> Unit,
     onSubmitNote: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    appearanceColors: AppearanceColors = AppearanceColors.Empty
 ) {
     Scaffold(
         topBar = {
@@ -380,7 +386,7 @@ private fun TicketDetailScreen(
                 val areDetailActionsEnabled = !uiState.isDetailActionInProgress
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
-                    TicketMetadata(detail)
+                    TicketMetadata(detail, appearanceColors)
                 }
 
                 item {
@@ -388,7 +394,7 @@ private fun TicketDetailScreen(
                 }
 
                 item {
-                    ConversationSection(detail.thread)
+                    ConversationSection(detail.thread, appearanceColors)
                 }
 
                 item {
@@ -444,7 +450,7 @@ private fun TicketDetailScreen(
 }
 
 @Composable
-private fun TicketCard(ticket: Ticket, onClick: () -> Unit) {
+private fun TicketCard(ticket: Ticket, onClick: () -> Unit, appearanceColors: AppearanceColors = AppearanceColors.Empty) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -456,11 +462,20 @@ private fun TicketCard(ticket: Ticket, onClick: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = listOfNotNull(ticket.status, ticket.priority, ticket.customerName)
-                    .joinToString(separator = " • "),
-                style = MaterialTheme.typography.bodyMedium
-            )
+            val statusColor = appearanceColors.statusColor(ticket.status).toComposeColorOrNull()
+            Row {
+                Text(
+                    text = ticket.status,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = statusColor ?: Color.Unspecified
+                )
+                listOfNotNull(ticket.priority, ticket.customerName).forEach { value ->
+                    Text(
+                        text = " • $value",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
             ticket.customerEmail?.let {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(it, style = MaterialTheme.typography.bodySmall)
@@ -474,13 +489,14 @@ private fun TicketCard(ticket: Ticket, onClick: () -> Unit) {
 }
 
 @Composable
-private fun TicketMetadata(detail: TicketDetail) {
+private fun TicketMetadata(detail: TicketDetail, appearanceColors: AppearanceColors = AppearanceColors.Empty) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Details", style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(8.dp))
             MetadataLine("Ticket number", detail.ticket.ticketNo)
-            MetadataLine("Status", detail.ticket.statusLabel())
+            val statusColor = appearanceColors.statusColor(detail.ticket.status).toComposeColorOrNull()
+            MetadataLine("Status", detail.ticket.statusLabel(), valueColor = statusColor)
             MetadataLine("Priority", detail.ticket.priority ?: "—")
             MetadataLine("Customer", detail.ticket.customerName ?: "—")
             MetadataLine("Customer email", detail.ticket.customerEmail ?: "—")
@@ -493,14 +509,18 @@ private fun TicketMetadata(detail: TicketDetail) {
 }
 
 @Composable
-private fun MetadataLine(label: String, value: String) {
+private fun MetadataLine(label: String, value: String, valueColor: Color? = null) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "$label: ",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = valueColor ?: Color.Unspecified
+        )
     }
 }
 
@@ -523,7 +543,7 @@ private fun AttachmentSection(attachments: List<TicketAttachment>) {
 }
 
 @Composable
-private fun ConversationSection(thread: List<TicketThreadEntry>) {
+private fun ConversationSection(thread: List<TicketThreadEntry>, appearanceColors: AppearanceColors = AppearanceColors.Empty) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Conversation", style = MaterialTheme.typography.titleSmall)
@@ -533,7 +553,7 @@ private fun ConversationSection(thread: List<TicketThreadEntry>) {
             } else {
                 thread.forEach { entry ->
                     Spacer(modifier = Modifier.height(8.dp))
-                    ThreadEntryCard(entry)
+                    ThreadEntryCard(entry, appearanceColors)
                 }
             }
         }
@@ -541,11 +561,19 @@ private fun ConversationSection(thread: List<TicketThreadEntry>) {
 }
 
 @Composable
-private fun ThreadEntryCard(entry: TicketThreadEntry) {
+private fun ThreadEntryCard(entry: TicketThreadEntry, appearanceColors: AppearanceColors = AppearanceColors.Empty) {
     val backgroundColor = if (entry.isInternal) {
         MaterialTheme.colorScheme.tertiaryContainer
     } else {
         MaterialTheme.colorScheme.surfaceVariant
+    }
+    val bodyTextColor = when {
+        entry.isInternal -> Color.Unspecified
+        entry.authorType.equals("agent", ignoreCase = true) ||
+            entry.authorType.equals("admin", ignoreCase = true) ->
+            appearanceColors.adminReplyColor.toComposeColorOrNull() ?: Color.Unspecified
+        else ->
+            appearanceColors.clientReplyColor.toComposeColorOrNull() ?: Color.Unspecified
     }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -562,7 +590,7 @@ private fun ThreadEntryCard(entry: TicketThreadEntry) {
             Text(heading, style = MaterialTheme.typography.labelMedium)
             entry.createdAt?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
             Spacer(modifier = Modifier.height(4.dp))
-            Text(entry.body, style = MaterialTheme.typography.bodyMedium)
+            Text(entry.body, style = MaterialTheme.typography.bodyMedium, color = bodyTextColor)
         }
     }
 }
@@ -690,5 +718,29 @@ private fun NoteComposer(
                 }
             }
         }
+    }
+}
+
+// Parses a CSS-style hex color string ("#rrggbb" or "#aarrggbb") into a Compose Color.
+// The server (WordPress sanitize_hex_color) emits 6-character values; the 8-character branch
+// assumes the optional alpha is in aarrggbb order (not rrggbbaa).
+private fun String.toComposeColorOrNull(): Color? {
+    val hex = this.trim()
+    if (hex.isEmpty()) return null
+    return try {
+        val normalized = if (hex.startsWith("#")) hex.substring(1) else hex
+        val argb = when (normalized.length) {
+            6 -> "FF$normalized".toLong(16) // prepend opaque alpha → 0xFFRRGGBB
+            8 -> normalized.toLong(16)      // caller supplies alpha as first two digits (aarrggbb)
+            else -> return null
+        }
+        Color(
+            red = argb.shr(16).and(0xFF).toInt(),
+            green = argb.shr(8).and(0xFF).toInt(),
+            blue = argb.and(0xFF).toInt(),
+            alpha = argb.shr(24).and(0xFF).toInt()
+        )
+    } catch (_: NumberFormatException) {
+        null
     }
 }
