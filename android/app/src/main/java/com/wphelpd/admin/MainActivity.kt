@@ -3,13 +3,22 @@ package com.wphelpd.admin
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -17,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -36,16 +47,23 @@ import com.wphelpd.admin.feature.push.PushTokenStateStore
 import com.wphelpd.admin.feature.push.PushTokenSyncManager
 import com.wphelpd.admin.feature.tickets.TicketsRoute
 import com.wphelpd.admin.feature.tickets.TicketsViewModel
+import com.wphelpd.admin.startup.StartupViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+private const val TAG = "MainActivity"
+
 class MainActivity : ComponentActivity() {
     private val pendingTicketId = MutableStateFlow<Int?>(null)
+    private lateinit var startupViewModel: StartupViewModel
     private lateinit var lockViewModel: AppLockViewModel
     private lateinit var ticketsViewModel: TicketsViewModel
+    private lateinit var pushTokenStateStore: PushTokenStateStore
+    private lateinit var pushTokenSyncManager: PushTokenSyncManager
     private val processLifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStop(owner: LifecycleOwner) {
+            if (!::lockViewModel.isInitialized || !::ticketsViewModel.isInitialized) return
             if (AppLockLifecyclePolicy.shouldRelockOnProcessStop(lockViewModel.uiState.value.isUnlocked)) {
                 ticketsViewModel.clearSensitiveSessionState()
                 lockViewModel.lock()
@@ -55,27 +73,27 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        pendingTicketId.value = extractTicketIdFromIntent(intent)
-        val lockManager = AppLockManager(applicationContext)
-        val serverConfigRepository = SecureServerConfigRepository(applicationContext)
-        val pushTokenStateStore = PushTokenStateStore(applicationContext)
-        val pushTokenSyncManager = PushTokenSyncManager(stateStore = pushTokenStateStore)
-        lockViewModel = ViewModelProvider(
-            this,
-            AppLockViewModel.factory(lockManager)
-        )[AppLockViewModel::class.java]
-        ticketsViewModel = ViewModelProvider(
-            this,
-            TicketsViewModel.factory(serverConfigRepository = serverConfigRepository)
-        )[TicketsViewModel::class.java]
-        FirebaseSafeTokenFetcher.fetchToken { token ->
-            pushTokenStateStore.saveCurrentToken(token)
-        }
-        ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
-        ProcessLifecycleOwner.get().lifecycle.addObserver(processLifecycleObserver)
-
+        startupViewModel = ViewModelProvider(this, StartupViewModel.factory)[StartupViewModel::class.java]
+        initializeApp()
         setContent {
             WpHelpdTheme {
+                val errorMessage = startupViewModel.startupError.collectAsStateWithLifecycle().value
+                if (errorMessage != null) {
+                    StartupErrorScreen(
+                        message = errorMessage,
+                        onRetry = {
+                            startupViewModel.clearError()
+                            initializeApp()
+                        }
+                    )
+                    return@WpHelpdTheme
+                }
+
+                if (!::lockViewModel.isInitialized || !::ticketsViewModel.isInitialized) {
+                    SplashLoadingScreen()
+                    return@WpHelpdTheme
+                }
+
                 val lockState = lockViewModel.uiState.collectAsStateWithLifecycle().value
                 val pendingTicket = pendingTicketId.asStateFlow().collectAsStateWithLifecycle().value
 
@@ -174,6 +192,35 @@ class MainActivity : ComponentActivity() {
         ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
     }
 
+    private fun initializeApp() {
+        // On retry, ViewModelProvider returns the same ViewModel instances already held in the
+        // ViewModelStore. That is intentional: any ViewModel that survived partial initialization
+        // is still valid, and the retry only needs to complete the remaining startup steps.
+        try {
+            pendingTicketId.value = extractTicketIdFromIntent(intent)
+            val lockManager = AppLockManager(applicationContext)
+            val serverConfigRepository = SecureServerConfigRepository(applicationContext)
+            pushTokenStateStore = PushTokenStateStore(applicationContext)
+            pushTokenSyncManager = PushTokenSyncManager(stateStore = pushTokenStateStore)
+            lockViewModel = ViewModelProvider(
+                this,
+                AppLockViewModel.factory(lockManager)
+            )[AppLockViewModel::class.java]
+            ticketsViewModel = ViewModelProvider(
+                this,
+                TicketsViewModel.factory(serverConfigRepository = serverConfigRepository)
+            )[TicketsViewModel::class.java]
+            FirebaseSafeTokenFetcher.fetchToken { token ->
+                pushTokenStateStore.saveCurrentToken(token)
+            }
+            ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
+            ProcessLifecycleOwner.get().lifecycle.addObserver(processLifecycleObserver)
+        } catch (e: Exception) {
+            Log.e(TAG, "Startup initialization failed — ${e.javaClass.simpleName}", e)
+            startupViewModel.reportError("The app failed to start. Please try again.")
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -213,5 +260,38 @@ private fun SplashLoadingScreen() {
                 .background(Color(0x99000000))
         )
         CircularProgressIndicator(color = Color.White)
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun StartupErrorScreen(message: String, onRetry: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Could not start the app",
+                style = MaterialTheme.typography.titleLarge,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = onRetry) {
+                Text("Retry")
+            }
+        }
     }
 }
