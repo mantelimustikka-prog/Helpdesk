@@ -385,6 +385,46 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_usesTopLevelMessagesWhenTopLevelItemsAreEmpty() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    items = emptyList(),
+                    messages = listOf(
+                        TicketThreadEntryDto(
+                            id = 8204,
+                            authorType = "agent",
+                            authorName = "Admin User",
+                            body = "Fallback from top-level messages.",
+                            createdAt = "2026-08-22T12:45:00Z",
+                            isInternal = 0
+                        )
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().id).isEqualTo(8204)
+        assertThat(detail.thread.single().body).isEqualTo("Fallback from top-level messages.")
+    }
+
+    @Test
     fun fetchTicketDetail_mapsFlatResponseMessagesAndAttachments() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(
