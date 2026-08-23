@@ -23,7 +23,6 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModelProvider
-import com.google.firebase.messaging.FirebaseMessaging
 import com.wphelpd.admin.core.config.SecureServerConfigRepository
 import com.wphelpd.admin.core.ui.theme.WpHelpdTheme
 import com.wphelpd.admin.feature.applock.AppLockLifecyclePolicy
@@ -31,6 +30,7 @@ import com.wphelpd.admin.feature.applock.AppLockManager
 import com.wphelpd.admin.feature.applock.AppLockViewModel
 import com.wphelpd.admin.feature.applock.CreatePasswordScreen
 import com.wphelpd.admin.feature.applock.UnlockScreen
+import com.wphelpd.admin.feature.push.FirebaseSafeTokenFetcher
 import com.wphelpd.admin.feature.push.PushNotificationAccessGate
 import com.wphelpd.admin.feature.push.PushTokenStateStore
 import com.wphelpd.admin.feature.push.PushTokenSyncManager
@@ -68,12 +68,9 @@ class MainActivity : ComponentActivity() {
             this,
             TicketsViewModel.factory(serverConfigRepository = serverConfigRepository)
         )[TicketsViewModel::class.java]
-        FirebaseMessaging.getInstance().token
-            .addOnSuccessListener { token ->
-                if (token.isNotBlank()) {
-                    pushTokenStateStore.saveCurrentToken(token)
-                }
-            }
+        FirebaseSafeTokenFetcher.fetchToken { token ->
+            pushTokenStateStore.saveCurrentToken(token)
+        }
         ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
         ProcessLifecycleOwner.get().lifecycle.addObserver(processLifecycleObserver)
 
