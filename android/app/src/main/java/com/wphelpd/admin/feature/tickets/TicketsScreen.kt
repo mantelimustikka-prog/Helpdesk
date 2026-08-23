@@ -44,6 +44,7 @@ import com.wphelpd.admin.domain.model.Ticket
 import com.wphelpd.admin.domain.model.TicketAttachment
 import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.TicketThreadEntry
+import com.wphelpd.admin.domain.model.statusLabel
 
 @Composable
 fun TicketsRoute(
@@ -479,7 +480,7 @@ private fun TicketMetadata(detail: TicketDetail) {
             Text("Details", style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(8.dp))
             MetadataLine("Ticket number", detail.ticket.ticketNo)
-            MetadataLine("Status", detail.ticket.status)
+            MetadataLine("Status", detail.ticket.statusLabel())
             MetadataLine("Priority", detail.ticket.priority ?: "—")
             MetadataLine("Customer", detail.ticket.customerName ?: "—")
             MetadataLine("Customer email", detail.ticket.customerEmail ?: "—")

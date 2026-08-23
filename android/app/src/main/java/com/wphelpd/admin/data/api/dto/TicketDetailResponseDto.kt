@@ -18,6 +18,8 @@ data class TicketDetailResponseDto(
     @SerializedName("priority") val priority: String? = null,
     @SerializedName("customer_name") val customerName: String? = null,
     @SerializedName("customer_email") val customerEmail: String? = null,
+    @SerializedName("requester_name") val requesterName: String? = null,
+    @SerializedName("requester_email") val requesterEmail: String? = null,
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("updated_at") val updatedAt: String? = null,
     @SerializedName("message_count") val messageCount: Int? = null
@@ -33,6 +35,8 @@ data class TicketDetailResponseDto(
                 priority = priority,
                 customerName = customerName,
                 customerEmail = customerEmail,
+                requesterName = requesterName,
+                requesterEmail = requesterEmail,
                 createdAt = createdAt,
                 updatedAt = updatedAt,
                 messageCount = messageCount ?: 0
