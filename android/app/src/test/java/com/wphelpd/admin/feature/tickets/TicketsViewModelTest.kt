@@ -379,6 +379,36 @@ class TicketsViewModelTest {
     }
 
     @Test
+    fun submitReply_doesNotOverwriteCurrentDetailWhenSelectionChangesDuringRefresh() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            replyDelayMs = 10,
+            ticketDetailDelayMsById = mapOf(101 to 50, 202 to 0),
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Ticket 101"),
+                202 to ticketDetailResponse(id = 202, subject = "Ticket 202")
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateReplyText("My reply.")
+        viewModel.submitReply()
+        advanceTimeBy(10)
+        runCurrent()
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
+        assertThat(api.ticketDetailRequestsById[101]).isEqualTo(2)
+    }
+
+    @Test
     fun updateTicketStatus_refreshesDetailOnSuccess() = runTest {
         val viewModel = TicketsViewModel(
             repository = HelpdeskRepository {
@@ -470,6 +500,35 @@ class TicketsViewModelTest {
         assertThat(state.selectedTicketId).isEqualTo(202)
         assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
         assertThat(api.ticketDetailRequestsById[101]).isEqualTo(1)
+    }
+
+    @Test
+    fun updateTicketStatus_doesNotOverwriteCurrentDetailWhenSelectionChangesDuringRefresh() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            statusDelayMs = 10,
+            ticketDetailDelayMsById = mapOf(101 to 50, 202 to 0),
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Ticket 101"),
+                202 to ticketDetailResponse(id = 202, subject = "Ticket 202")
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateTicketStatus("resolved")
+        advanceTimeBy(10)
+        runCurrent()
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
+        assertThat(api.ticketDetailRequestsById[101]).isEqualTo(2)
     }
 
     @Test
@@ -587,6 +646,36 @@ class TicketsViewModelTest {
     }
 
     @Test
+    fun submitNote_doesNotOverwriteCurrentDetailWhenSelectionChangesDuringRefresh() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            noteDelayMs = 10,
+            ticketDetailDelayMsById = mapOf(101 to 50, 202 to 0),
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Ticket 101"),
+                202 to ticketDetailResponse(id = 202, subject = "Ticket 202")
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateNoteText("My note.")
+        viewModel.submitNote()
+        advanceTimeBy(10)
+        runCurrent()
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
+        assertThat(api.ticketDetailRequestsById[101]).isEqualTo(2)
+    }
+
+    @Test
     fun startupBootstrap_routesToSetupWithRetryMessageWhenServerIsUnreachable() = runTest {
         val saved = AuthConfig(
             siteUrl = "https://saved.example.com",
@@ -643,6 +732,7 @@ private class FakeHelpdeskAdminApi(
         )
     ),
     private val ticketDetailResponsesById: Map<Int, TicketDetailResponseDto> = emptyMap(),
+    private val ticketDetailDelayMsById: Map<Int, Long> = emptyMap(),
     private val detailThrowable: Throwable? = null,
     private val authThrowable: Throwable? = null,
     private val replyResponse: ReplyResponseDto = ReplyResponseDto(success = true),
@@ -684,6 +774,9 @@ private class FakeHelpdeskAdminApi(
 
     override suspend fun getTicket(id: Int): TicketDetailResponseDto {
         ticketDetailRequestsById[id] = (ticketDetailRequestsById[id] ?: 0) + 1
+        ticketDetailDelayMsById[id]?.let { delayMs ->
+            if (delayMs > 0) delay(delayMs)
+        }
         detailThrowable?.let { throw it }
         return ticketDetailResponsesById[id] ?: ticketDetailResponse
     }

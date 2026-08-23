@@ -85,14 +85,22 @@ class TicketsViewModel(
             )
         }
         viewModelScope.launch {
-            loadTicketDetail(_uiState.value.toAuthConfig(), ticketId)
+            loadTicketDetail(
+                config = _uiState.value.toAuthConfig(),
+                ticketId = ticketId,
+                expectedSelectedTicketId = ticketId
+            )
         }
     }
 
     fun refreshSelectedTicket() {
         val ticketId = _uiState.value.selectedTicketId ?: return
         viewModelScope.launch {
-            loadTicketDetail(_uiState.value.toAuthConfig(), ticketId)
+            loadTicketDetail(
+                config = _uiState.value.toAuthConfig(),
+                ticketId = ticketId,
+                expectedSelectedTicketId = ticketId
+            )
         }
     }
 
@@ -150,6 +158,7 @@ class TicketsViewModel(
     fun updateTicketStatus(status: String) {
         val state = _uiState.value
         val ticketId = state.selectedTicketId ?: return
+        if (state.isUpdatingStatus) return
         var started = false
         updateState {
             if (isUpdatingStatus) this else {
@@ -235,7 +244,8 @@ class TicketsViewModel(
     private suspend fun loadTicketDetail(
         config: AuthConfig,
         ticketId: Int,
-        showLoading: Boolean = true
+        showLoading: Boolean = true,
+        expectedSelectedTicketId: Int? = null
     ) {
         if (showLoading) {
             updateState { copy(isDetailLoading = true, detailErrorMessage = null) }
@@ -243,6 +253,9 @@ class TicketsViewModel(
             updateState { copy(detailErrorMessage = null) }
         }
         when (val detailResult = repository.fetchTicketDetail(config, ticketId)) {
+            expectedSelectedTicketId?.let { selectedTicketId ->
+                if (_uiState.value.selectedTicketId != selectedTicketId) return
+            }
             is NetworkResult.Failure -> updateState {
                 copy(
                     isDetailLoading = false,
@@ -263,7 +276,12 @@ class TicketsViewModel(
 
     private suspend fun refreshTicketDetailIfStillSelected(config: AuthConfig, ticketId: Int) {
         if (_uiState.value.selectedTicketId != ticketId) return
-        loadTicketDetail(config, ticketId, showLoading = false)
+        loadTicketDetail(
+            config = config,
+            ticketId = ticketId,
+            showLoading = false,
+            expectedSelectedTicketId = ticketId
+        )
     }
 
     private fun updateState(transform: TicketsUiState.() -> TicketsUiState) {
