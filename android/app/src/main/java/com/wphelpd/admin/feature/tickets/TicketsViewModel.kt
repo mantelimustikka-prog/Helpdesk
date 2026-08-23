@@ -15,13 +15,13 @@ import kotlinx.coroutines.launch
 
 class TicketsViewModel(
     private val repository: HelpdeskRepository = HelpdeskRepository(),
-    private val serverConfigRepository: ServerConfigRepository? = null
+    private val serverConfigRepository: ServerConfigRepository = NoOpServerConfigRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(TicketsUiState())
     val uiState: StateFlow<TicketsUiState> = _uiState.asStateFlow()
 
     init {
-        serverConfigRepository?.load()?.let { saved ->
+        serverConfigRepository.load()?.let { saved ->
             updateState {
                 copy(
                     siteUrl = saved.siteUrl,
@@ -68,7 +68,7 @@ class TicketsViewModel(
                     }
                 }
                 is NetworkResult.Success -> {
-                    serverConfigRepository?.save(config)
+                    serverConfigRepository.save(config)
                     updateState { copy(currentUser = authResult.value) }
                     refreshTickets(config)
                 }
@@ -166,12 +166,18 @@ class TicketsViewModel(
     companion object {
         fun factory(
             repository: HelpdeskRepository = HelpdeskRepository(),
-            serverConfigRepository: ServerConfigRepository? = null
+            serverConfigRepository: ServerConfigRepository = NoOpServerConfigRepository
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 TicketsViewModel(repository, serverConfigRepository) as T
         }
     }
+}
+
+private object NoOpServerConfigRepository : ServerConfigRepository {
+    override fun load(): AuthConfig? = null
+    override fun save(config: AuthConfig) = Unit
+    override fun clear() = Unit
 }
 

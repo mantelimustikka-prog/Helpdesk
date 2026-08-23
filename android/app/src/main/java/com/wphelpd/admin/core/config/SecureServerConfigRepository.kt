@@ -13,13 +13,15 @@ import com.wphelpd.admin.core.network.AuthConfig
  */
 class SecureServerConfigRepository(context: Context) : ServerConfigRepository {
 
+    private val appContext = context.applicationContext
+
     private val prefs: SharedPreferences by lazy {
-        val masterKey = MasterKey.Builder(context)
+        val masterKey = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
 
         EncryptedSharedPreferences.create(
-            context,
+            appContext,
             PREFS_NAME,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
