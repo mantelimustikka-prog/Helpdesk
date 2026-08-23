@@ -3,6 +3,7 @@ package com.wphelpd.admin.feature.tickets
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,8 +13,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -35,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.wphelpd.admin.data.repository.HelpdeskRepository
 import com.wphelpd.admin.domain.model.Ticket
 import com.wphelpd.admin.domain.model.TicketAttachment
 import com.wphelpd.admin.domain.model.TicketDetail
@@ -58,7 +63,12 @@ fun TicketsRoute(viewModel: TicketsViewModel) {
         onRefreshList = viewModel::refreshTickets,
         onTicketSelected = viewModel::selectTicket,
         onBack = viewModel::clearSelectedTicket,
-        onRefreshDetail = viewModel::refreshSelectedTicket
+        onRefreshDetail = viewModel::refreshSelectedTicket,
+        onReplyTextChange = viewModel::updateReplyText,
+        onSubmitReply = viewModel::submitReply,
+        onStatusChange = viewModel::updateTicketStatus,
+        onNoteTextChange = viewModel::updateNoteText,
+        onSubmitNote = viewModel::submitNote
     )
 }
 
@@ -73,7 +83,12 @@ fun TicketsScreen(
     onRefreshList: () -> Unit,
     onTicketSelected: (Int) -> Unit,
     onBack: () -> Unit,
-    onRefreshDetail: () -> Unit
+    onRefreshDetail: () -> Unit,
+    onReplyTextChange: (String) -> Unit = {},
+    onSubmitReply: () -> Unit = {},
+    onStatusChange: (String) -> Unit = {},
+    onNoteTextChange: (String) -> Unit = {},
+    onSubmitNote: () -> Unit = {}
 ) {
     when {
         uiState.currentUser == null || uiState.requiresSetup -> {
@@ -90,7 +105,12 @@ fun TicketsScreen(
             TicketDetailScreen(
                 uiState = uiState,
                 onBack = onBack,
-                onRefreshDetail = onRefreshDetail
+                onRefreshDetail = onRefreshDetail,
+                onReplyTextChange = onReplyTextChange,
+                onSubmitReply = onSubmitReply,
+                onStatusChange = onStatusChange,
+                onNoteTextChange = onNoteTextChange,
+                onSubmitNote = onSubmitNote
             )
         }
         else -> {
@@ -271,7 +291,12 @@ private fun TicketListScreen(
 private fun TicketDetailScreen(
     uiState: TicketsUiState,
     onBack: () -> Unit,
-    onRefreshDetail: () -> Unit
+    onRefreshDetail: () -> Unit,
+    onReplyTextChange: (String) -> Unit,
+    onSubmitReply: () -> Unit,
+    onStatusChange: (String) -> Unit,
+    onNoteTextChange: (String) -> Unit,
+    onSubmitNote: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -335,6 +360,35 @@ private fun TicketDetailScreen(
 
                 item {
                     ConversationSection(detail.thread)
+                }
+
+                item {
+                    ReplyComposer(
+                        text = uiState.replyText,
+                        isLoading = uiState.isReplying,
+                        errorMessage = uiState.replyError,
+                        onTextChange = onReplyTextChange,
+                        onSubmit = onSubmitReply
+                    )
+                }
+
+                item {
+                    StatusActions(
+                        currentStatus = detail.ticket.status,
+                        isLoading = uiState.isUpdatingStatus,
+                        errorMessage = uiState.statusUpdateError,
+                        onStatusChange = onStatusChange
+                    )
+                }
+
+                item {
+                    NoteComposer(
+                        text = uiState.noteText,
+                        isLoading = uiState.isAddingNote,
+                        errorMessage = uiState.noteError,
+                        onTextChange = onNoteTextChange,
+                        onSubmit = onSubmitNote
+                    )
                 }
             }
 
@@ -477,6 +531,126 @@ private fun ThreadEntryCard(entry: TicketThreadEntry) {
             entry.createdAt?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
             Spacer(modifier = Modifier.height(4.dp))
             Text(entry.body, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun ReplyComposer(
+    text: String,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onTextChange: (String) -> Unit,
+    onSubmit: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Reply", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = text,
+                onValueChange = onTextChange,
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                label = { Text("Message") },
+                enabled = !isLoading
+            )
+            errorMessage?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onSubmit, enabled = !isLoading && text.isNotBlank()) {
+                    Text("Send reply")
+                }
+                if (isLoading) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            }
+        }
+    }
+}
+
+private val statusLabels: List<String> = HelpdeskRepository.allowedStatuses.sorted()
+
+@Composable
+private fun StatusActions(
+    currentStatus: String,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onStatusChange: (String) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Change status", style = MaterialTheme.typography.titleSmall)
+            errorMessage?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+            ) {
+                statusLabels.forEach { status ->
+                    val isCurrent = status.equals(currentStatus, ignoreCase = true)
+                    if (isCurrent) {
+                        Button(onClick = {}, enabled = false) {
+                            Text(status.replaceFirstChar { it.uppercase() })
+                        }
+                    } else {
+                        TextButton(onClick = { onStatusChange(status) }, enabled = !isLoading) {
+                            Text(status.replaceFirstChar { it.uppercase() })
+                        }
+                    }
+                }
+            }
+            if (isLoading) {
+                Spacer(modifier = Modifier.height(4.dp))
+                CircularProgressIndicator(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoteComposer(
+    text: String,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onTextChange: (String) -> Unit,
+    onSubmit: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Internal note", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = text,
+                onValueChange = onTextChange,
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                label = { Text("Note") },
+                enabled = !isLoading
+            )
+            errorMessage?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onSubmit, enabled = !isLoading && text.isNotBlank()) {
+                    Text("Add note")
+                }
+                if (isLoading) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            }
         }
     }
 }

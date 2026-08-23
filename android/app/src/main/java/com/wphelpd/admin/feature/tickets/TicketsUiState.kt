@@ -20,7 +20,18 @@ data class TicketsUiState(
     val selectedTicketId: Int? = null,
     val ticketDetail: TicketDetail? = null,
     val isDetailLoading: Boolean = false,
-    val detailErrorMessage: String? = null
+    val detailErrorMessage: String? = null,
+    // Reply action
+    val replyText: String = "",
+    val isReplying: Boolean = false,
+    val replyError: String? = null,
+    // Status action
+    val isUpdatingStatus: Boolean = false,
+    val statusUpdateError: String? = null,
+    // Internal note action
+    val noteText: String = "",
+    val isAddingNote: Boolean = false,
+    val noteError: String? = null
 ) {
     val canSubmit: Boolean = !isLoading && siteUrl.isNotBlank() && username.isNotBlank() && applicationPassword.isNotBlank()
 }

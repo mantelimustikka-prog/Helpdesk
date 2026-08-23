@@ -102,8 +102,81 @@ class TicketsViewModel(
                 selectedTicketId = null,
                 ticketDetail = null,
                 isDetailLoading = false,
-                detailErrorMessage = null
+                detailErrorMessage = null,
+                replyText = "",
+                isReplying = false,
+                replyError = null,
+                isUpdatingStatus = false,
+                statusUpdateError = null,
+                noteText = "",
+                isAddingNote = false,
+                noteError = null
             )
+        }
+    }
+
+    fun updateReplyText(value: String) = updateState { copy(replyText = value, replyError = null) }
+
+    fun submitReply() {
+        val state = _uiState.value
+        val ticketId = state.selectedTicketId ?: return
+        val message = state.replyText.trim()
+        if (message.isEmpty()) {
+            updateState { copy(replyError = "Reply cannot be empty.") }
+            return
+        }
+        viewModelScope.launch {
+            updateState { copy(isReplying = true, replyError = null) }
+            when (val result = repository.replyToTicket(state.toAuthConfig(), ticketId, message)) {
+                is NetworkResult.Failure -> updateState {
+                    copy(isReplying = false, replyError = result.message)
+                }
+                is NetworkResult.Success -> {
+                    updateState { copy(isReplying = false, replyText = "", replyError = null) }
+                    loadTicketDetail(state.toAuthConfig(), ticketId, showLoading = false)
+                }
+            }
+        }
+    }
+
+    fun updateTicketStatus(status: String) {
+        val state = _uiState.value
+        val ticketId = state.selectedTicketId ?: return
+        viewModelScope.launch {
+            updateState { copy(isUpdatingStatus = true, statusUpdateError = null) }
+            when (val result = repository.updateTicketStatus(state.toAuthConfig(), ticketId, status)) {
+                is NetworkResult.Failure -> updateState {
+                    copy(isUpdatingStatus = false, statusUpdateError = result.message)
+                }
+                is NetworkResult.Success -> {
+                    updateState { copy(isUpdatingStatus = false, statusUpdateError = null) }
+                    loadTicketDetail(state.toAuthConfig(), ticketId, showLoading = false)
+                }
+            }
+        }
+    }
+
+    fun updateNoteText(value: String) = updateState { copy(noteText = value, noteError = null) }
+
+    fun submitNote() {
+        val state = _uiState.value
+        val ticketId = state.selectedTicketId ?: return
+        val note = state.noteText.trim()
+        if (note.isEmpty()) {
+            updateState { copy(noteError = "Note cannot be empty.") }
+            return
+        }
+        viewModelScope.launch {
+            updateState { copy(isAddingNote = true, noteError = null) }
+            when (val result = repository.addInternalNote(state.toAuthConfig(), ticketId, note)) {
+                is NetworkResult.Failure -> updateState {
+                    copy(isAddingNote = false, noteError = result.message)
+                }
+                is NetworkResult.Success -> {
+                    updateState { copy(isAddingNote = false, noteText = "", noteError = null) }
+                    loadTicketDetail(state.toAuthConfig(), ticketId, showLoading = false)
+                }
+            }
         }
     }
 
