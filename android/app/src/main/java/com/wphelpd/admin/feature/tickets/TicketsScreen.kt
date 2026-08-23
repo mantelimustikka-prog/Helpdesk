@@ -468,7 +468,7 @@ private fun TicketCard(ticket: Ticket, onClick: () -> Unit, appearanceColors: Ap
             val statusColor = appearanceColors.statusColor(ticket.status).toComposeColorOrNull()
             Row {
                 Text(
-                    text = ticket.status,
+                    text = ticket.statusLabel(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = statusColor ?: Color.Unspecified
                 )

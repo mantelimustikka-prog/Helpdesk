@@ -391,12 +391,18 @@ class AdminTicketController {
 	 *
 	 * Adds an `author_name` field resolved from the WordPress user display name
 	 * so the Android client can show a human-readable sender label.
+	 * Integer DB columns are explicitly cast so json_encode emits JSON numbers
+	 * rather than strings, keeping Gson deserialization straightforward.
 	 *
 	 * @param array<string, mixed> $message Raw message DB row.
 	 * @return array<string, mixed>
 	 */
 	protected function normalizeMessageForResponse( array $message ): array {
-		$message['author_name'] = $message['author_name'] ?? null;
+		$message['id']             = (int) ( $message['id'] ?? 0 );
+		$message['ticket_id']      = (int) ( $message['ticket_id'] ?? 0 );
+		$message['author_user_id'] = isset( $message['author_user_id'] ) ? (int) $message['author_user_id'] : null;
+		$message['is_internal']    = (int) ( $message['is_internal'] ?? 0 );
+		$message['author_name']    = $message['author_name'] ?? null;
 		$user_id = (int) ( $message['author_user_id'] ?? 0 );
 		if ( $user_id > 0 ) {
 			$user = get_userdata( $user_id );
@@ -408,7 +414,7 @@ class AdminTicketController {
 	}
 
 	/**
-	 * Normalize ticket status in REST payloads.
+	 * Normalize ticket status in REST payloads and cast numeric fields.
 	 *
 	 * @param array<string, mixed>|null $ticket Ticket row.
 	 * @return array<string, mixed>
@@ -417,6 +423,7 @@ class AdminTicketController {
 		if ( empty( $ticket ) ) {
 			return array();
 		}
+		$ticket['id']     = (int) ( $ticket['id'] ?? 0 );
 		$ticket['status'] = TicketStatus::toCanonical( (string) ( $ticket['status'] ?? '' ) );
 		return $ticket;
 	}
