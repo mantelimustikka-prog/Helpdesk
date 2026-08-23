@@ -68,7 +68,20 @@ class AdminTicketController {
 			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
 		}
 
-		return new WP_REST_Response( $this->normalizeTicketForResponse( $ticket ) );
+		$messages = array_map(
+			array( $this, 'normalizeMessageForResponse' ),
+			$this->fetchMessagesForTicket( (int) $ticket['id'] )
+		);
+
+		$data             = $this->normalizeTicketForResponse( $ticket );
+		$data['messages'] = $messages;
+
+		return new WP_REST_Response(
+			array(
+				'success' => true,
+				'data'    => $data,
+			)
+		);
 	}
 
 	/**
@@ -78,20 +91,14 @@ class AdminTicketController {
 	 * @return WP_REST_Response
 	 */
 	public function getMessages( WP_REST_Request $request ): WP_REST_Response {
-		global $wpdb;
-
 		$ticket = $this->findTicket( (int) $request['id'] );
 		if ( empty( $ticket ) ) {
 			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
 		}
 
-		$table    = Schema::table( Constants::TABLE_TICKET_MESSAGES );
-		$messages = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE ticket_id = %d ORDER BY created_at ASC",
-				(int) $ticket['id']
-			),
-			ARRAY_A
+		$messages = array_map(
+			array( $this, 'normalizeMessageForResponse' ),
+			$this->fetchMessagesForTicket( (int) $ticket['id'] )
 		);
 
 		return new WP_REST_Response( array( 'items' => $messages ) );
@@ -354,6 +361,50 @@ class AdminTicketController {
 		);
 
 		return $ticket ?: null;
+	}
+
+	/**
+	 * Fetch raw message rows for a ticket, ordered chronologically.
+	 *
+	 * Extracted as a protected method so sub-classes (and unit tests) can
+	 * override the database query without touching global state.
+	 *
+	 * @param int $ticket_id Ticket ID.
+	 * @return array<int, array<string, mixed>>
+	 */
+	protected function fetchMessagesForTicket( int $ticket_id ): array {
+		global $wpdb;
+
+		$table = Schema::table( Constants::TABLE_TICKET_MESSAGES );
+
+		return $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE ticket_id = %d ORDER BY created_at ASC",
+				$ticket_id
+			),
+			ARRAY_A
+		) ?: array();
+	}
+
+	/**
+	 * Normalize a single message row for REST responses.
+	 *
+	 * Adds an `author_name` field resolved from the WordPress user display name
+	 * so the Android client can show a human-readable sender label.
+	 *
+	 * @param array<string, mixed> $message Raw message DB row.
+	 * @return array<string, mixed>
+	 */
+	protected function normalizeMessageForResponse( array $message ): array {
+		$message['author_name'] = $message['author_name'] ?? null;
+		$user_id = (int) ( $message['author_user_id'] ?? 0 );
+		if ( $user_id > 0 ) {
+			$user = get_userdata( $user_id );
+			if ( $user ) {
+				$message['author_name'] = $user->display_name;
+			}
+		}
+		return $message;
 	}
 
 	/**
