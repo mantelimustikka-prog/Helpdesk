@@ -241,6 +241,190 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_fallsBackToWrappedMessagesPayloadAndMapsThreadFields() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "items": [
+                            {
+                              "id": 8201,
+                              "author_type": "agent",
+                              "author_name": "Admin User",
+                              "body": "Saved wrapped fallback reply.",
+                              "created_at": "2026-08-22T12:30:00Z",
+                              "is_internal": 1
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        val entry = detail.thread.single()
+        assertThat(entry.id).isEqualTo(8201)
+        assertThat(entry.authorType).isEqualTo("agent")
+        assertThat(entry.authorName).isEqualTo("Admin User")
+        assertThat(entry.body).isEqualTo("Saved wrapped fallback reply.")
+        assertThat(entry.createdAt).isEqualTo("2026-08-22T12:30:00Z")
+        assertThat(entry.isInternal).isTrue()
+    }
+
+    @Test
+    fun fetchTicketDetail_usesWrappedMessagesWhenWrappedItemsAreUnusable() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "items": [
+                            { "author_type": "agent", "body": "missing id should be skipped" }
+                          ],
+                          "messages": [
+                            {
+                              "id": 8202,
+                              "author_type": "agent",
+                              "author_name": "Admin User",
+                              "body": "Fallback to wrapped messages entry.",
+                              "created_at": "2026-08-22T12:35:00Z",
+                              "is_internal": 0
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().id).isEqualTo(8202)
+        assertThat(detail.thread.single().body).isEqualTo("Fallback to wrapped messages entry.")
+    }
+
+    @Test
+    fun fetchTicketDetail_usesWrappedMessagesWhenWrappedItemsAreEmpty() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "items": [],
+                          "messages": [
+                            {
+                              "id": 8203,
+                              "author_type": "agent",
+                              "author_name": "Admin User",
+                              "body": "Fallback from empty wrapped items.",
+                              "created_at": "2026-08-22T12:40:00Z",
+                              "is_internal": 0
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().id).isEqualTo(8203)
+        assertThat(detail.thread.single().body).isEqualTo("Fallback from empty wrapped items.")
+    }
+
+    @Test
+    fun fetchTicketDetail_usesTopLevelMessagesWhenTopLevelItemsAreEmpty() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    items = emptyList(),
+                    messages = listOf(
+                        TicketThreadEntryDto(
+                            id = 8204,
+                            authorType = "agent",
+                            authorName = "Admin User",
+                            body = "Fallback from top-level messages.",
+                            createdAt = "2026-08-22T12:45:00Z",
+                            isInternal = 0
+                        )
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().id).isEqualTo(8204)
+        assertThat(detail.thread.single().body).isEqualTo("Fallback from top-level messages.")
+    }
+
+    @Test
     fun fetchTicketDetail_mapsFlatResponseMessagesAndAttachments() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(

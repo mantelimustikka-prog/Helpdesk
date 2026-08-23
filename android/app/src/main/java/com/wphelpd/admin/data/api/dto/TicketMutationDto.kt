@@ -1,5 +1,7 @@
 package com.wphelpd.admin.data.api.dto
 
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 import com.wphelpd.admin.domain.model.TicketThreadEntry
 
@@ -151,7 +153,56 @@ data class NoteResponseDto(
 }
 
 data class TicketMessagesResponseDto(
-    @SerializedName("items") val items: List<TicketThreadEntryDto>? = null
+    @SerializedName("success") val success: Boolean? = null,
+    @SerializedName("data") val data: JsonElement? = null,
+    @SerializedName("items") val items: List<TicketThreadEntryDto>? = null,
+    @SerializedName("messages") val messages: List<TicketThreadEntryDto>? = null
 ) {
-    fun toThread(): List<TicketThreadEntry> = items.orEmpty().map(TicketThreadEntryDto::toModel)
+    fun toThread(): List<TicketThreadEntry> {
+        check(success != false) { "Ticket messages request failed." }
+        val threadEntries = items?.takeIf { it.isNotEmpty() }
+            ?: messages?.takeIf { it.isNotEmpty() }
+            ?: data.toThreadEntriesOrNull()
+        return threadEntries.orEmpty().map(TicketThreadEntryDto::toModel)
+    }
+}
+
+private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {
+    if (this == null || isJsonNull) return null
+    if (isJsonArray) return parseThreadEntriesFromJson(this)
+    if (!isJsonObject) return null
+
+    val objectData = asJsonObject
+    return parseThreadEntriesFromJson(objectData.get("items"))
+        ?: parseThreadEntriesFromJson(objectData.get("messages"))
+}
+
+private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEntryDto>? {
+    if (value == null || !value.isJsonArray) return null
+    val entries = value.asJsonArray
+    return entries.mapNotNull { entry ->
+        if (!entry.isJsonObject) return@mapNotNull null
+        val payload = entry.asJsonObject
+        val id = payload.intOrNull("id") ?: return@mapNotNull null
+        val authorType = payload.stringOrNull("author_type") ?: return@mapNotNull null
+        val body = payload.stringOrNull("body") ?: return@mapNotNull null
+        TicketThreadEntryDto(
+            id = id,
+            authorType = authorType,
+            authorName = payload.stringOrNull("author_name"),
+            body = body,
+            createdAt = payload.stringOrNull("created_at"),
+            isInternal = payload.intOrNull("is_internal")
+        )
+    }.ifEmpty { null }
+}
+
+private fun JsonObject.stringOrNull(name: String): String? {
+    val value = get(name) ?: return null
+    return if (value.isJsonNull) null else value.asString
+}
+
+private fun JsonObject.intOrNull(name: String): Int? {
+    val value = get(name) ?: return null
+    return if (value.isJsonNull) null else value.asInt
 }
