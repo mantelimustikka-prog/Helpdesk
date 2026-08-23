@@ -34,4 +34,20 @@ class PushNotificationPayloadParserTest {
         assertThat(unsupported).isNull()
         assertThat(invalidId).isNull()
     }
+
+    @Test
+    fun parse_fallbackNotificationId_isUniqueAcrossMessages() {
+        val payload1 = PushNotificationPayloadParser.parse(
+            mapOf("event_type" to "ticket_replied", "ticket_id" to "42")
+        )
+        val payload2 = PushNotificationPayloadParser.parse(
+            mapOf("event_type" to "ticket_replied", "ticket_id" to "42")
+        )
+
+        assertThat(payload1).isNotNull()
+        assertThat(payload2).isNotNull()
+        assertThat(payload1!!.notificationId).isNotEmpty()
+        assertThat(payload2!!.notificationId).isNotEmpty()
+        assertThat(payload1.notificationId).isNotEqualTo(payload2.notificationId)
+    }
 }

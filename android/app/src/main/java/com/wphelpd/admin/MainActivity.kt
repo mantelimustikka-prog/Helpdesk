@@ -107,8 +107,10 @@ class MainActivity : ComponentActivity() {
                                 requiresSetup = ticketsState.requiresSetup,
                                 hasCurrentUser = ticketsState.currentUser != null
                             )
-                            if (ticketIdToOpen != null && ticketsState.selectedTicketId != ticketIdToOpen) {
-                                ticketsViewModel.selectTicket(ticketIdToOpen)
+                            if (ticketIdToOpen != null) {
+                                if (ticketsState.selectedTicketId != ticketIdToOpen) {
+                                    ticketsViewModel.selectTicket(ticketIdToOpen)
+                                }
                                 pendingTicketId.value = null
                             }
                         }
@@ -140,6 +142,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel = ticketsViewModel,
                                 onLogout = {
                                     val config = ticketsState.toAuthConfig()
+                                    pendingTicketId.value = null
                                     pushTokenStateStore.clearHandledNotifications()
                                     ticketsViewModel.logout()
                                     lockViewModel.lock()
