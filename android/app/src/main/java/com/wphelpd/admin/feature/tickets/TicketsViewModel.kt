@@ -38,7 +38,8 @@ class TicketsViewModel(
                     siteUrl = savedConfig.siteUrl,
                     username = savedConfig.username,
                     applicationPassword = savedConfig.applicationPassword,
-                    wpNonce = savedConfig.wpNonce
+                    wpNonce = savedConfig.wpNonce,
+                    isBootstrapping = true
                 )
             }
             bootstrapFromSavedConfig(savedConfig)

@@ -10,7 +10,7 @@ data class TicketsUiState(
     val username: String = "",
     val applicationPassword: String = "",
     val wpNonce: String = "",
-    val isBootstrapping: Boolean = true,
+    val isBootstrapping: Boolean = false,
     val requiresSetup: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
