@@ -20,16 +20,24 @@ final class FakeAdminTicketController extends AdminTicketController {
 	/** @var array<int, array<string, mixed>> */
 	private array $messages;
 
+	/** @var array<int, array<string, mixed>|null> */
+	private array $ticketSequence;
+
 	/**
 	 * @param array<string, mixed>|null         $ticket
 	 * @param array<int, array<string, mixed>>  $messages
 	 */
-	public function __construct( ?array $ticket, array $messages = array() ) {
-		$this->ticket   = $ticket;
-		$this->messages = $messages;
+	public function __construct( ?array $ticket, array $messages = array(), array $ticketSequence = array() ) {
+		$this->ticket         = $ticket;
+		$this->messages       = $messages;
+		$this->ticketSequence = $ticketSequence;
 	}
 
 	protected function findTicket( int $ticket_id ): ?array {
+		if ( ! empty( $this->ticketSequence ) ) {
+			$ticket = array_shift( $this->ticketSequence );
+			return is_array( $ticket ) ? $ticket : null;
+		}
 		return $this->ticket;
 	}
 
@@ -179,5 +187,145 @@ final class AdminTicketControllerTest extends TestCase {
 		self::assertArrayHasKey( 'items', $response->data );
 		self::assertCount( 1, $response->data['items'] );
 		self::assertSame( 'Where is my order?', $response->data['items'][0]['body'] );
+	}
+
+	public function testReplyReturnsWrappedNormalizedMessage(): void {
+		global $wpdb;
+
+		$ticket = array(
+			'id'        => 5,
+			'ticket_no' => 'HD-000005',
+			'subject'   => 'Reply test',
+			'status'    => 'open',
+		);
+		$controller = new FakeAdminTicketController( $ticket );
+		$wpdb       = new class {
+			public int $insert_id = 401;
+			/** @var array<string, mixed> */
+			public array $last_insert = array();
+
+			public function insert( string $table, array $data, array $format = array() ): int {
+				$this->last_insert = $data;
+				return 1;
+			}
+
+			public function prepare( string $query, ...$args ): string {
+				return $query;
+			}
+
+			public function get_row( string $query, string $output ) {
+				return array(
+					'id'             => 401,
+					'ticket_id'      => 5,
+					'author_user_id' => 7,
+					'author_type'    => 'agent',
+					'body'           => $this->last_insert['body'] ?? '',
+					'is_internal'    => $this->last_insert['is_internal'] ?? 0,
+					'created_at'     => $this->last_insert['created_at'] ?? null,
+				);
+			}
+		};
+		$GLOBALS['wp_users_index'][7] = (object) array( 'display_name' => 'Agent Smith' );
+
+		$request = new WP_REST_Request();
+		$request['id'] = 5;
+		$request->set_param( 'body', 'Thanks for the update.' );
+		$request->set_param( 'is_internal', 0 );
+
+		$response = $controller->reply( $request );
+
+		self::assertSame( 201, $response->status );
+		self::assertTrue( $response->data['success'] );
+		self::assertSame( 401, $response->data['data']['id'] );
+		self::assertSame( 'Agent Smith', $response->data['data']['author_name'] );
+		self::assertSame( 'Thanks for the update.', $response->data['data']['body'] );
+		self::assertSame( 'agent', $response->data['data']['author_type'] );
+	}
+
+	public function testAddNoteReturnsWrappedNormalizedMessage(): void {
+		global $wpdb;
+
+		$ticket = array(
+			'id'        => 6,
+			'ticket_no' => 'HD-000006',
+			'subject'   => 'Internal note test',
+			'status'    => 'open',
+		);
+		$controller = new FakeAdminTicketController( $ticket );
+		$wpdb       = new class {
+			public int $insert_id = 501;
+			/** @var array<string, mixed> */
+			public array $last_insert = array();
+
+			public function insert( string $table, array $data, array $format = array() ): int {
+				$this->last_insert = $data;
+				return 1;
+			}
+
+			public function prepare( string $query, ...$args ): string {
+				return $query;
+			}
+
+			public function get_row( string $query, string $output ) {
+				return array(
+					'id'             => 501,
+					'ticket_id'      => 6,
+					'author_user_id' => 7,
+					'author_type'    => 'agent',
+					'body'           => $this->last_insert['body'] ?? '',
+					'is_internal'    => 1,
+					'created_at'     => $this->last_insert['created_at'] ?? null,
+				);
+			}
+		};
+		$GLOBALS['wp_users_index'][7] = (object) array( 'display_name' => 'Agent Smith' );
+
+		$request = new WP_REST_Request();
+		$request['id'] = 6;
+		$request->set_param( 'body', 'Investigating logs.' );
+
+		$response = $controller->addNote( $request );
+
+		self::assertSame( 201, $response->status );
+		self::assertTrue( $response->data['success'] );
+		self::assertSame( 501, $response->data['data']['id'] );
+		self::assertSame( 'Agent Smith', $response->data['data']['author_name'] );
+		self::assertSame( 1, $response->data['data']['is_internal'] );
+		self::assertSame( 'Investigating logs.', $response->data['data']['body'] );
+	}
+
+	public function testUpdateStatusReturnsWrappedNormalizedTicket(): void {
+		global $wpdb;
+
+		$original = array(
+			'id'        => 7,
+			'ticket_no' => 'HD-000007',
+			'subject'   => 'Status test',
+			'status'    => 'open',
+		);
+		$updated = $original;
+		$updated['status'] = 'closed';
+		$controller        = new FakeAdminTicketController( $original, array(), array( $original, $updated ) );
+		$wpdb              = new class {
+			/** @var array<string, mixed> */
+			public array $last_update = array();
+
+			public function update( string $table, array $data, array $where, array $format = array(), array $where_format = array() ): int {
+				$this->last_update = $data;
+				return 1;
+			}
+		};
+
+		$request = new WP_REST_Request();
+		$request['id'] = 7;
+		$request->set_param( 'status', 'closed' );
+
+		$response = $controller->updateStatus( $request );
+
+		self::assertSame( 200, $response->status );
+		self::assertTrue( $response->data['success'] );
+		self::assertSame( 7, $response->data['data']['id'] );
+		self::assertSame( 'closed', $response->data['data']['status'] );
+		self::assertSame( '2026-08-18 21:14:13', $wpdb->last_update['closed_at'] );
 	}
 }

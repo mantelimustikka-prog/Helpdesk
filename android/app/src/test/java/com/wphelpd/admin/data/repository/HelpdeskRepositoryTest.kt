@@ -11,6 +11,7 @@ import com.wphelpd.admin.data.api.dto.DeviceTokenResponseDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
 import com.wphelpd.admin.data.api.dto.NoteResponseDto
 import com.wphelpd.admin.data.api.dto.PaginationDto
+import com.wphelpd.admin.data.api.dto.ReplyResultDto
 import com.wphelpd.admin.data.api.dto.ReplyRequestDto
 import com.wphelpd.admin.data.api.dto.ReplyResponseDto
 import com.wphelpd.admin.data.api.dto.StatusUpdateRequestDto
@@ -205,6 +206,41 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_fallsBackToMessagesEndpointWhenEmbeddedMessagesAreEmpty() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    items = listOf(
+                        TicketThreadEntryDto(
+                            id = 8101,
+                            authorType = "agent",
+                            authorName = "Admin User",
+                            body = "Saved reply from fallback endpoint."
+                        )
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().body).isEqualTo("Saved reply from fallback endpoint.")
+    }
+
+    @Test
     fun fetchTicketDetail_mapsFlatResponseMessagesAndAttachments() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(
@@ -244,6 +280,37 @@ class HelpdeskRepositoryTest {
         assertThat(detail.thread.single().body).isEqualTo("I cannot sign in.")
         assertThat(detail.attachments.single().name).isEqualTo("screenshot.png")
         assertThat(detail.assignedToName).isEqualTo("Admin User")
+    }
+
+    @Test
+    fun replyToTicket_mapsContractReplyResultToThreadEntry() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                replyResponse = ReplyResponseDto(
+                    success = true,
+                    data = ReplyResultDto(
+                        id = 9101,
+                        ticketId = 101,
+                        authorType = "agent",
+                        authorName = "Admin User",
+                        body = "Saved mobile reply.",
+                        createdAt = "2026-08-22T12:00:00Z",
+                        isInternal = 0
+                    )
+                )
+            )
+        }
+
+        val result = repository.replyToTicket(config, ticketId = 101, message = "Saved mobile reply.")
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val entry = (result as NetworkResult.Success).value
+        assertThat(entry).isNotNull()
+        assertThat(entry?.id).isEqualTo(9101)
+        assertThat(entry?.authorType).isEqualTo("agent")
+        assertThat(entry?.authorName).isEqualTo("Admin User")
+        assertThat(entry?.body).isEqualTo("Saved mobile reply.")
+        assertThat(entry?.isInternal).isFalse()
     }
 
     @Test

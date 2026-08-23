@@ -150,7 +150,13 @@ class AdminTicketController {
 		 */
 		do_action( 'hd_ticket_replied', $ticket, $message );
 
-		return new WP_REST_Response( $message, 201 );
+		return new WP_REST_Response(
+			array(
+				'success' => true,
+				'data'    => is_array( $message ) ? $this->normalizeMessageForResponse( $message ) : array(),
+			),
+			201
+		);
 	}
 
 	/**
@@ -197,7 +203,12 @@ class AdminTicketController {
 		 */
 		do_action( 'hd_ticket_status_changed', $this->normalizeTicketForResponse( $updated ?: $ticket ), $old_status, $new_status );
 
-		return new WP_REST_Response( $this->normalizeTicketForResponse( $updated ?: $ticket ) );
+		return new WP_REST_Response(
+			array(
+				'success' => true,
+				'data'    => $this->normalizeTicketForResponse( $updated ?: $ticket ),
+			)
+		);
 	}
 
 	/**
@@ -299,7 +310,13 @@ class AdminTicketController {
 		 */
 		do_action( 'hd_ticket_note_added', $ticket, $note );
 
-		return new WP_REST_Response( $note, 201 );
+		return new WP_REST_Response(
+			array(
+				'success' => true,
+				'data'    => is_array( $note ) ? $this->normalizeMessageForResponse( $note ) : array(),
+			),
+			201
+		);
 	}
 
 	/**
