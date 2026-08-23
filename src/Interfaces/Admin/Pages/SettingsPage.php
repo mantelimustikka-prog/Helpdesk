@@ -218,7 +218,7 @@ class SettingsPage {
 		$footer_enabled = $this->booleanFromPost( 'hd_email_footer_enabled' );
 
 		$push_enabled   = $this->booleanFromPost( 'hd_push_enabled' );
-		$fcm_mode       = $this->sanitizeEnumFromPost( 'hd_fcm_mode', self::VALID_FCM_MODES, 'legacy', $errors, __( 'Invalid FCM mode.', 'wp-helpdesk' ) );
+		$fcm_mode       = $this->sanitizeEnumFromPost( 'hd_fcm_mode', self::VALID_FCM_MODES, 'v1', $errors, __( 'Invalid FCM mode.', 'wp-helpdesk' ) );
 		$fcm_server_key = $this->sanitizeSecretReplacement( 'hd_fcm_server_key', true, $errors, '' );
 		$fcm_project_id = isset( $_POST['hd_fcm_project_id'] ) ? sanitize_text_field( wp_unslash( $_POST['hd_fcm_project_id'] ) ) : '';
 		$service_json   = $this->sanitizeSecretReplacement( 'hd_fcm_service_account_json', false, $errors, __( 'FCM Service Account JSON is not valid JSON.', 'wp-helpdesk' ) );
@@ -731,7 +731,7 @@ class SettingsPage {
 		$footer_enabled = (int) get_site_option( Constants::OPTION_EMAIL_FOOTER_ENABLED, 1 );
 
 		$push_enabled = (int) get_site_option( Constants::OPTION_PUSH_ENABLED, 0 );
-		$fcm_mode     = (string) get_site_option( Constants::OPTION_FCM_MODE, 'legacy' );
+		$fcm_mode     = (string) get_site_option( Constants::OPTION_FCM_MODE, 'v1' );
 		$fcm_key_set  = '' !== (string) get_site_option( Constants::OPTION_FCM_SERVER_KEY, '' );
 		$fcm_project  = (string) get_site_option( Constants::OPTION_FCM_PROJECT_ID, '' );
 		$sa_json_set  = '' !== (string) get_site_option( Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON, '' );
@@ -805,9 +805,10 @@ class SettingsPage {
 					<th scope="row"><label for="hd_fcm_mode"><?php esc_html_e( 'FCM Mode', 'wp-helpdesk' ); ?></label></th>
 					<td>
 						<select id="hd_fcm_mode" name="hd_fcm_mode">
-							<option value="legacy" <?php selected( $fcm_mode, 'legacy' ); ?>><?php esc_html_e( 'Legacy', 'wp-helpdesk' ); ?></option>
 							<option value="v1" <?php selected( $fcm_mode, 'v1' ); ?>><?php esc_html_e( 'FCM v1', 'wp-helpdesk' ); ?></option>
+							<option value="legacy" <?php selected( $fcm_mode, 'legacy' ); ?>><?php esc_html_e( 'Legacy', 'wp-helpdesk' ); ?></option>
 						</select>
+						<p class="description"><?php esc_html_e( 'FCM v1 is the default and recommended delivery mode. Legacy mode is only for older installations that still rely on a server key.', 'wp-helpdesk' ); ?></p>
 					</td>
 				</tr>
 				<tr>

@@ -25,7 +25,7 @@ class PushNotificationPayloadParserTest {
     @Test
     fun parse_rejectsUnsupportedEventOrInvalidTicketId() {
         val unsupported = PushNotificationPayloadParser.parse(
-            mapOf("event_type" to "status_changed", "ticket_id" to "100")
+            mapOf("event_type" to "comment_added", "ticket_id" to "100")
         )
         val invalidId = PushNotificationPayloadParser.parse(
             mapOf("event_type" to "ticket_replied", "ticket_id" to "0")
@@ -33,6 +33,23 @@ class PushNotificationPayloadParserTest {
 
         assertThat(unsupported).isNull()
         assertThat(invalidId).isNull()
+    }
+
+    @Test
+    fun parse_acceptsStatusAndAssignmentEvents() {
+        val statusChanged = PushNotificationPayloadParser.parse(
+            mapOf("event_type" to "status_changed", "ticket_id" to "44")
+        )
+        val assigned = PushNotificationPayloadParser.parse(
+            mapOf("event_type" to "ticket_assigned", "ticket_id" to "45")
+        )
+
+        assertThat(statusChanged).isNotNull()
+        assertThat(statusChanged!!.eventType).isEqualTo("status_changed")
+        assertThat(statusChanged.deepLink).isEqualTo("wphelpd://ticket/44")
+        assertThat(assigned).isNotNull()
+        assertThat(assigned!!.eventType).isEqualTo("ticket_assigned")
+        assertThat(assigned.deepLink).isEqualTo("wphelpd://ticket/45")
     }
 
     @Test

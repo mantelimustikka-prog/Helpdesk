@@ -134,6 +134,31 @@ final class FirebasePushProviderTest extends TestCase {
 		self::assertCount( 0, $GLOBALS['wp_remote_post_log'] );
 	}
 
+	public function testSendDefaultsToV1WhenModeIsNotConfigured(): void {
+		unset( $GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ] );
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_PROJECT_ID ]           = 'default-v1-project';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] = json_encode(
+			array(
+				'client_email' => 'bot@example.iam.gserviceaccount.com',
+				'private_key'  => 'stub-key',
+			)
+		);
+
+		$provider = new class extends FirebasePushProvider {
+			protected function getAccessToken(): ?string {
+				return 'default-v1-token';
+			}
+		};
+
+		$result = $provider->send( array( 'device-token-abc' ), 'Hello', 'World' );
+
+		self::assertTrue( $result );
+		self::assertSame(
+			'https://fcm.googleapis.com/v1/projects/default-v1-project/messages:send',
+			$GLOBALS['wp_remote_post_log'][0]['url']
+		);
+	}
+
 	// -------------------------------------------------------------------------
 	// Legacy mode: existing behaviour should be unchanged.
 	// -------------------------------------------------------------------------

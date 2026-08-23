@@ -88,6 +88,31 @@ final class PushServiceTest extends TestCase {
 		self::assertSame( 1, $provider->calls );
 	}
 
+	public function testPushDefaultsToV1ConfigurationWhenModeIsUnset(): void {
+		$provider = new class implements PushProviderInterface {
+			public int $calls = 0;
+
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				++$this->calls;
+				return true;
+			}
+		};
+
+		$service = new class( $provider ) extends PushService {
+			protected function getAdminTokens(): array {
+				return array( 'token-1' );
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ]              = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ]        = array( 'ticket_created' );
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_PROJECT_ID ]            = 'project-id';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ]  = '{"client_email":"bot@example.test"}';
+
+		$service->notifyNewTicket( array( 'id' => 4, 'subject' => 'Subject' ) );
+		self::assertSame( 1, $provider->calls );
+	}
+
 	public function testNewReplyPushIncludesRoutingPayload(): void {
 		$provider = new class implements PushProviderInterface {
 			/** @var array<int, array<string, mixed>> */
@@ -123,5 +148,69 @@ final class PushServiceTest extends TestCase {
 		self::assertSame( 42, $provider->calls[0]['data']['ticket_id'] );
 		self::assertSame( 'wphelpd://ticket/42', $provider->calls[0]['data']['deep_link'] );
 		self::assertSame( 'ticket_replied:42:9001', $provider->calls[0]['data']['notification_id'] );
+	}
+
+	public function testStatusChangedPushIncludesRoutingPayload(): void {
+		$provider = new class implements PushProviderInterface {
+			/** @var array<int, array<string, mixed>> */
+			public array $calls = array();
+
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				$this->calls[] = compact( 'device_tokens', 'title', 'body', 'data' );
+				return true;
+			}
+		};
+
+		$service = new class( $provider ) extends PushService {
+			protected function getAdminTokens(): array {
+				return array( 'token-1' );
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ]       = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ] = array( 'status_changed' );
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]           = 'v1';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_PROJECT_ID ]     = 'project-id';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] = '{"client_email":"bot@example.test"}';
+
+		$service->notifyStatusChanged( array( 'id' => 42, 'ticket_no' => 'HD-42' ), 'resolved' );
+
+		self::assertCount( 1, $provider->calls );
+		self::assertSame( 'status_changed', $provider->calls[0]['data']['event_type'] );
+		self::assertSame( 42, $provider->calls[0]['data']['ticket_id'] );
+		self::assertSame( 'wphelpd://ticket/42', $provider->calls[0]['data']['deep_link'] );
+		self::assertSame( 'status_changed:42:resolved', $provider->calls[0]['data']['notification_id'] );
+	}
+
+	public function testAssignedPushIncludesRoutingPayload(): void {
+		$provider = new class implements PushProviderInterface {
+			/** @var array<int, array<string, mixed>> */
+			public array $calls = array();
+
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				$this->calls[] = compact( 'device_tokens', 'title', 'body', 'data' );
+				return true;
+			}
+		};
+
+		$service = new class( $provider ) extends PushService {
+			protected function getUserTokens( int $user_id ): array {
+				return array( 'token-' . $user_id );
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ] = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]     = 'v1';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_PROJECT_ID ] = 'project-id';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] = '{"client_email":"bot@example.test"}';
+
+		$service->notifyAssigned( array( 'id' => 12, 'ticket_no' => 'HD-12' ), 77 );
+
+		self::assertCount( 1, $provider->calls );
+		self::assertSame( array( 'token-77' ), $provider->calls[0]['device_tokens'] );
+		self::assertSame( 'ticket_assigned', $provider->calls[0]['data']['event_type'] );
+		self::assertSame( 12, $provider->calls[0]['data']['ticket_id'] );
+		self::assertSame( 'wphelpd://ticket/12', $provider->calls[0]['data']['deep_link'] );
+		self::assertSame( 'ticket_assigned:12:77', $provider->calls[0]['data']['notification_id'] );
 	}
 }

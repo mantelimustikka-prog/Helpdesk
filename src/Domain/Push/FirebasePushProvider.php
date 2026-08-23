@@ -19,7 +19,7 @@ class FirebasePushProvider implements PushProviderInterface {
 	private int     $token_expires_at  = 0;
 
 	public function __construct() {
-		$this->mode                 = (string) get_site_option( Constants::OPTION_FCM_MODE, 'legacy' );
+		$this->mode                 = (string) get_site_option( Constants::OPTION_FCM_MODE, 'v1' );
 		$this->server_key           = (string) get_site_option( Constants::OPTION_FCM_SERVER_KEY, '' );
 		$this->project_id           = (string) get_site_option( Constants::OPTION_FCM_PROJECT_ID, '' );
 		$this->service_account_json = (string) get_site_option( Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON, '' );

@@ -48,6 +48,7 @@ import com.wphelpd.admin.domain.model.TicketAttachment
 import com.wphelpd.admin.domain.model.TicketDetail
 import com.wphelpd.admin.domain.model.TicketThreadEntry
 import com.wphelpd.admin.domain.model.statusLabel
+import com.wphelpd.admin.domain.model.ticketStatusLabel
 
 @Composable
 fun TicketsRoute(
