@@ -24,6 +24,7 @@ import com.wphelpd.admin.data.repository.HelpdeskRepository
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -333,6 +334,51 @@ class TicketsViewModelTest {
     }
 
     @Test
+    fun submitReply_blocksDuplicateSubmissionWhileInFlight() = runTest {
+        val api = FakeHelpdeskAdminApi(replyDelayMs = 10)
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateReplyText("My reply.")
+        viewModel.submitReply()
+        viewModel.submitReply()
+        advanceUntilIdle()
+
+        assertThat(api.replyCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun submitReply_doesNotRefreshStaleTicketWhenSelectionChanges() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            replyDelayMs = 10,
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Ticket 101"),
+                202 to ticketDetailResponse(id = 202, subject = "Ticket 202")
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateReplyText("My reply.")
+        viewModel.submitReply()
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
+        assertThat(api.ticketDetailRequestsById[101]).isEqualTo(1)
+    }
+
+    @Test
     fun updateTicketStatus_refreshesDetailOnSuccess() = runTest {
         val viewModel = TicketsViewModel(
             repository = HelpdeskRepository {
@@ -381,6 +427,49 @@ class TicketsViewModelTest {
         val state = viewModel.uiState.value
         assertThat(state.isUpdatingStatus).isFalse()
         assertThat(state.statusUpdateError).isEqualTo("Unable to reach the WP HelpD server.")
+    }
+
+    @Test
+    fun updateTicketStatus_blocksDuplicateSubmissionWhileInFlight() = runTest {
+        val api = FakeHelpdeskAdminApi(statusDelayMs = 10)
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateTicketStatus("resolved")
+        viewModel.updateTicketStatus("resolved")
+        advanceUntilIdle()
+
+        assertThat(api.statusUpdateCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun updateTicketStatus_doesNotRefreshStaleTicketWhenSelectionChanges() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            statusDelayMs = 10,
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Ticket 101"),
+                202 to ticketDetailResponse(id = 202, subject = "Ticket 202")
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateTicketStatus("resolved")
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
+        assertThat(api.ticketDetailRequestsById[101]).isEqualTo(1)
     }
 
     @Test
@@ -453,6 +542,51 @@ class TicketsViewModelTest {
     }
 
     @Test
+    fun submitNote_blocksDuplicateSubmissionWhileInFlight() = runTest {
+        val api = FakeHelpdeskAdminApi(noteDelayMs = 10)
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateNoteText("My note.")
+        viewModel.submitNote()
+        viewModel.submitNote()
+        advanceUntilIdle()
+
+        assertThat(api.noteCallCount).isEqualTo(1)
+    }
+
+    @Test
+    fun submitNote_doesNotRefreshStaleTicketWhenSelectionChanges() = runTest {
+        val api = FakeHelpdeskAdminApi(
+            noteDelayMs = 10,
+            ticketDetailResponsesById = mapOf(
+                101 to ticketDetailResponse(id = 101, subject = "Ticket 101"),
+                202 to ticketDetailResponse(id = 202, subject = "Ticket 202")
+            )
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+
+        viewModel.updateNoteText("My note.")
+        viewModel.submitNote()
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.ticket?.id).isEqualTo(202)
+        assertThat(api.ticketDetailRequestsById[101]).isEqualTo(1)
+    }
+
+    @Test
     fun startupBootstrap_routesToSetupWithRetryMessageWhenServerIsUnreachable() = runTest {
         val saved = AuthConfig(
             siteUrl = "https://saved.example.com",
@@ -508,15 +642,27 @@ private class FakeHelpdeskAdminApi(
             status = "open"
         )
     ),
+    private val ticketDetailResponsesById: Map<Int, TicketDetailResponseDto> = emptyMap(),
     private val detailThrowable: Throwable? = null,
     private val authThrowable: Throwable? = null,
     private val replyResponse: ReplyResponseDto = ReplyResponseDto(success = true),
     private val replyThrowable: Throwable? = null,
+    private val replyDelayMs: Long = 0,
     private val statusResponse: StatusUpdateResponseDto = StatusUpdateResponseDto(success = true),
     private val statusThrowable: Throwable? = null,
+    private val statusDelayMs: Long = 0,
     private val noteResponse: NoteResponseDto = NoteResponseDto(success = true),
-    private val noteThrowable: Throwable? = null
+    private val noteThrowable: Throwable? = null,
+    private val noteDelayMs: Long = 0
 ) : HelpdeskAdminApi {
+    var replyCallCount: Int = 0
+        private set
+    var statusUpdateCallCount: Int = 0
+        private set
+    var noteCallCount: Int = 0
+        private set
+    val ticketDetailRequestsById: MutableMap<Int, Int> = mutableMapOf()
+
     override suspend fun authCheck(): AuthCheckResponseDto {
         authThrowable?.let { throw it }
         return AuthCheckResponseDto(
@@ -537,27 +683,44 @@ private class FakeHelpdeskAdminApi(
     )
 
     override suspend fun getTicket(id: Int): TicketDetailResponseDto {
+        ticketDetailRequestsById[id] = (ticketDetailRequestsById[id] ?: 0) + 1
         detailThrowable?.let { throw it }
-        return ticketDetailResponse
+        return ticketDetailResponsesById[id] ?: ticketDetailResponse
     }
 
     override suspend fun getTicketMessages(id: Int): TicketMessagesResponseDto = TicketMessagesResponseDto(items = emptyList())
 
     override suspend fun replyToTicket(id: Int, request: ReplyRequestDto): ReplyResponseDto {
+        replyCallCount += 1
+        if (replyDelayMs > 0) delay(replyDelayMs)
         replyThrowable?.let { throw it }
         return replyResponse
     }
 
     override suspend fun updateTicketStatus(id: Int, request: StatusUpdateRequestDto): StatusUpdateResponseDto {
+        statusUpdateCallCount += 1
+        if (statusDelayMs > 0) delay(statusDelayMs)
         statusThrowable?.let { throw it }
         return statusResponse
     }
 
     override suspend fun addTicketNote(id: Int, request: NoteRequestDto): NoteResponseDto {
+        noteCallCount += 1
+        if (noteDelayMs > 0) delay(noteDelayMs)
         noteThrowable?.let { throw it }
         return noteResponse
     }
 }
+
+private fun ticketDetailResponse(id: Int, subject: String): TicketDetailResponseDto = TicketDetailResponseDto(
+    success = true,
+    data = TicketDetailDto(
+        id = id,
+        ticketNo = "HD-$id",
+        subject = subject,
+        status = "open"
+    )
+)
 
 private class FakeServerConfigRepository(initial: AuthConfig? = null) : ServerConfigRepository {
     private var stored: AuthConfig? = initial
