@@ -20,6 +20,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,6 +36,7 @@ import com.wphelpd.admin.feature.push.PushTokenStateStore
 import com.wphelpd.admin.feature.push.PushTokenSyncManager
 import com.wphelpd.admin.feature.tickets.TicketsRoute
 import com.wphelpd.admin.feature.tickets.TicketsViewModel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -71,20 +73,19 @@ class MainActivity : ComponentActivity() {
                         val ticketsState = ticketsViewModel.uiState.collectAsStateWithLifecycle().value
 
                         DisposableEffect(ticketsViewModel) {
+                            val processLifecycle = ProcessLifecycleOwner.get().lifecycle
                             val observer = LifecycleEventObserver { _, event ->
                                 if (event == Lifecycle.Event.ON_STOP) {
                                     ticketsViewModel.clearSensitiveSessionState()
                                     lockViewModel.lock()
                                 }
                             }
-                            lifecycle.addObserver(observer)
-                            onDispose { lifecycle.removeObserver(observer) }
+                            processLifecycle.addObserver(observer)
+                            onDispose { processLifecycle.removeObserver(observer) }
                         }
 
                         LaunchedEffect(lockState.isUnlocked) {
-                            if (lockState.isUnlocked) {
-                                ticketsViewModel.restoreSessionFromSavedConfigIfNeeded()
-                            }
+                            ticketsViewModel.restoreSessionFromSavedConfigIfNeeded()
                         }
 
                         LaunchedEffect(
@@ -134,9 +135,10 @@ class MainActivity : ComponentActivity() {
                                 viewModel = ticketsViewModel,
                                 onLogout = {
                                     val config = ticketsState.toAuthConfig()
+                                    pushTokenStateStore.clearHandledNotifications()
                                     ticketsViewModel.logout()
                                     lockViewModel.lock()
-                                    lifecycleScope.launchWhenCreated {
+                                    lifecycleScope.launch {
                                         pushTokenSyncManager.unregisterIfNeeded(config)
                                     }
                                 }

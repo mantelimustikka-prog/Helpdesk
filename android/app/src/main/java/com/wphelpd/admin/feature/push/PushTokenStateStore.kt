@@ -33,10 +33,27 @@ class PushTokenStateStore(context: Context) {
     }
 
     fun wasNotificationHandled(notificationId: String): Boolean =
-        prefs.getString(KEY_LAST_HANDLED_NOTIFICATION, null) == notificationId
+        recentNotificationIds().contains(notificationId)
 
     fun markNotificationHandled(notificationId: String) {
-        prefs.edit().putString(KEY_LAST_HANDLED_NOTIFICATION, notificationId).apply()
+        val updated = buildList {
+            add(notificationId)
+            addAll(recentNotificationIds().filterNot { it == notificationId })
+        }.take(MAX_HANDLED_NOTIFICATIONS)
+        prefs.edit()
+            .putString(KEY_HANDLED_NOTIFICATIONS, updated.joinToString(separator = "\n"))
+            .apply()
+    }
+
+    private fun recentNotificationIds(): List<String> =
+        prefs.getString(KEY_HANDLED_NOTIFICATIONS, null)
+            ?.split('\n')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?: emptyList()
+
+    fun clearHandledNotifications() {
+        prefs.edit().remove(KEY_HANDLED_NOTIFICATIONS).apply()
     }
 
     companion object {
@@ -45,6 +62,7 @@ class PushTokenStateStore(context: Context) {
         private const val KEY_REGISTERED_TOKEN = "registered_token"
         private const val KEY_REGISTERED_SITE_URL = "registered_site_url"
         private const val KEY_REGISTERED_USERNAME = "registered_username"
-        private const val KEY_LAST_HANDLED_NOTIFICATION = "last_handled_notification"
+        private const val KEY_HANDLED_NOTIFICATIONS = "handled_notifications"
+        private const val MAX_HANDLED_NOTIFICATIONS = 20
     }
 }
