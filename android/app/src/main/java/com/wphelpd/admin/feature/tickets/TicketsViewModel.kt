@@ -252,10 +252,11 @@ class TicketsViewModel(
         } else {
             updateState { copy(detailErrorMessage = null) }
         }
-        when (val detailResult = repository.fetchTicketDetail(config, ticketId)) {
-            expectedSelectedTicketId?.let { selectedTicketId ->
-                if (_uiState.value.selectedTicketId != selectedTicketId) return
-            }
+        val detailResult = repository.fetchTicketDetail(config, ticketId)
+        expectedSelectedTicketId?.let { selectedTicketId ->
+            if (_uiState.value.selectedTicketId != selectedTicketId) return
+        }
+        when (detailResult) {
             is NetworkResult.Failure -> updateState {
                 copy(
                     isDetailLoading = false,
