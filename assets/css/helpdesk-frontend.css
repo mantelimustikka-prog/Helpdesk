@@ -2,6 +2,22 @@
    WP Helpdesk – Customer-facing frontend styles
    ========================================================================== */
 
+.hd-page {
+	background-image: url("https://github.com/user-attachments/assets/993b5e47-3306-48b7-b67e-aaa4bedd38f7");
+	background-position: center;
+	background-repeat: no-repeat;
+	background-size: cover;
+	background-attachment: fixed;
+}
+
+.hd-page .hd-wrap {
+	background: rgba(255, 255, 255, 0.88);
+	backdrop-filter: blur(1px);
+	border-radius: 12px;
+	padding-top: 20px;
+	padding-bottom: 20px;
+}
+
 .hd-wrap {
 	max-width: 900px;
 	margin: 40px auto;

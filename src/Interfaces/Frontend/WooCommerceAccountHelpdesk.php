@@ -14,6 +14,7 @@ use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\RendersAttachmentsTrait;
 
 class WooCommerceAccountHelpdesk {
+	protected const APP_ICON_URL = 'https://github.com/user-attachments/assets/993b5e47-3306-48b7-b67e-aaa4bedd38f7';
 	use RendersAttachmentsTrait;
 
 	public const ENDPOINT = 'helpdesk';
@@ -1268,14 +1269,29 @@ class WooCommerceAccountHelpdesk {
 	 */
 	protected function outputHeader( string $title ): void {
 		if ( function_exists( 'get_header' ) ) {
+			$app_icon_url = esc_url( self::APP_ICON_URL );
 			$title_filter = static function ( array $parts ) use ( $title ): array {
 				$parts['title'] = $title;
 				return $parts;
 			};
+			$body_class_filter = static function ( array $classes ): array {
+				$classes[] = 'hd-page';
+				return $classes;
+			};
+			$head_icon_filter = static function () use ( $app_icon_url ): void {
+				echo '<link rel="icon" href="' . $app_icon_url . '" />' . "\n";
+				echo '<link rel="apple-touch-icon" href="' . $app_icon_url . '" />' . "\n";
+			};
 			add_filter( 'document_title_parts', $title_filter );
+			add_filter( 'body_class', $body_class_filter );
+			add_action( 'wp_head', $head_icon_filter, 1 );
 			get_header();
 			if ( function_exists( 'remove_filter' ) ) {
 				remove_filter( 'document_title_parts', $title_filter );
+				remove_filter( 'body_class', $body_class_filter );
+			}
+			if ( function_exists( 'remove_action' ) ) {
+				remove_action( 'wp_head', $head_icon_filter, 1 );
 			}
 			return;
 		}
@@ -1286,6 +1302,8 @@ class WooCommerceAccountHelpdesk {
 		<head>
 			<meta charset="utf-8">
 			<title><?php echo esc_html( $title ); ?></title>
+			<link rel="icon" href="<?php echo esc_url( self::APP_ICON_URL ); ?>">
+			<link rel="apple-touch-icon" href="<?php echo esc_url( self::APP_ICON_URL ); ?>">
 		</head>
 		<body class="hd-page">
 		<?php
