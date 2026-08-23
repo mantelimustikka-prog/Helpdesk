@@ -75,6 +75,8 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		);
 		$GLOBALS['wp_user_meta'] = array();
 		$GLOBALS['wp_remote_post_response'] = array( 'response' => array( 'code' => 200 ) );
+		$GLOBALS['wp_remote_post_responses'] = array();
+		$GLOBALS['wp_remote_post_log']       = array();
 		$GLOBALS['wp_posts_index'] = array();
 		$GLOBALS['wc_page_permalinks'] = array(
 			'myaccount' => 'https://example.test/my-account/',
@@ -784,6 +786,11 @@ if ( ! function_exists( 'is_wp_error' ) ) {
 
 if ( ! function_exists( 'wp_remote_post' ) ) {
 	function wp_remote_post( string $url, array $args = array() ) {
+		$GLOBALS['wp_remote_post_log'][] = array( 'url' => $url, 'args' => $args );
+		// Support a queue of responses: if the global is a list of responses, shift one off.
+		if ( isset( $GLOBALS['wp_remote_post_responses'] ) && is_array( $GLOBALS['wp_remote_post_responses'] ) && count( $GLOBALS['wp_remote_post_responses'] ) > 0 ) {
+			return array_shift( $GLOBALS['wp_remote_post_responses'] );
+		}
 		return $GLOBALS['wp_remote_post_response'];
 	}
 }
@@ -791,6 +798,12 @@ if ( ! function_exists( 'wp_remote_post' ) ) {
 if ( ! function_exists( 'wp_remote_retrieve_response_code' ) ) {
 	function wp_remote_retrieve_response_code( array $response ): int {
 		return (int) ( $response['response']['code'] ?? 0 );
+	}
+}
+
+if ( ! function_exists( 'wp_remote_retrieve_body' ) ) {
+	function wp_remote_retrieve_body( array $response ): string {
+		return (string) ( $response['body'] ?? '' );
 	}
 }
 
