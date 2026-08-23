@@ -189,21 +189,18 @@ class TicketsViewModel(
 
             when (val authResult = repository.authCheck(config)) {
                 is NetworkResult.Failure -> {
-                    val state = if (isBootstrap) {
+                    val message = if (isBootstrap) {
                         classifyBootstrapAuthFailure(authResult)
                     } else {
-                        AuthFailureState(
-                            requiresSetup = true,
-                            message = authResult.message
-                        )
+                        authResult.message
                     }
                     updateState {
                         copy(
                             isBootstrapping = false,
-                            requiresSetup = state.requiresSetup,
+                            requiresSetup = true,
                             isLoading = false,
                             currentUser = null,
-                            errorMessage = state.message
+                            errorMessage = message
                         )
                     }
                 }
@@ -218,26 +215,17 @@ class TicketsViewModel(
         }
     }
 
-    private fun classifyBootstrapAuthFailure(result: NetworkResult.Failure): AuthFailureState {
+    private fun classifyBootstrapAuthFailure(result: NetworkResult.Failure): String {
         val throwable = result.throwable
         return when {
             throwable is HttpException && (throwable.code() == 401 || throwable.code() == 403) ->
-                AuthFailureState(
-                    requiresSetup = true,
-                    message = "Saved credentials are invalid. Please update them and authenticate again."
-                )
+                "Saved credentials are invalid. Please update them and authenticate again."
 
             throwable is IOException ->
-                AuthFailureState(
-                    requiresSetup = true,
-                    message = "Unable to reach the WP HelpD server. Check your connection and retry."
-                )
+                "Unable to reach the WP HelpD server. Check your connection and retry."
 
             else ->
-                AuthFailureState(
-                    requiresSetup = true,
-                    message = result.message
-                )
+                result.message
         }
     }
 
@@ -259,11 +247,6 @@ class TicketsViewModel(
         }
     }
 }
-
-private data class AuthFailureState(
-    val requiresSetup: Boolean,
-    val message: String
-)
 
 private object NoOpServerConfigRepository : ServerConfigRepository {
     override fun load(): AuthConfig? = null
