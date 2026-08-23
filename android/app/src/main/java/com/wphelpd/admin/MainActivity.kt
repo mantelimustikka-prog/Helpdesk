@@ -13,11 +13,16 @@ import com.wphelpd.admin.feature.applock.CreatePasswordScreen
 import com.wphelpd.admin.feature.applock.UnlockScreen
 import com.wphelpd.admin.feature.tickets.TicketsRoute
 import com.wphelpd.admin.feature.tickets.TicketsViewModel
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +38,17 @@ class MainActivity : ComponentActivity() {
                 when {
                     lockState.isInitialising -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Image(
+                                painter = painterResource(id = R.drawable.splash_background),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color(0x88000000))
+                            )
                             CircularProgressIndicator()
                         }
                     }
@@ -42,6 +58,17 @@ class MainActivity : ComponentActivity() {
                         val ticketsState = ticketsViewModel.uiState.collectAsStateWithLifecycle().value
                         if (ticketsState.isBootstrapping) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.splash_background),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color(0x88000000))
+                                )
                                 CircularProgressIndicator()
                             }
                         } else {
