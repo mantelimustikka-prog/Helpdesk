@@ -14,6 +14,42 @@ The app should be a secure, admin-focused client for customer service operations
 - Keep sensitive admin access protected by a local device password
 - Integrate with the existing WP Helpdesk plugin backend
 
+## Roadmap
+
+### Now
+
+Focus on the highest-risk and most user-visible foundation work first.
+
+- Stabilize the app shell and fix crash issues
+- Verify app-lock lifecycle behavior on real devices
+- Keep the mandatory password gate reliable on first launch and subsequent launches
+- Prevent sensitive content from flashing before unlock
+- Confirm secure password storage and logout cleanup behavior
+
+### Next
+
+Complete the documented MVP flows needed for a usable admin client.
+
+- Implement or verify server connection setup
+- Connect to `/wp-json/helpdesk/v1/admin/` with secure authentication
+- Finish ticket list and ticket detail flows
+- Support replying to tickets and changing ticket status
+- Verify notes, attachments, and search where already supported or close behind
+- Complete push notifications for new tickets and replies
+- Ensure notification taps route to the correct ticket
+
+### Later
+
+Add the documented future enhancements after the core app is stable and the MVP is complete.
+
+- Biometric unlock
+- Offline caching
+- Attachment uploads from camera and gallery
+- Advanced filtering and sorting
+- Agent assignment workflows
+- Knowledge base shortcuts
+- Multi-account support
+
 ## Core Requirement: App Password Lock
 
 The app must **always require a local password to open**.
