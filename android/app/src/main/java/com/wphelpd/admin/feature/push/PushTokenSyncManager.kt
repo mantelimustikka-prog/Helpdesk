@@ -7,7 +7,7 @@ import com.wphelpd.admin.data.repository.HelpdeskRepository
 
 class PushTokenSyncManager(
     private val repository: HelpdeskRepository = HelpdeskRepository(),
-    private val stateStore: PushTokenStateStore
+    private val stateStore: PushTokenStorage
 ) {
     suspend fun registerIfNeeded(config: AuthConfig): Boolean {
         val token = stateStore.currentToken() ?: return false
@@ -32,19 +32,12 @@ class PushTokenSyncManager(
 
     suspend fun unregisterIfNeeded(config: AuthConfig): Boolean {
         val token = stateStore.currentToken() ?: return false
-        return when (
-            repository.unregisterDeviceToken(
-                config = config,
-                deviceToken = token,
-                appVersion = BuildConfig.VERSION_NAME
-            )
-        ) {
-            is NetworkResult.Success -> {
-                stateStore.clearRegisteredState()
-                true
-            }
-
-            is NetworkResult.Failure -> false
-        }
+        val result = repository.unregisterDeviceToken(
+            config = config,
+            deviceToken = token,
+            appVersion = BuildConfig.VERSION_NAME
+        )
+        stateStore.clearRegisteredState()
+        return result is NetworkResult.Success
     }
 }

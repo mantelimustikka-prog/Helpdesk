@@ -2,7 +2,7 @@ package com.wphelpd.admin.feature.push
 
 import android.content.Context
 
-class PushTokenStateStore(context: Context) {
+class PushTokenStateStore(context: Context) : PushTokenStorage {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     fun saveCurrentToken(token: String) {

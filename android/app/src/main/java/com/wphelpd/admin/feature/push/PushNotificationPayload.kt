@@ -17,7 +17,7 @@ object PushNotificationPayloadParser {
         val deepLink = data["deep_link"]?.trim().takeUnless { it.isNullOrEmpty() }
             ?: "wphelpd://ticket/$ticketId"
         val notificationId = data["notification_id"]?.trim().takeUnless { it.isNullOrEmpty() }
-            ?: "$eventType:$ticketId"
+            ?: java.util.UUID.randomUUID().toString()
         return PushNotificationPayload(
             eventType = eventType,
             ticketId = ticketId,
