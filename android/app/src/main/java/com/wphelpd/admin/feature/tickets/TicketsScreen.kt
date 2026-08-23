@@ -676,7 +676,11 @@ private fun StatusActions(
                                 disabledContentColor = MaterialTheme.colorScheme.onSurface
                             )
                         ) {
+<<<<<<< HEAD
                             Text(ticketStatusLabel(status))
+=======
+                            Text(status.ticketStatusLabel())
+>>>>>>> origin/main
                         }
                     } else {
                         TextButton(
@@ -686,7 +690,11 @@ private fun StatusActions(
                                 contentColor = statusColor ?: MaterialTheme.colorScheme.primary
                             )
                         ) {
+<<<<<<< HEAD
                             Text(ticketStatusLabel(status))
+=======
+                            Text(status.ticketStatusLabel())
+>>>>>>> origin/main
                         }
                     }
                 }
