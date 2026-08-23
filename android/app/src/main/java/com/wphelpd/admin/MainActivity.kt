@@ -42,16 +42,8 @@ class MainActivity : ComponentActivity() {
                 DisposableEffect(lockViewModel) {
                     val observer = LifecycleEventObserver { _, event ->
                         when (event) {
-                            Lifecycle.Event.ON_STOP -> {
-                                if (!activity.isChangingConfigurations) {
-                                    lockViewModel.onAppBackgrounded()
-                                }
-                            }
-                            Lifecycle.Event.ON_START -> {
-                                if (!activity.isChangingConfigurations) {
-                                    lockViewModel.onAppForegrounded()
-                                }
-                            }
+                            Lifecycle.Event.ON_STOP -> lockViewModel.onAppBackgrounded()
+                            Lifecycle.Event.ON_START -> lockViewModel.onAppForegrounded()
                             else -> Unit
                         }
                     }
