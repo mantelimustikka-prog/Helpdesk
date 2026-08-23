@@ -96,6 +96,17 @@ class TicketsViewModel(
         }
     }
 
+    fun clearSelectedTicket() {
+        updateState {
+            copy(
+                selectedTicketId = null,
+                ticketDetail = null,
+                isDetailLoading = false,
+                detailErrorMessage = null
+            )
+        }
+    }
+
     private suspend fun refreshTickets(config: AuthConfig) {
         when (val ticketsResult = repository.fetchTickets(config)) {
             is NetworkResult.Failure -> {

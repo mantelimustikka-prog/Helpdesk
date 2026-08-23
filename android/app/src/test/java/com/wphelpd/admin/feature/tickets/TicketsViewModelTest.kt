@@ -231,6 +231,37 @@ class TicketsViewModelTest {
     }
 
     @Test
+    fun clearSelectedTicket_resetsDetailState() = runTest {
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    ticketDetailResponse = TicketDetailResponseDto(
+                        success = true,
+                        data = TicketDetailDto(
+                            id = 101,
+                            ticketNo = "HD-000101",
+                            subject = "Login issue",
+                            status = "open"
+                        )
+                    )
+                )
+            }
+        )
+
+        viewModel.selectTicket(101)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.selectedTicketId).isEqualTo(101)
+
+        viewModel.clearSelectedTicket()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isNull()
+        assertThat(state.ticketDetail).isNull()
+        assertThat(state.isDetailLoading).isFalse()
+        assertThat(state.detailErrorMessage).isNull()
+    }
+
+    @Test
     fun startupBootstrap_routesToSetupWithRetryMessageWhenServerIsUnreachable() = runTest {
         val saved = AuthConfig(
             siteUrl = "https://saved.example.com",

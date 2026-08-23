@@ -1,5 +1,6 @@
 package com.wphelpd.admin.feature.tickets
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,10 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -38,6 +43,11 @@ import com.wphelpd.admin.domain.model.TicketThreadEntry
 @Composable
 fun TicketsRoute(viewModel: TicketsViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    BackHandler(enabled = uiState.selectedTicketId != null) {
+        viewModel.clearSelectedTicket()
+    }
+
     TicketsScreen(
         uiState = uiState,
         onSiteUrlChange = viewModel::updateSiteUrl,
@@ -47,11 +57,11 @@ fun TicketsRoute(viewModel: TicketsViewModel) {
         onConnect = viewModel::connectAndLoadTickets,
         onRefreshList = viewModel::refreshTickets,
         onTicketSelected = viewModel::selectTicket,
+        onBack = viewModel::clearSelectedTicket,
         onRefreshDetail = viewModel::refreshSelectedTicket
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TicketsScreen(
     uiState: TicketsUiState,
@@ -62,12 +72,49 @@ fun TicketsScreen(
     onConnect: () -> Unit,
     onRefreshList: () -> Unit,
     onTicketSelected: (Int) -> Unit,
+    onBack: () -> Unit,
     onRefreshDetail: () -> Unit
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("WP HelpD Admin") })
+    when {
+        uiState.currentUser == null || uiState.requiresSetup -> {
+            ServerSetupScreen(
+                uiState = uiState,
+                onSiteUrlChange = onSiteUrlChange,
+                onUsernameChange = onUsernameChange,
+                onApplicationPasswordChange = onApplicationPasswordChange,
+                onWpNonceChange = onWpNonceChange,
+                onConnect = onConnect
+            )
         }
+        uiState.selectedTicketId != null -> {
+            TicketDetailScreen(
+                uiState = uiState,
+                onBack = onBack,
+                onRefreshDetail = onRefreshDetail
+            )
+        }
+        else -> {
+            TicketListScreen(
+                uiState = uiState,
+                onRefreshList = onRefreshList,
+                onTicketSelected = onTicketSelected
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServerSetupScreen(
+    uiState: TicketsUiState,
+    onSiteUrlChange: (String) -> Unit,
+    onUsernameChange: (String) -> Unit,
+    onApplicationPasswordChange: (String) -> Unit,
+    onWpNonceChange: (String) -> Unit,
+    onConnect: () -> Unit
+) {
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("WP HelpD — Connect") }) }
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
@@ -77,15 +124,49 @@ fun TicketsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                ServerSetupCard(
-                    uiState = uiState,
-                    onSiteUrlChange = onSiteUrlChange,
-                    onUsernameChange = onUsernameChange,
-                    onApplicationPasswordChange = onApplicationPasswordChange,
-                    onWpNonceChange = onWpNonceChange,
-                    onConnect = onConnect,
-                    onRefresh = onRefreshList
-                )
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Connection", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = uiState.siteUrl,
+                            onValueChange = onSiteUrlChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("WordPress site URL") },
+                            placeholder = { Text("https://example.com") }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = uiState.username,
+                            onValueChange = onUsernameChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("Username") }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = uiState.applicationPassword,
+                            onValueChange = onApplicationPasswordChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            label = { Text("Application password") }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = uiState.wpNonce,
+                            onValueChange = onWpNonceChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("X-WP-Nonce (optional)") }
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(onClick = onConnect, enabled = uiState.canSubmit) {
+                            Text("Connect")
+                        }
+                    }
+                }
             }
 
             uiState.errorMessage?.let { message ->
@@ -100,136 +181,190 @@ fun TicketsScreen(
 
             if (uiState.isLoading) {
                 item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
                 }
             }
+        }
+    }
+}
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TicketListScreen(
+    uiState: TicketsUiState,
+    onRefreshList: () -> Unit,
+    onTicketSelected: (Int) -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Tickets") },
+                actions = {
+                    TextButton(onClick = onRefreshList, enabled = !uiState.isLoading) {
+                        Text("Refresh")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             uiState.currentUser?.let { currentUser ->
                 item {
+                    Spacer(modifier = Modifier.height(8.dp))
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(currentUser.name, style = MaterialTheme.typography.titleMedium)
-                            Text(currentUser.email, style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                currentUser.roles.joinToString(prefix = "Roles: "),
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(currentUser.name, style = MaterialTheme.typography.titleSmall)
+                            Text(currentUser.email, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
             }
 
-            if (!uiState.isLoading && uiState.currentUser != null && uiState.tickets.isEmpty()) {
+            uiState.errorMessage?.let { message ->
                 item {
-                    Text("No tickets returned yet.")
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+
+            if (uiState.isLoading) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.padding(16.dp))
+                    }
+                }
+            }
+
+            if (!uiState.isLoading && uiState.tickets.isEmpty() && uiState.errorMessage == null) {
+                item {
+                    Text(
+                        text = "No tickets found.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
             }
 
             items(uiState.tickets, key = Ticket::id) { ticket ->
-                TicketCard(
-                    ticket = ticket,
-                    isSelected = ticket.id == uiState.selectedTicketId,
-                    onClick = { onTicketSelected(ticket.id) }
-                )
+                TicketCard(ticket = ticket, onClick = { onTicketSelected(ticket.id) })
             }
 
-            if (uiState.selectedTicketId != null) {
-                item {
-                    TicketDetailSection(
-                        uiState = uiState,
-                        onRefreshDetail = onRefreshDetail
-                    )
-                }
-            }
+            item { Spacer(modifier = Modifier.height(8.dp)) }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ServerSetupCard(
+private fun TicketDetailScreen(
     uiState: TicketsUiState,
-    onSiteUrlChange: (String) -> Unit,
-    onUsernameChange: (String) -> Unit,
-    onApplicationPasswordChange: (String) -> Unit,
-    onWpNonceChange: (String) -> Unit,
-    onConnect: () -> Unit,
-    onRefresh: () -> Unit
+    onBack: () -> Unit,
+    onRefreshDetail: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Connection", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = uiState.siteUrl,
-                onValueChange = onSiteUrlChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("WordPress site URL") },
-                placeholder = { Text("https://example.com") }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = uiState.username,
-                onValueChange = onUsernameChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("Username") }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = uiState.applicationPassword,
-                onValueChange = onApplicationPasswordChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                label = { Text("Application password") }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = uiState.wpNonce,
-                onValueChange = onWpNonceChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("X-WP-Nonce (optional)") }
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onConnect, enabled = uiState.canSubmit) {
-                    Text("Auth check + load tickets")
-                }
-                if (uiState.currentUser != null) {
-                    TextButton(onClick = onRefresh, enabled = !uiState.isLoading) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(uiState.ticketDetail?.ticket?.subject ?: "Ticket detail") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                actions = {
+                    TextButton(onClick = onRefreshDetail, enabled = !uiState.isDetailLoading) {
                         Text("Refresh")
                     }
                 }
+            )
+        }
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (uiState.isDetailLoading) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.padding(16.dp))
+                    }
+                }
             }
+
+            uiState.detailErrorMessage?.let { error ->
+                item {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TextButton(onClick = onRefreshDetail) {
+                        Text("Retry")
+                    }
+                }
+            }
+
+            uiState.ticketDetail?.let { detail ->
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TicketMetadata(detail)
+                }
+
+                item {
+                    AttachmentSection(detail.attachments)
+                }
+
+                item {
+                    ConversationSection(detail.thread)
+                }
+            }
+
+            if (
+                !uiState.isDetailLoading &&
+                uiState.ticketDetail == null &&
+                uiState.detailErrorMessage == null
+            ) {
+                item {
+                    Text(
+                        text = "No ticket data available.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(8.dp)) }
         }
     }
 }
 
 @Composable
-private fun TicketCard(ticket: Ticket, isSelected: Boolean, onClick: () -> Unit) {
-    val selectedColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
+private fun TicketCard(ticket: Ticket, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(selectedColor)
-                .padding(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "${ticket.ticketNo} · ${ticket.subject}",
                 style = MaterialTheme.typography.titleMedium
@@ -248,133 +383,79 @@ private fun TicketCard(ticket: Ticket, isSelected: Boolean, onClick: () -> Unit)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(it, style = MaterialTheme.typography.bodySmall)
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                if (isSelected) "Selected" else "Tap to open details",
-                style = MaterialTheme.typography.labelMedium
-            )
-        }
-    }
-}
-
-@Composable
-private fun TicketDetailSection(
-    uiState: TicketsUiState,
-    onRefreshDetail: () -> Unit
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Ticket detail", style = MaterialTheme.typography.titleMedium)
-                TextButton(
-                    onClick = onRefreshDetail,
-                    enabled = !uiState.isDetailLoading
-                ) {
-                    Text("Refresh")
-                }
-            }
-
-            if (uiState.isDetailLoading) {
-                Spacer(modifier = Modifier.height(8.dp))
-                CircularProgressIndicator()
-            }
-
-            uiState.detailErrorMessage?.let {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(it, color = MaterialTheme.colorScheme.error)
-            }
-
-            uiState.ticketDetail?.let { detail ->
-                TicketMetadata(detail)
-
-                Spacer(modifier = Modifier.height(12.dp))
-                AttachmentSection(detail.attachments)
-
-                Spacer(modifier = Modifier.height(12.dp))
-                ConversationSection(detail.thread)
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    "Reply, status, and internal note actions will be added in a later Android step.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
-            if (
-                uiState.selectedTicketId != null &&
-                !uiState.isDetailLoading &&
-                uiState.ticketDetail == null &&
-                uiState.detailErrorMessage == null
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("No ticket detail returned yet.", style = MaterialTheme.typography.bodySmall)
-            }
         }
     }
 }
 
 @Composable
 private fun TicketMetadata(detail: TicketDetail) {
-    Spacer(modifier = Modifier.height(8.dp))
-    MetadataLine("Ticket number", detail.ticket.ticketNo)
-    MetadataLine("Subject", detail.ticket.subject)
-    MetadataLine("Status", detail.ticket.status)
-    MetadataLine("Priority", detail.ticket.priority ?: "—")
-    MetadataLine("Customer", detail.ticket.customerName ?: "—")
-    MetadataLine("Customer email", detail.ticket.customerEmail ?: "—")
-    MetadataLine("Assigned agent", detail.assignedToName ?: "—")
-    MetadataLine("Created", detail.ticket.createdAt ?: "—")
-    MetadataLine("Updated", detail.ticket.updatedAt ?: "—")
-    MetadataLine("Messages", detail.ticket.messageCount.toString())
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Details", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            MetadataLine("Ticket number", detail.ticket.ticketNo)
+            MetadataLine("Status", detail.ticket.status)
+            MetadataLine("Priority", detail.ticket.priority ?: "—")
+            MetadataLine("Customer", detail.ticket.customerName ?: "—")
+            MetadataLine("Customer email", detail.ticket.customerEmail ?: "—")
+            MetadataLine("Assigned agent", detail.assignedToName ?: "—")
+            MetadataLine("Created", detail.ticket.createdAt ?: "—")
+            MetadataLine("Updated", detail.ticket.updatedAt ?: "—")
+            MetadataLine("Messages", detail.ticket.messageCount.toString())
+        }
+    }
 }
 
 @Composable
 private fun MetadataLine(label: String, value: String) {
-    Spacer(modifier = Modifier.height(4.dp))
-    Text("$label: $value", style = MaterialTheme.typography.bodyMedium)
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "$label: ",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(text = value, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 @Composable
 private fun AttachmentSection(attachments: List<TicketAttachment>) {
-    Text("Attachments", style = MaterialTheme.typography.titleSmall)
-    if (attachments.isEmpty()) {
-        Text("No attachments.", style = MaterialTheme.typography.bodySmall)
-    } else {
-        attachments.forEach { attachment ->
-            AttachmentRow(attachment)
+    if (attachments.isEmpty()) return
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Attachments", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            attachments.forEach { attachment ->
+                Text(
+                    text = "• ${attachment.name} (${attachment.mimeType ?: "file"})",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(text = attachment.url, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
 
 @Composable
 private fun ConversationSection(thread: List<TicketThreadEntry>) {
-    Text("Conversation", style = MaterialTheme.typography.titleSmall)
-    if (thread.isEmpty()) {
-        Text("No messages yet.", style = MaterialTheme.typography.bodySmall)
-    } else {
-        thread.forEach { entry ->
-            ThreadEntryCard(entry)
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Conversation", style = MaterialTheme.typography.titleSmall)
+            if (thread.isEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("No messages yet.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                thread.forEach { entry ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ThreadEntryCard(entry)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun AttachmentRow(attachment: TicketAttachment) {
-    Spacer(modifier = Modifier.height(4.dp))
-    Text(
-        text = "• ${attachment.name} (${attachment.mimeType ?: "file"})",
-        style = MaterialTheme.typography.bodySmall
-    )
-    Text(text = attachment.url, style = MaterialTheme.typography.bodySmall)
-}
-
-@Composable
 private fun ThreadEntryCard(entry: TicketThreadEntry) {
-    Spacer(modifier = Modifier.height(8.dp))
     val backgroundColor = if (entry.isInternal) {
         MaterialTheme.colorScheme.tertiaryContainer
     } else {
@@ -388,18 +469,15 @@ private fun ThreadEntryCard(entry: TicketThreadEntry) {
                 .padding(12.dp)
         ) {
             val heading = buildString {
-                if (entry.isInternal) {
-                    append("Internal note · ")
-                }
+                if (entry.isInternal) append("Internal note · ")
                 append(entry.authorType.replaceFirstChar { it.uppercase() })
                 entry.authorName?.let { append(" · ").append(it) }
             }
             Text(heading, style = MaterialTheme.typography.labelMedium)
-            entry.createdAt?.let {
-                Text(it, style = MaterialTheme.typography.labelSmall)
-            }
+            entry.createdAt?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
             Spacer(modifier = Modifier.height(4.dp))
             Text(entry.body, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
+
