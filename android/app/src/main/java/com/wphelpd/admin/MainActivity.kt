@@ -47,7 +47,11 @@ class MainActivity : ComponentActivity() {
                                     lockViewModel.onAppBackgrounded()
                                 }
                             }
-                            Lifecycle.Event.ON_START -> lockViewModel.onAppForegrounded()
+                            Lifecycle.Event.ON_START -> {
+                                if (!activity.isChangingConfigurations) {
+                                    lockViewModel.onAppForegrounded()
+                                }
+                            }
                             else -> Unit
                         }
                     }

@@ -110,7 +110,7 @@ class AppLockViewModelTest {
     }
 
     @Test
-    fun onAppForegrounded_relocksOnlyAfterTimeout_whenBackgroundLockDisabled() = runTest {
+    fun timeoutRelock_locksAfterElapsedThreshold_whenBackgroundLockDisabled() = runTest {
         var now = 1_000L
         val repo = FakeAppLockRepository(hasPassword = true, correctPassword = "secret")
         val vm = AppLockViewModel(
@@ -132,6 +132,27 @@ class AppLockViewModelTest {
         now += 5_000L
         vm.onAppForegrounded()
         assertThat(vm.uiState.value.isUnlocked).isFalse()
+    }
+
+    @Test
+    fun onAppForegrounded_doesNotRelock_whenTimeoutDisabledAndBackgroundLockDisabled() = runTest {
+        var now = 1_000L
+        val repo = FakeAppLockRepository(hasPassword = true, correctPassword = "secret")
+        val vm = AppLockViewModel(
+            repository = repo,
+            relockTimeoutMillis = 0L,
+            lockOnBackground = false,
+            currentTimeMillis = { now }
+        )
+        advanceUntilIdle()
+        vm.unlock("secret")
+        advanceUntilIdle()
+
+        vm.onAppBackgrounded()
+        now += 60_000L
+        vm.onAppForegrounded()
+
+        assertThat(vm.uiState.value.isUnlocked).isTrue()
     }
 }
 

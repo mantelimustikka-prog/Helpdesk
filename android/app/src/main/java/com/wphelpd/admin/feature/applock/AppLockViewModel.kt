@@ -70,11 +70,11 @@ class AppLockViewModel(
 
     fun onAppForegrounded() {
         val backgroundedAt = backgroundedAtMillis ?: return
-        backgroundedAtMillis = null
         val currentState = _uiState.value
         if (!currentState.isUnlocked || currentState.isFirstRun) return
+        backgroundedAtMillis = null
         val elapsed = currentTimeMillis() - backgroundedAt
-        if (relockTimeoutMillis <= 0L || elapsed >= relockTimeoutMillis) {
+        if (relockTimeoutMillis > 0L && elapsed >= relockTimeoutMillis) {
             _uiState.update { it.copy(isUnlocked = false, errorMessage = null) }
         }
     }
@@ -82,6 +82,7 @@ class AppLockViewModel(
     companion object {
         /** Minimum password length enforced by product requirements. */
         private const val MIN_PASSWORD_LENGTH = 4
+        /** 0 disables timeout-based relock; background relock is handled separately. */
         private const val DEFAULT_RELOCK_TIMEOUT_MILLIS = 0L
 
         fun factory(repository: AppLockRepository): ViewModelProvider.Factory =
