@@ -155,6 +155,82 @@ class AppLockViewModelTest {
         assertThat(vm.uiState.value.isUnlocked).isTrue()
     }
 
+    // ── lifecycle guard edge cases ────────────────────────────────────────────
+
+    /** ON_START fires on first launch before any ON_STOP — must be a no-op. */
+    @Test
+    fun onAppForegrounded_withoutPriorBackgrounded_isNoOp() = runTest {
+        val repo = FakeAppLockRepository(hasPassword = true, correctPassword = "secret")
+        val vm = AppLockViewModel(repo)
+        advanceUntilIdle()
+        vm.unlock("secret")
+        advanceUntilIdle()
+
+        // Call foregrounded without any prior backgrounded call
+        vm.onAppForegrounded()
+
+        assertThat(vm.uiState.value.isUnlocked).isTrue()
+    }
+
+    /** ON_STOP fires while app is still locking/locked — must not double-lock or set a stale timestamp. */
+    @Test
+    fun onAppBackgrounded_whenAlreadyLocked_isNoOp() = runTest {
+        val repo = FakeAppLockRepository(hasPassword = true, correctPassword = "secret")
+        val vm = AppLockViewModel(repo)
+        advanceUntilIdle()
+        // App is locked (isUnlocked = false); calling backgrounded should have no effect.
+        vm.onAppBackgrounded()
+        vm.onAppBackgrounded()
+
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
+        // Subsequent foregrounded must also be a no-op (backgroundedAtMillis not set).
+        vm.onAppForegrounded()
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
+    }
+
+    /** ON_STOP fires during the init window (isInitialising=true, isUnlocked=false) — must be a no-op. */
+    @Test
+    fun onAppBackgrounded_duringInitialising_isNoOp() = runTest {
+        val repo = FakeAppLockRepository(hasPassword = true, correctPassword = "secret")
+        // Don't advance — init coroutine hasn't completed, so isInitialising=true
+        val vm = AppLockViewModel(repo)
+
+        vm.onAppBackgrounded()
+
+        // State is still initialising; no timestamp stored, no lock change.
+        assertThat(vm.uiState.value.isInitialising).isTrue()
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
+
+        // Foregrounded afterwards must also be a no-op.
+        vm.onAppForegrounded()
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
+    }
+
+    /**
+     * Config-change scenario: ON_STOP on old activity → ViewModel locked; new activity
+     * gets ON_START → onAppForegrounded clears the stale timestamp and stays locked.
+     */
+    @Test
+    fun configChange_backgroundedThenForegrounded_staysLocked() = runTest {
+        val repo = FakeAppLockRepository(hasPassword = true, correctPassword = "secret")
+        val vm = AppLockViewModel(repo)
+        advanceUntilIdle()
+        vm.unlock("secret")
+        advanceUntilIdle()
+
+        // Simulate configuration-change lifecycle: ON_STOP then ON_START on the new instance.
+        vm.onAppBackgrounded()
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
+
+        vm.onAppForegrounded()
+        // App must remain locked; backgroundedAtMillis cleared so no re-relock attempt later.
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
+
+        // A second foregrounded call (e.g., double-fire) must still be a no-op.
+        vm.onAppForegrounded()
+        assertThat(vm.uiState.value.isUnlocked).isFalse()
+    }
+
     // ── clearError ───────────────────────────────────────────────────────────
 
     @Test
