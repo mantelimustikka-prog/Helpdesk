@@ -91,6 +91,53 @@ class TicketsViewModelTest {
     }
 
     @Test
+    fun selectTicket_loadsThreadFromMessagesEndpointWhenDetailResponseHasNoMessages() = runTest {
+        // Simulate the production scenario: getTicket returns a flat response with no embedded
+        // messages, so the repository falls back to the dedicated messages endpoint.
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository {
+                FakeHelpdeskAdminApi(
+                    ticketDetailResponse = TicketDetailResponseDto(
+                        id = 202,
+                        ticketNo = "HD-000202",
+                        subject = "Password reset",
+                        status = "open"
+                    ),
+                    ticketMessagesResponse = TicketMessagesResponseDto(
+                        items = listOf(
+                            TicketThreadEntryDto(
+                                id = 7001,
+                                authorType = "customer",
+                                authorName = "Bob Smith",
+                                body = "I need a password reset.",
+                                createdAt = "2026-08-22T11:00:00Z"
+                            ),
+                            TicketThreadEntryDto(
+                                id = 7002,
+                                authorType = "agent",
+                                authorName = "Support Agent",
+                                body = "Reset link sent.",
+                                createdAt = "2026-08-22T11:05:00Z"
+                            )
+                        )
+                    )
+                )
+            }
+        )
+
+        viewModel.selectTicket(202)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTicketId).isEqualTo(202)
+        assertThat(state.ticketDetail?.thread).hasSize(2)
+        assertThat(state.ticketDetail?.thread?.first()?.body).isEqualTo("I need a password reset.")
+        assertThat(state.ticketDetail?.thread?.last()?.authorType).isEqualTo("agent")
+        assertThat(state.detailErrorMessage).isNull()
+        assertThat(state.isDetailLoading).isFalse()
+    }
+
+    @Test
     fun selectTicket_setsReadableErrorWhenDetailFetchFails() = runTest {
         val viewModel = TicketsViewModel(
             repository = HelpdeskRepository {
@@ -1102,6 +1149,7 @@ private class FakeHelpdeskAdminApi(
     private val statusResponse: StatusUpdateResponseDto = StatusUpdateResponseDto(success = true),
     private val statusThrowable: Throwable? = null,
     private val statusDelayMs: Long = 0,
+    private val ticketMessagesResponse: TicketMessagesResponseDto = TicketMessagesResponseDto(items = emptyList()),
     private val noteResponse: NoteResponseDto = NoteResponseDto(success = true),
     private val noteThrowable: Throwable? = null,
     private val noteDelayMs: Long = 0
@@ -1148,7 +1196,7 @@ private class FakeHelpdeskAdminApi(
             ?: ticketDetailResponse
     }
 
-    override suspend fun getTicketMessages(id: Int): TicketMessagesResponseDto = TicketMessagesResponseDto(items = emptyList())
+    override suspend fun getTicketMessages(id: Int): TicketMessagesResponseDto = ticketMessagesResponse
 
     override suspend fun replyToTicket(id: Int, request: ReplyRequestDto): ReplyResponseDto {
         replyCallCount += 1

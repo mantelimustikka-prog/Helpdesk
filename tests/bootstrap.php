@@ -83,6 +83,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		);
 		$GLOBALS['wp_is_multisite']       = false;
 		$GLOBALS['wp_switch_to_blog_log'] = array();
+		$GLOBALS['wp_users_index']        = array();
 		// Simulate an initialised WP rewrite object so getAccountPageUrl()'s null
 		// guard passes in normal test scenarios. The test doubles for wc_get_page_permalink
 		// never call methods on this object, so a plain stdClass sentinel is safe here.
@@ -677,6 +678,13 @@ if ( ! function_exists( 'update_user_meta' ) ) {
 	function update_user_meta( int $user_id, string $key, $value ): bool {
 		$GLOBALS['wp_user_meta'][ $user_id ][ $key ] = $value;
 		return true;
+	}
+}
+
+if ( ! function_exists( 'get_userdata' ) ) {
+	function get_userdata( int $user_id ) {
+		$users = $GLOBALS['wp_users_index'] ?? array();
+		return $users[ $user_id ] ?? false;
 	}
 }
 
