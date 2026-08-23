@@ -69,7 +69,13 @@ class HelpdeskRepository(
         if (detail.thread.isNotEmpty()) {
             detail
         } else {
-            val thread = api.getTicketMessages(ticketId).toThread()
+            val thread = try {
+                api.getTicketMessages(ticketId).toThread()
+            } catch (throwable: CancellationException) {
+                throw throwable
+            } catch (_: Throwable) {
+                return@execute detail
+            }
             detail.copy(thread = thread)
         }
     }

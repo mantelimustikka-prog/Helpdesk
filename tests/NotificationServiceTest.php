@@ -124,19 +124,21 @@ final class NotificationServiceTest extends TestCase {
 		self::assertSame( 1, preg_match( '#/helpdesk/ticket/HD-900004/[0-9a-f]{64}/#', $mail ) );
 	}
 
-	public function testSendTicketReplyGeneratesGuestLinkForLoggedInUserTicket(): void {
+	public function testSendTicketReplyUsesRequestPathForLoggedInUserTicket(): void {
 		global $wpdb;
-		$wpdb = new class {
+		$updateCalled = false;
+		$wpdb         = new class( $updateCalled ) {
 			public string $base_prefix = 'wp_';
-			/** @var array<string, mixed> */
-			public array $updated_data = array();
-			/** @var array<string, mixed> */
-			public array $updated_where = array();
+			/** @var bool */
+			public bool $called;
+
+			public function __construct( bool &$called ) {
+				$this->called = &$called;
+			}
 
 			public function update( string $table, array $data, array $where, array $format = array(), array $where_format = array() ): int {
-				$this->updated_data  = $data;
-				$this->updated_where = $where;
-				return 1;
+				$this->called = true;
+				return 0;
 			}
 		};
 
@@ -153,12 +155,11 @@ final class NotificationServiceTest extends TestCase {
 			'member@example.test'
 		);
 
-		self::assertSame( 99, $wpdb->updated_where['id'] ?? null );
-		self::assertArrayHasKey( 'guest_token_hash', $wpdb->updated_data );
+		self::assertFalse( $updateCalled, 'wpdb->update should not be called for logged-in user tickets' );
 
 		$mail = $GLOBALS['wp_mail_calls'][0]['message'] ?? '';
 		self::assertStringContainsString( 'View and continue this ticket', $mail );
-		self::assertStringContainsString( '/helpdesk/ticket/HD-900003/', $mail );
-		self::assertSame( 1, preg_match( '#/helpdesk/ticket/HD-900003/[0-9a-f]{64}/#', $mail ) );
+		self::assertStringContainsString( '/helpdesk/request/HD-900003/', $mail );
+		self::assertStringNotContainsString( '/helpdesk/ticket/', $mail );
 	}
 }
