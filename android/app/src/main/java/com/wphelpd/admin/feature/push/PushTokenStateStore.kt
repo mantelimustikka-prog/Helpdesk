@@ -5,18 +5,18 @@ import android.content.Context
 class PushTokenStateStore(context: Context) : PushTokenStorage {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun saveCurrentToken(token: String) {
+    override fun saveCurrentToken(token: String) {
         prefs.edit().putString(KEY_CURRENT_TOKEN, token.trim()).apply()
     }
 
-    fun currentToken(): String? = prefs.getString(KEY_CURRENT_TOKEN, null)?.takeIf { it.isNotBlank() }
+    override fun currentToken(): String? = prefs.getString(KEY_CURRENT_TOKEN, null)?.takeIf { it.isNotBlank() }
 
-    fun isAlreadyRegistered(token: String, siteUrl: String, username: String): Boolean =
+    override fun isAlreadyRegistered(token: String, siteUrl: String, username: String): Boolean =
         prefs.getString(KEY_REGISTERED_TOKEN, null) == token &&
             prefs.getString(KEY_REGISTERED_SITE_URL, null) == siteUrl &&
             prefs.getString(KEY_REGISTERED_USERNAME, null) == username
 
-    fun markRegistered(token: String, siteUrl: String, username: String) {
+    override fun markRegistered(token: String, siteUrl: String, username: String) {
         prefs.edit()
             .putString(KEY_REGISTERED_TOKEN, token)
             .putString(KEY_REGISTERED_SITE_URL, siteUrl)
@@ -24,7 +24,7 @@ class PushTokenStateStore(context: Context) : PushTokenStorage {
             .apply()
     }
 
-    fun clearRegisteredState() {
+    override fun clearRegisteredState() {
         prefs.edit()
             .remove(KEY_REGISTERED_TOKEN)
             .remove(KEY_REGISTERED_SITE_URL)
@@ -32,10 +32,10 @@ class PushTokenStateStore(context: Context) : PushTokenStorage {
             .apply()
     }
 
-    fun wasNotificationHandled(notificationId: String): Boolean =
+    override fun wasNotificationHandled(notificationId: String): Boolean =
         recentNotificationIds().contains(notificationId)
 
-    fun markNotificationHandled(notificationId: String) {
+    override fun markNotificationHandled(notificationId: String) {
         val updated = buildList {
             add(notificationId)
             addAll(recentNotificationIds().filterNot { it == notificationId })
@@ -52,7 +52,7 @@ class PushTokenStateStore(context: Context) : PushTokenStorage {
             ?.filter { it.isNotEmpty() }
             ?: emptyList()
 
-    fun clearHandledNotifications() {
+    override fun clearHandledNotifications() {
         prefs.edit().remove(KEY_HANDLED_NOTIFICATIONS).apply()
     }
 
