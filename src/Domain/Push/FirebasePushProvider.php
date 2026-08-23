@@ -205,7 +205,7 @@ class FirebasePushProvider implements PushProviderInterface {
 		}
 
 		$this->access_token     = (string) $body['access_token'];
-		$this->token_expires_at = time() + max( 0, (int) ( $body['expires_in'] ?? 3600 ) ) - 60;
+		$this->token_expires_at = time() + max( 0, (int) ( $body['expires_in'] ?? 3600 ) - 60 );
 
 		return $this->access_token;
 	}
@@ -233,7 +233,6 @@ class FirebasePushProvider implements PushProviderInterface {
 			(string) wp_json_encode(
 				array(
 					'iss'   => $client_email,
-					'sub'   => $client_email,
 					'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
 					'aud'   => 'https://oauth2.googleapis.com/token',
 					'iat'   => $now,
