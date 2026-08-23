@@ -638,7 +638,7 @@ private fun ReplyComposer(
     }
 }
 
-private val statusLabels: List<String> = HelpdeskRepository.allowedStatuses.sorted()
+private val statusLabels: List<String> = HelpdeskRepository.statusOptions
 
 @Composable
 private fun StatusActions(
