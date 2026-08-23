@@ -53,6 +53,11 @@ The Android admin application should authenticate over HTTPS using WordPress App
 - For browser-based requests, send a valid `X-WP-Nonce` nonce
 - Android scaffold path: `/android`
 
+Current Android scaffold coverage:
+
+- Implemented: auth check, ticket list/detail, reply/status/note actions, attachments in detail payloads, and device register/unregister calls.
+- Not in current MVP scaffold: assignment/reassignment and new-ticket creation flows.
+
 ### Push notifications
 
 Set the `hd_fcm_server_key` network option with your Firebase Cloud Messaging server key before enabling push delivery.

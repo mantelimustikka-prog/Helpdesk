@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -18,15 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.messaging.FirebaseMessaging
 import com.wphelpd.admin.core.config.SecureServerConfigRepository
 import com.wphelpd.admin.core.ui.theme.WpHelpdTheme
+import com.wphelpd.admin.feature.applock.AppLockLifecyclePolicy
 import com.wphelpd.admin.feature.applock.AppLockManager
 import com.wphelpd.admin.feature.applock.AppLockViewModel
 import com.wphelpd.admin.feature.applock.CreatePasswordScreen
@@ -42,6 +38,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class MainActivity : ComponentActivity() {
     private val pendingTicketId = MutableStateFlow<Int?>(null)
+    private lateinit var lockViewModel: AppLockViewModel
+    private lateinit var ticketsViewModel: TicketsViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +48,8 @@ class MainActivity : ComponentActivity() {
         val serverConfigRepository = SecureServerConfigRepository(applicationContext)
         val pushTokenStateStore = PushTokenStateStore(applicationContext)
         val pushTokenSyncManager = PushTokenSyncManager(stateStore = pushTokenStateStore)
+        lockViewModel = AppLockViewModel(lockManager)
+        ticketsViewModel = TicketsViewModel(serverConfigRepository = serverConfigRepository)
         FirebaseMessaging.getInstance().token
             .addOnSuccessListener { token ->
                 if (token.isNotBlank()) {
@@ -59,7 +59,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             WpHelpdTheme {
-                val lockViewModel: AppLockViewModel = viewModel(factory = AppLockViewModel.factory(lockManager))
                 val lockState = lockViewModel.uiState.collectAsStateWithLifecycle().value
                 val pendingTicket = pendingTicketId.asStateFlow().collectAsStateWithLifecycle().value
 
@@ -68,21 +67,7 @@ class MainActivity : ComponentActivity() {
                         SplashLoadingScreen()
                     }
                     lockState.isUnlocked -> {
-                        val ticketsViewModel: TicketsViewModel =
-                            viewModel(factory = TicketsViewModel.factory(serverConfigRepository = serverConfigRepository))
                         val ticketsState = ticketsViewModel.uiState.collectAsStateWithLifecycle().value
-
-                        DisposableEffect(ticketsViewModel) {
-                            val processLifecycle = ProcessLifecycleOwner.get().lifecycle
-                            val observer = LifecycleEventObserver { _, event ->
-                                if (event == Lifecycle.Event.ON_STOP) {
-                                    ticketsViewModel.clearSensitiveSessionState()
-                                    lockViewModel.lock()
-                                }
-                            }
-                            processLifecycle.addObserver(observer)
-                            onDispose { processLifecycle.removeObserver(observer) }
-                        }
 
                         LaunchedEffect(lockState.isUnlocked) {
                             ticketsViewModel.restoreSessionFromSavedConfigIfNeeded()
@@ -159,6 +144,20 @@ class MainActivity : ComponentActivity() {
                             onUnlock = { pw -> lockViewModel.unlock(pw) }
                         )
                     }
+                }
+            }
+
+            override fun onStop() {
+                super.onStop()
+                if (!::lockViewModel.isInitialized || !::ticketsViewModel.isInitialized) return
+                if (
+                    AppLockLifecyclePolicy.shouldRelockOnStop(
+                        isUnlocked = lockViewModel.uiState.value.isUnlocked,
+                        isChangingConfigurations = isChangingConfigurations
+                    )
+                ) {
+                    ticketsViewModel.clearSensitiveSessionState()
+                    lockViewModel.lock()
                 }
             }
         }
