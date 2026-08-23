@@ -241,6 +241,56 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_fallsBackToWrappedMessagesPayloadAndMapsThreadFields() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "items": [
+                            {
+                              "id": 8201,
+                              "author_type": "agent",
+                              "author_name": "Admin User",
+                              "body": "Saved wrapped fallback reply.",
+                              "created_at": "2026-08-22T12:30:00Z",
+                              "is_internal": 1
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        val entry = detail.thread.single()
+        assertThat(entry.id).isEqualTo(8201)
+        assertThat(entry.authorType).isEqualTo("agent")
+        assertThat(entry.authorName).isEqualTo("Admin User")
+        assertThat(entry.body).isEqualTo("Saved wrapped fallback reply.")
+        assertThat(entry.createdAt).isEqualTo("2026-08-22T12:30:00Z")
+        assertThat(entry.isInternal).isTrue()
+    }
+
+    @Test
     fun fetchTicketDetail_mapsFlatResponseMessagesAndAttachments() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(
