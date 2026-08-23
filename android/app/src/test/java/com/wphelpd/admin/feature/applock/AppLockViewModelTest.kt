@@ -94,6 +94,22 @@ class AppLockViewModelTest {
         assertThat(vm.uiState.value.isUnlocked).isFalse()
         assertThat(vm.uiState.value.errorMessage).isNotNull()
     }
+
+    // ── clearError ───────────────────────────────────────────────────────────
+
+    @Test
+    fun clearError_removesExistingErrorMessage() = runTest {
+        val vm = AppLockViewModel(FakeAppLockRepository(hasPassword = false))
+        advanceUntilIdle()
+        // Trigger a mismatch error so that errorMessage is non-null.
+        vm.createPassword("abcd", "wxyz")
+        advanceUntilIdle()
+        assertThat(vm.uiState.value.errorMessage).isNotNull()
+
+        vm.clearError()
+
+        assertThat(vm.uiState.value.errorMessage).isNull()
+    }
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
