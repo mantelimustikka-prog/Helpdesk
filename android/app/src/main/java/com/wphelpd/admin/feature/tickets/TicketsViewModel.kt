@@ -191,7 +191,7 @@ class TicketsViewModel(
                     val state = if (isBootstrap) {
                         classifyBootstrapAuthFailure(authResult)
                     } else {
-                        ManualAuthFailure(
+                        AuthFailureState(
                             requiresSetup = true,
                             message = authResult.message
                         )
@@ -217,23 +217,23 @@ class TicketsViewModel(
         }
     }
 
-    private fun classifyBootstrapAuthFailure(result: NetworkResult.Failure): ManualAuthFailure {
+    private fun classifyBootstrapAuthFailure(result: NetworkResult.Failure): AuthFailureState {
         val throwable = result.throwable
         return when {
             throwable is HttpException && (throwable.code() == 401 || throwable.code() == 403) ->
-                ManualAuthFailure(
+                AuthFailureState(
                     requiresSetup = true,
                     message = "Saved credentials are invalid. Please update them and authenticate again."
                 )
 
             throwable is IOException ->
-                ManualAuthFailure(
+                AuthFailureState(
                     requiresSetup = true,
                     message = "Unable to reach the WP HelpD server. Check your connection and retry."
                 )
 
             else ->
-                ManualAuthFailure(
+                AuthFailureState(
                     requiresSetup = true,
                     message = result.message
                 )
@@ -259,7 +259,7 @@ class TicketsViewModel(
     }
 }
 
-private data class ManualAuthFailure(
+private data class AuthFailureState(
     val requiresSetup: Boolean,
     val message: String
 )
