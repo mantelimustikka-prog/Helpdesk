@@ -27,7 +27,9 @@ object FirebaseSafeTokenFetcher {
                     }
                 }
                 .addOnFailureListener { e ->
-                    Log.w(TAG, "FCM token fetch failed — Firebase may not be configured", e)
+                    runCatching {
+                        Log.w(TAG, "FCM token fetch failed — Firebase may not be configured", e)
+                    }
                 }
         }.onFailure { e ->
             Log.w(TAG, "Firebase is not available — skipping FCM token fetch", e)
