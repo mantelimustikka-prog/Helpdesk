@@ -176,7 +176,6 @@ private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {
     val objectData = asJsonObject
     return parseThreadEntriesFromJson(objectData.get("items"))
         ?: parseThreadEntriesFromJson(objectData.get("messages"))
-        ?: parseThreadEntriesFromJson(objectData.get("data"))
 }
 
 private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEntryDto>? {
