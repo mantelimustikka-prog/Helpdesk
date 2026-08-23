@@ -39,7 +39,14 @@ class MainActivity : ComponentActivity() {
                     lockState.isUnlocked -> {
                         val ticketsViewModel: TicketsViewModel =
                             viewModel(factory = TicketsViewModel.factory(serverConfigRepository = serverConfigRepository))
-                        TicketsRoute(viewModel = ticketsViewModel)
+                        val ticketsState = ticketsViewModel.uiState.collectAsStateWithLifecycle().value
+                        if (ticketsState.isBootstrapping) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                        } else {
+                            TicketsRoute(viewModel = ticketsViewModel)
+                        }
                     }
                     lockState.isFirstRun -> {
                         CreatePasswordScreen(

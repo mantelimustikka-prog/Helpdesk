@@ -7,11 +7,13 @@ import com.wphelpd.admin.core.config.ServerConfigRepository
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.core.network.NetworkResult
 import com.wphelpd.admin.data.repository.HelpdeskRepository
+import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 class TicketsViewModel(
     private val repository: HelpdeskRepository = HelpdeskRepository(),
@@ -21,15 +23,26 @@ class TicketsViewModel(
     val uiState: StateFlow<TicketsUiState> = _uiState.asStateFlow()
 
     init {
-        serverConfigRepository.load()?.let { saved ->
+        val savedConfig = serverConfigRepository.load()
+        if (savedConfig == null) {
             updateState {
                 copy(
-                    siteUrl = saved.siteUrl,
-                    username = saved.username,
-                    applicationPassword = saved.applicationPassword,
-                    wpNonce = saved.wpNonce
+                    isBootstrapping = false,
+                    requiresSetup = true,
+                    errorMessage = "Saved server configuration was not found. Enter your WordPress credentials to continue."
                 )
             }
+        } else {
+            updateState {
+                copy(
+                    siteUrl = savedConfig.siteUrl,
+                    username = savedConfig.username,
+                    applicationPassword = savedConfig.applicationPassword,
+                    wpNonce = savedConfig.wpNonce,
+                    isBootstrapping = true
+                )
+            }
+            bootstrapFromSavedConfig(savedConfig)
         }
     }
 
@@ -41,39 +54,19 @@ class TicketsViewModel(
     fun connectAndLoadTickets() {
         val state = _uiState.value
         if (!state.siteUrl.trim().startsWith("https://")) {
-            updateState { copy(errorMessage = "Use an HTTPS site URL for WP HelpD.") }
-            return
-        }
-
-        val config = state.toAuthConfig()
-
-        viewModelScope.launch {
             updateState {
                 copy(
-                    isLoading = true,
-                    errorMessage = null,
-                    tickets = emptyList(),
-                    pagination = null,
-                    selectedTicketId = null,
-                    ticketDetail = null,
-                    isDetailLoading = false,
-                    detailErrorMessage = null
+                    requiresSetup = true,
+                    errorMessage = "Use an HTTPS site URL for WP HelpD."
                 )
             }
-
-            when (val authResult = repository.authCheck(config)) {
-                is NetworkResult.Failure -> {
-                    updateState {
-                        copy(isLoading = false, currentUser = null, errorMessage = authResult.message)
-                    }
-                }
-                is NetworkResult.Success -> {
-                    serverConfigRepository.save(config)
-                    updateState { copy(currentUser = authResult.value) }
-                    refreshTickets(config)
-                }
-            }
+            return
         }
+        authenticateAndLoadTickets(
+            config = state.toAuthConfig(),
+            saveConfigOnSuccess = true,
+            isBootstrap = false
+        )
     }
 
     fun refreshTickets() {
@@ -107,12 +100,21 @@ class TicketsViewModel(
         when (val ticketsResult = repository.fetchTickets(config)) {
             is NetworkResult.Failure -> {
                 updateState {
-                    copy(isLoading = false, tickets = emptyList(), pagination = null, errorMessage = ticketsResult.message)
+                    copy(
+                        isBootstrapping = false,
+                        requiresSetup = false,
+                        isLoading = false,
+                        tickets = emptyList(),
+                        pagination = null,
+                        errorMessage = ticketsResult.message
+                    )
                 }
             }
             is NetworkResult.Success -> {
                 updateState {
                     copy(
+                        isBootstrapping = false,
+                        requiresSetup = false,
                         isLoading = false,
                         errorMessage = null,
                         tickets = ticketsResult.value.tickets,
@@ -156,6 +158,77 @@ class TicketsViewModel(
         _uiState.update { it.transform() }
     }
 
+    private fun bootstrapFromSavedConfig(config: AuthConfig) {
+        authenticateAndLoadTickets(
+            config = config,
+            saveConfigOnSuccess = false,
+            isBootstrap = true
+        )
+    }
+
+    private fun authenticateAndLoadTickets(
+        config: AuthConfig,
+        saveConfigOnSuccess: Boolean,
+        isBootstrap: Boolean
+    ) {
+        viewModelScope.launch {
+            updateState {
+                copy(
+                    isBootstrapping = isBootstrap,
+                    isLoading = true,
+                    requiresSetup = false,
+                    errorMessage = null,
+                    tickets = emptyList(),
+                    pagination = null,
+                    selectedTicketId = null,
+                    ticketDetail = null,
+                    isDetailLoading = false,
+                    detailErrorMessage = null
+                )
+            }
+
+            when (val authResult = repository.authCheck(config)) {
+                is NetworkResult.Failure -> {
+                    val message = if (isBootstrap) {
+                        classifyBootstrapAuthFailure(authResult)
+                    } else {
+                        authResult.message
+                    }
+                    updateState {
+                        copy(
+                            isBootstrapping = false,
+                            requiresSetup = true,
+                            isLoading = false,
+                            currentUser = null,
+                            errorMessage = message
+                        )
+                    }
+                }
+                is NetworkResult.Success -> {
+                    if (saveConfigOnSuccess) {
+                        serverConfigRepository.save(config)
+                    }
+                    updateState { copy(currentUser = authResult.value) }
+                    refreshTickets(config)
+                }
+            }
+        }
+    }
+
+    private fun classifyBootstrapAuthFailure(result: NetworkResult.Failure): String {
+        val throwable = result.throwable
+        return when {
+            throwable is HttpException && (throwable.code() == 401 || throwable.code() == 403) ->
+                "Saved credentials are invalid. Please update them and authenticate again."
+
+            throwable is IOException ->
+                "Unable to reach the WP HelpD server. Check your connection and retry."
+
+            else ->
+                result.message
+        }
+    }
+
     private fun TicketsUiState.toAuthConfig(): AuthConfig = AuthConfig(
         siteUrl = siteUrl,
         username = username,
@@ -180,4 +253,3 @@ private object NoOpServerConfigRepository : ServerConfigRepository {
     override fun save(config: AuthConfig) = Unit
     override fun clear() = Unit
 }
-
