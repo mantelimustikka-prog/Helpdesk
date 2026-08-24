@@ -159,13 +159,20 @@ data class TicketMessagesResponseDto(
 ) {
     fun toThread(): List<TicketThreadEntry> {
         check(success != false) { "Ticket messages request failed." }
-        val threadEntries = (
-            items?.takeIf { it.isNotEmpty() }
-                ?: messages?.takeIf { it.isNotEmpty() }
-                ?: data.toThreadEntriesOrNull()
-        ).orEmpty()
-        return threadEntries.map(TicketThreadEntryDto::toModel)
+        return (
+            items.toThreadOrNull()
+                ?: messages.toThreadOrNull()
+                ?: data.toThreadEntriesOrNull()?.toThreadOrNull()
+                ?: emptyList()
+            )
     }
+}
+
+private fun List<TicketThreadEntryDto>?.toThreadOrNull(): List<TicketThreadEntry>? {
+    val entries = this?.mapNotNull { entry ->
+        runCatching { entry.toModel() }.getOrNull()
+    }.orEmpty()
+    return entries.ifEmpty { null }
 }
 
 private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {

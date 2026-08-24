@@ -1,6 +1,7 @@
 package com.wphelpd.admin.data.repository
 
 import com.google.common.truth.Truth.assertThat
+import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.core.network.NetworkResult
@@ -459,6 +460,56 @@ class HelpdeskRepositoryTest {
         assertThat(detail.thread).hasSize(1)
         assertThat(detail.thread.single().id).isEqualTo(8204)
         assertThat(detail.thread.single().body).isEqualTo("Fallback from top-level messages.")
+    }
+
+    @Test
+    fun fetchTicketDetail_usesTopLevelMessagesWhenTopLevelItemsAreUnusable() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = Gson().fromJson(
+                    """
+                    {
+                      "success": true,
+                      "items": [
+                        {
+                          "id": 8206,
+                          "body": "Missing author_type row should be ignored."
+                        }
+                      ],
+                      "messages": [
+                        {
+                          "id": 8207,
+                          "author_type": "agent",
+                          "author_name": "Admin User",
+                          "body": "Fallback from usable top-level messages.",
+                          "created_at": "2026-08-22T12:47:00Z",
+                          "is_internal": 0
+                        }
+                      ]
+                    }
+                    """.trimIndent(),
+                    TicketMessagesResponseDto::class.java
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().id).isEqualTo(8207)
+        assertThat(detail.thread.single().body).isEqualTo("Fallback from usable top-level messages.")
     }
 
     @Test
