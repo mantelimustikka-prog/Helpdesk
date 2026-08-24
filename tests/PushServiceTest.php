@@ -293,4 +293,151 @@ final class PushServiceTest extends TestCase {
 
 		self::assertSame( 0, $provider->calls, 'Provider must not be called when the event is not in the allowlist.' );
 	}
+
+	// -------------------------------------------------------------------------
+	// Logging side-effect tests.
+	// -------------------------------------------------------------------------
+
+	public function testBlockedLoggingWhenPushIsDisabled(): void {
+		$provider = new class implements PushProviderInterface {
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				return true;
+			}
+		};
+
+		$service = new class( $provider ) extends PushService {
+			protected function getAdminTokens(): array {
+				return array( 'tok' );
+			}
+		};
+
+		// Push not enabled (default).
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ] = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ] = 'key';
+
+		$service->notifyNewTicket( array( 'id' => 1, 'subject' => 'Hello' ) );
+
+		$blocked = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.blocked' === $e['action'] )
+		);
+		self::assertNotEmpty( $blocked );
+		self::assertSame( 'push_disabled', $blocked[0]['context']['reason'] );
+		self::assertSame( 'ticket_created', $blocked[0]['context']['event'] );
+	}
+
+	public function testBlockedLoggingWhenConfigurationIsInvalid(): void {
+		$provider = new class implements PushProviderInterface {
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				return true;
+			}
+		};
+
+		$service = new class( $provider ) extends PushService {
+			protected function getAdminTokens(): array {
+				return array( 'tok' );
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ]       = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ] = array( 'ticket_created' );
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]           = 'v1';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_PROJECT_ID ]     = ''; // Missing project ID makes v1 config invalid.
+
+		$service->notifyNewTicket( array( 'id' => 2, 'subject' => 'Hello' ) );
+
+		$blocked = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.blocked' === $e['action'] )
+		);
+		self::assertNotEmpty( $blocked );
+		self::assertSame( 'invalid_configuration', $blocked[0]['context']['reason'] );
+	}
+
+	public function testBlockedLoggingWhenEventNotInAllowlist(): void {
+		$provider = new class implements PushProviderInterface {
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				return true;
+			}
+		};
+
+		$service = new class( $provider ) extends PushService {
+			protected function getAdminTokens(): array {
+				return array( 'tok' );
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ]             = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ]       = array( 'ticket_replied' ); // ticket_created absent.
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]                 = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ]           = 'key';
+
+		$service->notifyNewTicket( array( 'id' => 3, 'subject' => 'Hello' ) );
+
+		$blocked = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.blocked' === $e['action'] )
+		);
+		self::assertNotEmpty( $blocked );
+		self::assertSame( 'event_not_in_allowlist', $blocked[0]['context']['reason'] );
+		self::assertSame( 'ticket_created', $blocked[0]['context']['event'] );
+	}
+
+	public function testNoTokensLoggingSkipsProviderCall(): void {
+		$provider = new class implements PushProviderInterface {
+			public int $calls = 0;
+
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				++$this->calls;
+				return true;
+			}
+		};
+
+		$service = new class( $provider ) extends PushService {
+			protected function getAdminTokens(): array {
+				return array();
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ]             = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ]       = array( 'ticket_created' );
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]                 = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ]           = 'key';
+
+		$service->notifyNewTicket( array( 'id' => 5, 'subject' => 'Empty' ) );
+
+		self::assertSame( 0, $provider->calls );
+
+		$noTokenEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.no_tokens' === $e['action'] )
+		);
+		self::assertNotEmpty( $noTokenEntries );
+		self::assertSame( 'ticket_created', $noTokenEntries[0]['context']['event'] );
+	}
+
+	public function testSendResultIsLogged(): void {
+		$provider = new class implements PushProviderInterface {
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				return true;
+			}
+		};
+
+		$service = new class( $provider ) extends PushService {
+			protected function getAdminTokens(): array {
+				return array( 'tok' );
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ]             = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ]       = array( 'ticket_created' );
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]                 = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ]           = 'key';
+
+		$service->notifyNewTicket( array( 'id' => 8, 'subject' => 'Test' ) );
+
+		$resultEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.send_result' === $e['action'] )
+		);
+		self::assertNotEmpty( $resultEntries );
+		self::assertSame( 'ticket_created', $resultEntries[0]['context']['event'] );
+		self::assertSame( 8, $resultEntries[0]['context']['ticket_id'] );
+		self::assertTrue( $resultEntries[0]['context']['success'] );
+	}
 }

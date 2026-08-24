@@ -60,6 +60,7 @@ class FirebasePushProvider implements PushProviderInterface {
 
 	private function sendLegacy( array $device_tokens, string $title, string $body, array $data ): bool {
 		if ( '' === $this->server_key ) {
+			HelpdeskLogger::log( 'push.fcm_error', array( 'error' => 'missing_server_key', 'mode' => 'legacy' ) );
 			return false;
 		}
 
@@ -84,7 +85,23 @@ class FirebasePushProvider implements PushProviderInterface {
 			)
 		);
 
-		return ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response );
+		if ( is_wp_error( $response ) ) {
+			$err_msg = 'WP Helpdesk Push: FCM legacy request error – ' . $response->get_error_message();
+			error_log( $err_msg );
+			HelpdeskLogger::log( 'push.fcm_error', array( 'error' => 'wp_error', 'mode' => 'legacy', 'message' => $response->get_error_message() ) );
+			return false;
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $code ) {
+			$err_msg = sprintf( 'WP Helpdesk Push: FCM legacy returned HTTP %d', $code );
+			error_log( $err_msg );
+			HelpdeskLogger::log( 'push.fcm_error', array( 'error' => 'http_error', 'mode' => 'legacy', 'http_code' => $code ) );
+			return false;
+		}
+
+		HelpdeskLogger::log( 'push.fcm_sent', array( 'mode' => 'legacy', 'token_count' => count( $device_tokens ) ) );
+		return true;
 	}
 
 	// -------------------------------------------------------------------------
@@ -158,6 +175,8 @@ class FirebasePushProvider implements PushProviderInterface {
 				error_log( $err_msg );
 				HelpdeskLogger::log( 'push.fcm_error', array( 'error' => 'http_error', 'http_code' => $code, 'token_prefix' => substr( $token, 0, 8 ) ) );
 				$success = false;
+			} else {
+				HelpdeskLogger::log( 'push.fcm_sent', array( 'mode' => 'v1', 'token_prefix' => substr( $token, 0, 8 ) ) );
 			}
 		}
 

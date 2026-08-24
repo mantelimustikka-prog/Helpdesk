@@ -187,4 +187,157 @@ final class FirebasePushProviderTest extends TestCase {
 
 		self::assertFalse( $result );
 	}
+
+	// -------------------------------------------------------------------------
+	// Logging side-effect tests.
+	// -------------------------------------------------------------------------
+
+	public function testV1SendLogsFcmModeEntry(): void {
+		$provider = $this->makeV1Provider();
+
+		$provider->send( array( 'tok' ), 'T', 'B' );
+
+		$actions = array_column( $GLOBALS['hd_log_calls'], 'action' );
+		self::assertContains( 'push.fcm_mode', $actions );
+
+		$modeEntry = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_mode' === $e['action'] )
+		)[0];
+		self::assertSame( 'v1', $modeEntry['context']['mode'] );
+	}
+
+	public function testLegacySendLogsFcmModeEntry(): void {
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]       = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ] = 'key';
+
+		$provider = new FirebasePushProvider();
+		$provider->send( array( 'tok' ), 'T', 'B' );
+
+		$modeEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_mode' === $e['action'] )
+		);
+		self::assertNotEmpty( $modeEntries );
+		self::assertSame( 'legacy', $modeEntries[0]['context']['mode'] );
+	}
+
+	public function testV1SendLogsSuccessPerToken(): void {
+		$provider = $this->makeV1Provider();
+
+		$provider->send( array( 'mytoken-xyz' ), 'T', 'B' );
+
+		$sentEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_sent' === $e['action'] )
+		);
+		self::assertCount( 1, $sentEntries );
+		self::assertSame( 'v1', $sentEntries[0]['context']['mode'] );
+		self::assertSame( 'mytoken-', $sentEntries[0]['context']['token_prefix'] );
+	}
+
+	public function testV1SendLogsHttpErrorPerToken(): void {
+		$provider = $this->makeV1Provider();
+
+		$GLOBALS['wp_remote_post_response'] = array( 'response' => array( 'code' => 400 ) );
+
+		$provider->send( array( 'bad-token' ), 'T', 'B' );
+
+		$errEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_error' === $e['action'] )
+		);
+		self::assertCount( 1, $errEntries );
+		self::assertSame( 'http_error', $errEntries[0]['context']['error'] );
+		self::assertSame( 400, $errEntries[0]['context']['http_code'] );
+	}
+
+	public function testV1SendLogsWpError(): void {
+		$provider = $this->makeV1Provider();
+
+		$GLOBALS['wp_remote_post_response'] = new WP_Error( 'conn_failed', 'Connection timed out' );
+
+		$provider->send( array( 'any-token' ), 'T', 'B' );
+
+		$errEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_error' === $e['action'] )
+		);
+		self::assertCount( 1, $errEntries );
+		self::assertSame( 'wp_error', $errEntries[0]['context']['error'] );
+		self::assertSame( 'Connection timed out', $errEntries[0]['context']['message'] );
+	}
+
+	public function testV1SendLogsMissingProjectId(): void {
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]       = 'v1';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_PROJECT_ID ] = '';
+
+		$provider = new FirebasePushProvider();
+		$provider->send( array( 'tok' ), 'T', 'B' );
+
+		$errEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_error' === $e['action'] )
+		);
+		self::assertCount( 1, $errEntries );
+		self::assertSame( 'missing_project_id', $errEntries[0]['context']['error'] );
+	}
+
+	public function testV1SendLogsOauthTokenUnavailable(): void {
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]                 = 'v1';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_PROJECT_ID ]           = 'proj';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] = '{}';
+
+		$provider = new FirebasePushProvider();
+		$provider->send( array( 'tok' ), 'T', 'B' );
+
+		$errEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_error' === $e['action'] )
+		);
+		self::assertCount( 1, $errEntries );
+		self::assertSame( 'oauth2_token_unavailable', $errEntries[0]['context']['error'] );
+	}
+
+	public function testLegacySendLogsSuccessfulDelivery(): void {
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]       = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ] = 'key';
+
+		$provider = new FirebasePushProvider();
+		$provider->send( array( 'tok-1', 'tok-2' ), 'T', 'B' );
+
+		$sentEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_sent' === $e['action'] )
+		);
+		self::assertCount( 1, $sentEntries );
+		self::assertSame( 'legacy', $sentEntries[0]['context']['mode'] );
+		self::assertSame( 2, $sentEntries[0]['context']['token_count'] );
+	}
+
+	public function testLegacySendLogsHttpError(): void {
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]       = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ] = 'key';
+		$GLOBALS['wp_remote_post_response']                             = array( 'response' => array( 'code' => 500 ) );
+
+		$provider = new FirebasePushProvider();
+		$result   = $provider->send( array( 'tok' ), 'T', 'B' );
+
+		self::assertFalse( $result );
+
+		$errEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_error' === $e['action'] )
+		);
+		self::assertCount( 1, $errEntries );
+		self::assertSame( 'http_error', $errEntries[0]['context']['error'] );
+		self::assertSame( 'legacy', $errEntries[0]['context']['mode'] );
+		self::assertSame( 500, $errEntries[0]['context']['http_code'] );
+	}
+
+	public function testLegacySendLogsMissingServerKey(): void {
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]       = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ] = '';
+
+		$provider = new FirebasePushProvider();
+		$provider->send( array( 'tok' ), 'T', 'B' );
+
+		$errEntries = array_values(
+			array_filter( $GLOBALS['hd_log_calls'], static fn( $e ) => 'push.fcm_error' === $e['action'] )
+		);
+		self::assertCount( 1, $errEntries );
+		self::assertSame( 'missing_server_key', $errEntries[0]['context']['error'] );
+		self::assertSame( 'legacy', $errEntries[0]['context']['mode'] );
+	}
 }

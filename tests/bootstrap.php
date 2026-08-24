@@ -77,6 +77,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_remote_post_response'] = array( 'response' => array( 'code' => 200 ) );
 		$GLOBALS['wp_remote_post_responses'] = array();
 		$GLOBALS['wp_remote_post_log']       = array();
+		$GLOBALS['hd_log_calls']             = array();
 		$GLOBALS['wp_posts_index'] = array();
 		$GLOBALS['wp_upload_dir_override'] = array();
 		$GLOBALS['wc_page_permalinks'] = array(
