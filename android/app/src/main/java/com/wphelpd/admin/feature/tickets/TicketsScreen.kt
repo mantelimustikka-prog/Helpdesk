@@ -387,9 +387,7 @@ private fun TicketDetailScreen(
             }
 
             uiState.ticketDetail?.let { detail ->
-                SideEffect {
-                    Log.d("TicketsScreen", "render: selectedTicketId=${uiState.selectedTicketId} isDetailLoading=${uiState.isDetailLoading} detailError=${uiState.detailErrorMessage} threadSize=${detail.thread.size}")
-                }
+                Log.d("TicketsScreen", "render: selectedTicketId=${uiState.selectedTicketId} isDetailLoading=${uiState.isDetailLoading} detailError=${uiState.detailErrorMessage} threadSize=${detail.thread.size}")
                 val areDetailActionsEnabled = !uiState.isDetailActionInProgress
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
