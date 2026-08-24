@@ -791,7 +791,7 @@ class SettingsPage {
 			</table>
 
 			<h2><?php esc_html_e( 'Push Notifications (Android App – FCM)', 'wp-helpdesk' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'Push notifications are delivered exclusively to the WP Helpdesk Android app via Firebase Cloud Messaging (FCM).', 'wp-helpdesk' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Push notifications are delivered exclusively to the WP Helpdesk Android app via Firebase Cloud Messaging (FCM).', 'wp-helpdesk' ); ?> <a href="https://firebase.google.com/docs/cloud-messaging" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Learn how to set up Firebase Cloud Messaging →', 'wp-helpdesk' ); ?></a></p>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><?php esc_html_e( 'Enable Push', 'wp-helpdesk' ); ?></th>
@@ -823,6 +823,7 @@ class SettingsPage {
 					<th scope="row"><label for="hd_fcm_project_id"><?php esc_html_e( 'FCM Project ID', 'wp-helpdesk' ); ?></label></th>
 					<td>
 						<input type="text" id="hd_fcm_project_id" name="hd_fcm_project_id" value="<?php echo esc_attr( $fcm_project ); ?>" class="regular-text">
+						<p class="description"><?php esc_html_e( 'Your Firebase project ID. Find this in the Firebase Console under Settings → Project settings → Project ID. Only required for FCM v1 mode.', 'wp-helpdesk' ); ?></p>
 					</td>
 				</tr>
 				<tr>
@@ -837,17 +838,30 @@ class SettingsPage {
 					<td>
 						<?php
 						$event_labels = array(
-							'ticket_created' => __( 'Ticket created', 'wp-helpdesk' ),
-							'ticket_replied' => __( 'Ticket replied', 'wp-helpdesk' ),
-							'status_changed' => __( 'Status changed', 'wp-helpdesk' ),
-							'ticket_assigned' => __( 'Ticket assigned (to the assignee only)', 'wp-helpdesk' ),
+							'ticket_created'  => array(
+								'label'       => __( 'Ticket created', 'wp-helpdesk' ),
+								'description' => __( 'Notifies all admins when a new ticket is submitted.', 'wp-helpdesk' ),
+							),
+							'ticket_replied'  => array(
+								'label'       => __( 'Ticket replied', 'wp-helpdesk' ),
+								'description' => __( 'Notifies all admins when a customer replies to a ticket.', 'wp-helpdesk' ),
+							),
+							'status_changed'  => array(
+								'label'       => __( 'Status changed', 'wp-helpdesk' ),
+								'description' => __( 'Notifies all admins when a ticket status is updated.', 'wp-helpdesk' ),
+							),
+							'ticket_assigned' => array(
+								'label'       => __( 'Ticket assigned', 'wp-helpdesk' ),
+								'description' => __( 'Notifies the assigned user when a ticket is assigned to them.', 'wp-helpdesk' ),
+							),
 						);
-						foreach ( $event_labels as $event_key => $event_label ) :
+						foreach ( $event_labels as $event_key => $event_data ) :
 							?>
 							<label style="display:block;margin-bottom:4px">
 								<input type="checkbox" name="hd_push_ticket_events[]" value="<?php echo esc_attr( $event_key ); ?>" <?php checked( in_array( $event_key, $push_events, true ), true ); ?>>
-								<?php echo esc_html( $event_label ); ?>
+								<?php echo esc_html( $event_data['label'] ); ?>
 							</label>
+							<p class="description" style="margin:0 0 8px 20px"><?php echo esc_html( $event_data['description'] ); ?></p>
 						<?php endforeach; ?>
 					</td>
 				</tr>
