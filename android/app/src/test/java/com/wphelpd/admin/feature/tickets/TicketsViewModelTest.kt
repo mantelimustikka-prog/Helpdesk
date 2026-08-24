@@ -415,26 +415,25 @@ class TicketsViewModelTest {
 
     @Test
     fun submitReply_clearsReplyTextAndRefreshesDetailOnSuccess() = runTest {
-        val viewModel = TicketsViewModel(
-            repository = HelpdeskRepository {
-                FakeHelpdeskAdminApi(
-                    ticketDetailResponse = TicketDetailResponseDto(
-                        success = true,
-                        data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
-                    ),
-                    ticketMessagesResponse = TicketMessagesResponseDto(
-                        items = listOf(
-                            TicketThreadEntryDto(
-                                id = 9201,
-                                authorType = "agent",
-                                authorName = "Support Agent",
-                                body = "This is my reply."
-                            )
-                        )
-                    ),
-                    replyResponse = ReplyResponseDto(success = true)
+        val api = FakeHelpdeskAdminApi(
+            ticketDetailResponse = TicketDetailResponseDto(
+                success = true,
+                data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
+            ),
+            ticketMessagesResponse = TicketMessagesResponseDto(
+                items = listOf(
+                    TicketThreadEntryDto(
+                        id = 9201,
+                        authorType = "agent",
+                        authorName = "Support Agent",
+                        body = "This is my reply."
+                    )
                 )
-            }
+            ),
+            replyResponse = ReplyResponseDto(success = true)
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
         )
 
         viewModel.selectTicket(101)
@@ -448,9 +447,12 @@ class TicketsViewModelTest {
         assertThat(state.replyText).isEmpty()
         assertThat(state.isReplying).isFalse()
         assertThat(state.replyError).isNull()
+        assertThat(state.selectedTicketId).isEqualTo(101)
         assertThat(state.ticketDetail).isNotNull()
         assertThat(state.ticketDetail?.thread).isNotEmpty()
         assertThat(state.ticketDetail?.thread?.single()?.body).isEqualTo("This is my reply.")
+        assertThat(api.ticketDetailRequestsById[101]).isEqualTo(2)
+        assertThat(api.ticketMessagesRequestsById[101]).isEqualTo(2)
     }
 
     @Test
@@ -805,27 +807,26 @@ class TicketsViewModelTest {
 
     @Test
     fun submitNote_clearsNoteTextAndRefreshesDetailOnSuccess() = runTest {
-        val viewModel = TicketsViewModel(
-            repository = HelpdeskRepository {
-                FakeHelpdeskAdminApi(
-                    ticketDetailResponse = TicketDetailResponseDto(
-                        success = true,
-                        data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
-                    ),
-                    ticketMessagesResponse = TicketMessagesResponseDto(
-                        items = listOf(
-                            TicketThreadEntryDto(
-                                id = 9301,
-                                authorType = "agent",
-                                authorName = "Support Agent",
-                                body = "Internal note text.",
-                                isInternal = JsonParser.parseString("true")
-                            )
-                        )
-                    ),
-                    noteResponse = NoteResponseDto(success = true)
+        val api = FakeHelpdeskAdminApi(
+            ticketDetailResponse = TicketDetailResponseDto(
+                success = true,
+                data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
+            ),
+            ticketMessagesResponse = TicketMessagesResponseDto(
+                items = listOf(
+                    TicketThreadEntryDto(
+                        id = 9301,
+                        authorType = "agent",
+                        authorName = "Support Agent",
+                        body = "Internal note text.",
+                        isInternal = JsonParser.parseString("true")
+                    )
                 )
-            }
+            ),
+            noteResponse = NoteResponseDto(success = true)
+        )
+        val viewModel = TicketsViewModel(
+            repository = HelpdeskRepository { api }
         )
 
         viewModel.selectTicket(101)
@@ -839,9 +840,12 @@ class TicketsViewModelTest {
         assertThat(state.noteText).isEmpty()
         assertThat(state.isAddingNote).isFalse()
         assertThat(state.noteError).isNull()
+        assertThat(state.selectedTicketId).isEqualTo(101)
         assertThat(state.ticketDetail).isNotNull()
         assertThat(state.ticketDetail?.thread).isNotEmpty()
         assertThat(state.ticketDetail?.thread?.single()?.isInternal).isTrue()
+        assertThat(api.ticketDetailRequestsById[101]).isEqualTo(2)
+        assertThat(api.ticketMessagesRequestsById[101]).isEqualTo(2)
     }
 
     @Test
@@ -1246,6 +1250,7 @@ private class FakeHelpdeskAdminApi(
     var noteCallCount: Int = 0
         private set
     val ticketDetailRequestsById: MutableMap<Int, Int> = mutableMapOf()
+    val ticketMessagesRequestsById: MutableMap<Int, Int> = mutableMapOf()
 
     override suspend fun authCheck(): AuthCheckResponseDto {
         authThrowable?.let { throw it }
@@ -1281,7 +1286,10 @@ private class FakeHelpdeskAdminApi(
             ?: ticketDetailResponse
     }
 
-    override suspend fun getTicketMessages(id: Int): TicketMessagesResponseDto = ticketMessagesResponse
+    override suspend fun getTicketMessages(id: Int): TicketMessagesResponseDto {
+        ticketMessagesRequestsById[id] = (ticketMessagesRequestsById[id] ?: 0) + 1
+        return ticketMessagesResponse
+    }
 
     override suspend fun replyToTicket(id: Int, request: ReplyRequestDto): ReplyResponseDto {
         replyCallCount += 1
