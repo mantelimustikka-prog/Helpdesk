@@ -241,6 +241,9 @@ private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {
             val objectData = asJsonObject
             parseThreadEntriesFromJson(objectData.get("items"))
                 ?: parseThreadEntriesFromJson(objectData.get("messages"))
+                ?: parseThreadEntriesFromJson(objectData.get("thread"))
+                ?: parseThreadEntriesFromJson(objectData.get("entries"))
+                ?: objectData.get("data")?.takeIf { it.isJsonArray }?.let { parseThreadEntriesFromJson(it) }
         }
         isJsonArray -> parseThreadEntriesFromJson(this)
         else -> null
@@ -258,9 +261,13 @@ private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEn
             ?: return@mapNotNull null
         val authorType = payload.stringOrNull("author_type")
             ?: payload.stringOrNull("authorType")
+            // "type" is accepted as an alias when author_type/authorType are absent.
+            // Expected values: "agent", "customer".
+            ?: payload.stringOrNull("type")
             ?: return@mapNotNull null
         val body = payload.stringOrNull("body")
             ?: payload.stringOrNull("message")
+            ?: payload.stringOrNull("content")
             ?: return@mapNotNull null
         TicketThreadEntryDto(
             id = id,
@@ -272,6 +279,7 @@ private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEn
                 ?: payload.stringOrNull("createdAt"),
             isInternal = payload.primitiveOrNull("is_internal")
                 ?: payload.primitiveOrNull("isInternal")
+                ?: payload.primitiveOrNull("internal")
         )
     }.ifEmpty { null }
 }
@@ -322,6 +330,9 @@ private fun JsonElement?.debugShape(): String = when {
     isJsonObject -> when {
         asJsonObject.get("items")?.isJsonArray == true -> "data.items"
         asJsonObject.get("messages")?.isJsonArray == true -> "data.messages"
+        asJsonObject.get("thread")?.isJsonArray == true -> "data.thread"
+        asJsonObject.get("entries")?.isJsonArray == true -> "data.entries"
+        asJsonObject.get("data")?.isJsonArray == true -> "data.data"
         else -> "data.object"
     }
     else -> "data.other"
