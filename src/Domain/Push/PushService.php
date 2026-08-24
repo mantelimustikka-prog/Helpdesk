@@ -7,6 +7,7 @@ namespace WPHelpdesk\Domain\Push;
 
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
+use WPHelpdesk\Support\HelpdeskLogger;
 
 class PushService {
 	protected PushProviderInterface $provider;
@@ -22,21 +23,31 @@ class PushService {
 	 * @return void
 	 */
 	public function notifyNewTicket( array $ticket ): void {
+		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+		HelpdeskLogger::log( 'push.notify_new_ticket', array( 'ticket_id' => $ticket_id ) );
+
 		if ( ! $this->shouldSendEvent( 'ticket_created' ) ) {
 			return;
 		}
 
-		$this->provider->send(
-			$this->getAdminTokens(),
+		$tokens = $this->getAdminTokens();
+		if ( empty( $tokens ) ) {
+			HelpdeskLogger::log( 'push.no_tokens', array( 'event' => 'ticket_created', 'ticket_id' => $ticket_id ) );
+			return;
+		}
+
+		$result = $this->provider->send(
+			$tokens,
 			'New ticket created',
 			(string) ( $ticket['subject'] ?? '' ),
 			array(
 				'event_type'      => 'ticket_created',
-				'ticket_id'       => (int) ( $ticket['id'] ?? 0 ),
-				'deep_link'       => sprintf( 'wphelpd://ticket/%d', (int) ( $ticket['id'] ?? 0 ) ),
-				'notification_id' => sprintf( 'ticket_created:%d', (int) ( $ticket['id'] ?? 0 ) ),
+				'ticket_id'       => $ticket_id,
+				'deep_link'       => sprintf( 'wphelpd://ticket/%d', $ticket_id ),
+				'notification_id' => sprintf( 'ticket_created:%d', $ticket_id ),
 			)
 		);
+		HelpdeskLogger::log( 'push.send_result', array( 'event' => 'ticket_created', 'ticket_id' => $ticket_id, 'success' => $result ) );
 	}
 
 	/**
@@ -47,25 +58,32 @@ class PushService {
 	 * @return void
 	 */
 	public function notifyNewReply( array $ticket, array $message ): void {
+		$ticket_id  = (int) ( $ticket['id'] ?? 0 );
+		$message_id = (int) ( $message['id'] ?? 0 );
+		HelpdeskLogger::log( 'push.notify_new_reply', array( 'ticket_id' => $ticket_id, 'message_id' => $message_id ) );
+
 		if ( ! $this->shouldSendEvent( 'ticket_replied' ) ) {
 			return;
 		}
 
-		$this->provider->send(
-			$this->getAdminTokens(),
+		$tokens = $this->getAdminTokens();
+		if ( empty( $tokens ) ) {
+			HelpdeskLogger::log( 'push.no_tokens', array( 'event' => 'ticket_replied', 'ticket_id' => $ticket_id ) );
+			return;
+		}
+
+		$result = $this->provider->send(
+			$tokens,
 			'New ticket reply',
 			wp_trim_words( wp_strip_all_tags( (string) ( $message['body'] ?? '' ) ), 20 ),
 			array(
 				'event_type'      => 'ticket_replied',
-				'ticket_id'       => (int) ( $ticket['id'] ?? 0 ),
-				'deep_link'       => sprintf( 'wphelpd://ticket/%d', (int) ( $ticket['id'] ?? 0 ) ),
-				'notification_id' => sprintf(
-					'ticket_replied:%d:%d',
-					(int) ( $ticket['id'] ?? 0 ),
-					(int) ( $message['id'] ?? 0 )
-				),
+				'ticket_id'       => $ticket_id,
+				'deep_link'       => sprintf( 'wphelpd://ticket/%d', $ticket_id ),
+				'notification_id' => sprintf( 'ticket_replied:%d:%d', $ticket_id, $message_id ),
 			)
 		);
+		HelpdeskLogger::log( 'push.send_result', array( 'event' => 'ticket_replied', 'ticket_id' => $ticket_id, 'success' => $result ) );
 	}
 
 	/**
@@ -76,14 +94,21 @@ class PushService {
 	 * @return void
 	 */
 	public function notifyStatusChanged( array $ticket, string $new_status ): void {
+		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+		HelpdeskLogger::log( 'push.notify_status_changed', array( 'ticket_id' => $ticket_id, 'new_status' => $new_status ) );
+
 		if ( ! $this->shouldSendEvent( 'status_changed' ) ) {
 			return;
 		}
 
-		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+		$tokens = $this->getAdminTokens();
+		if ( empty( $tokens ) ) {
+			HelpdeskLogger::log( 'push.no_tokens', array( 'event' => 'status_changed', 'ticket_id' => $ticket_id ) );
+			return;
+		}
 
-		$this->provider->send(
-			$this->getAdminTokens(),
+		$result = $this->provider->send(
+			$tokens,
 			'Ticket status changed',
 			sprintf( 'Ticket %s is now %s.', (string) ( $ticket['ticket_no'] ?? '' ), $new_status ),
 			array(
@@ -93,6 +118,7 @@ class PushService {
 				'notification_id' => sprintf( 'status_changed:%d:%s', $ticket_id, sanitize_key( $new_status ) ),
 			)
 		);
+		HelpdeskLogger::log( 'push.send_result', array( 'event' => 'status_changed', 'ticket_id' => $ticket_id, 'success' => $result ) );
 	}
 
 	/**
@@ -103,14 +129,21 @@ class PushService {
 	 * @return void
 	 */
 	public function notifyAssigned( array $ticket, int $assigned_to ): void {
+		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+		HelpdeskLogger::log( 'push.notify_assigned', array( 'ticket_id' => $ticket_id, 'assigned_to' => $assigned_to ) );
+
 		if ( ! $this->isPushEnabled() || ! $this->hasValidConfiguration() ) {
 			return;
 		}
 
-		$ticket_id = (int) ( $ticket['id'] ?? 0 );
+		$tokens = $this->getUserTokens( $assigned_to );
+		if ( empty( $tokens ) ) {
+			HelpdeskLogger::log( 'push.no_tokens', array( 'event' => 'ticket_assigned', 'ticket_id' => $ticket_id, 'assigned_to' => $assigned_to ) );
+			return;
+		}
 
-		$this->provider->send(
-			$this->getUserTokens( $assigned_to ),
+		$result = $this->provider->send(
+			$tokens,
 			'Ticket assigned',
 			sprintf( 'Ticket %s has been assigned to you.', (string) ( $ticket['ticket_no'] ?? '' ) ),
 			array(
@@ -120,6 +153,7 @@ class PushService {
 				'notification_id' => sprintf( 'ticket_assigned:%d:%d', $ticket_id, $assigned_to ),
 			)
 		);
+		HelpdeskLogger::log( 'push.send_result', array( 'event' => 'ticket_assigned', 'ticket_id' => $ticket_id, 'success' => $result ) );
 	}
 
 	/**
@@ -140,7 +174,10 @@ class PushService {
 			$tokens = array_merge( $tokens, $this->getUserTokens( (int) $user_id ) );
 		}
 
-		return array_values( array_unique( $tokens ) );
+		$tokens = array_values( array_unique( $tokens ) );
+		HelpdeskLogger::log( 'push.admin_tokens', array( 'count' => count( $tokens ) ) );
+
+		return $tokens;
 	}
 
 	/**
@@ -172,12 +209,23 @@ class PushService {
 	 * @return bool
 	 */
 	protected function shouldSendEvent( string $event ): bool {
-		if ( ! $this->isPushEnabled() || ! $this->hasValidConfiguration() ) {
+		if ( ! $this->isPushEnabled() ) {
+			HelpdeskLogger::log( 'push.blocked', array( 'reason' => 'push_disabled', 'event' => $event ) );
+			return false;
+		}
+
+		if ( ! $this->hasValidConfiguration() ) {
+			HelpdeskLogger::log( 'push.blocked', array( 'reason' => 'invalid_configuration', 'event' => $event ) );
 			return false;
 		}
 
 		$events = (array) get_site_option( Constants::OPTION_PUSH_TICKET_EVENTS, array() );
-		return in_array( $event, $events, true );
+		if ( ! in_array( $event, $events, true ) ) {
+			HelpdeskLogger::log( 'push.blocked', array( 'reason' => 'event_not_in_allowlist', 'event' => $event ) );
+			return false;
+		}
+
+		return true;
 	}
 
 	/**

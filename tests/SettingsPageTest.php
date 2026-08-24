@@ -253,6 +253,40 @@ final class SettingsPageTest extends TestCase {
 		self::assertSame( '#000000', $GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR ] );
 	}
 
+	public function testIntegrationsSavePersistsPushTicketEvents(): void {
+		$this->submit(
+			'integrations',
+			array(
+				'hd_push_enabled'       => '1',
+				'hd_push_ticket_events' => array( 'ticket_created', 'ticket_replied', 'status_changed', 'ticket_assigned' ),
+				'hd_fcm_mode'           => 'legacy',
+			)
+		);
+
+		self::assertSame( 1, $GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ] );
+		$saved_events = $GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ];
+		self::assertContains( 'ticket_created', $saved_events );
+		self::assertContains( 'ticket_replied', $saved_events );
+		self::assertContains( 'status_changed', $saved_events );
+		self::assertContains( 'ticket_assigned', $saved_events );
+	}
+
+	public function testIntegrationsSaveRejectsUnknownPushEvents(): void {
+		$this->submit(
+			'integrations',
+			array(
+				'hd_push_enabled'       => '1',
+				'hd_push_ticket_events' => array( 'ticket_created', 'bogus_event', 'ticket_deleted' ),
+				'hd_fcm_mode'           => 'legacy',
+			)
+		);
+
+		$saved_events = $GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ] ?? array();
+		self::assertContains( 'ticket_created', $saved_events );
+		self::assertNotContains( 'bogus_event', $saved_events );
+		self::assertNotContains( 'ticket_deleted', $saved_events );
+	}
+
 	/**
 	 * @param array<string, string> $post
 	 */

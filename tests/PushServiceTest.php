@@ -213,4 +213,84 @@ final class PushServiceTest extends TestCase {
 		self::assertSame( 'wphelpd://ticket/12', $provider->calls[0]['data']['deep_link'] );
 		self::assertSame( 'ticket_assigned:12:77', $provider->calls[0]['data']['notification_id'] );
 	}
+
+	public function testEmptyAdminTokensSkipsProviderCall(): void {
+		$provider = new class implements PushProviderInterface {
+			public int $calls = 0;
+
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				++$this->calls;
+				return true;
+			}
+		};
+
+		// Override getAdminTokens to return an empty list.
+		$service = new class( $provider ) extends PushService {
+			protected function getAdminTokens(): array {
+				return array();
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ]             = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ]       = array( 'ticket_created' );
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]                 = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ]           = 'key';
+
+		$service->notifyNewTicket( array( 'id' => 99, 'subject' => 'Test' ) );
+
+		self::assertSame( 0, $provider->calls, 'Provider must not be called when there are no device tokens.' );
+	}
+
+	public function testEmptyAssigneeTokensSkipsProviderCall(): void {
+		$provider = new class implements PushProviderInterface {
+			public int $calls = 0;
+
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				++$this->calls;
+				return true;
+			}
+		};
+
+		// Override getUserTokens to return no tokens for the assignee.
+		$service = new class( $provider ) extends PushService {
+			protected function getUserTokens( int $user_id ): array {
+				return array();
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ]             = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]                 = 'v1';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_PROJECT_ID ]           = 'proj';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] = '{"client_email":"a@b.test"}';
+
+		$service->notifyAssigned( array( 'id' => 5, 'ticket_no' => 'HD-5' ), 42 );
+
+		self::assertSame( 0, $provider->calls, 'Provider must not be called when the assignee has no device tokens.' );
+	}
+
+	public function testEventNotInAllowlistBlocksSend(): void {
+		$provider = new class implements PushProviderInterface {
+			public int $calls = 0;
+
+			public function send( array $device_tokens, string $title, string $body, array $data = array() ): bool {
+				++$this->calls;
+				return true;
+			}
+		};
+
+		$service = new class( $provider ) extends PushService {
+			protected function getAdminTokens(): array {
+				return array( 'tok' );
+			}
+		};
+
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ]             = 1;
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ]       = array( 'ticket_replied' ); // ticket_created absent.
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]                 = 'legacy';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ]           = 'key';
+
+		$service->notifyNewTicket( array( 'id' => 7, 'subject' => 'Hello' ) );
+
+		self::assertSame( 0, $provider->calls, 'Provider must not be called when the event is not in the allowlist.' );
+	}
 }
