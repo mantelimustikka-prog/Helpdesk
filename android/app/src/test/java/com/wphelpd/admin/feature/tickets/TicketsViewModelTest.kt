@@ -1,6 +1,7 @@
 package com.wphelpd.admin.feature.tickets
 
 import com.google.common.truth.Truth.assertThat
+import com.google.gson.JsonParser
 import com.wphelpd.admin.core.config.ServerConfigRepository
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.data.api.HelpdeskAdminApi
@@ -421,6 +422,16 @@ class TicketsViewModelTest {
                         success = true,
                         data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
                     ),
+                    ticketMessagesResponse = TicketMessagesResponseDto(
+                        items = listOf(
+                            TicketThreadEntryDto(
+                                id = 9201,
+                                authorType = "agent",
+                                authorName = "Support Agent",
+                                body = "This is my reply."
+                            )
+                        )
+                    ),
                     replyResponse = ReplyResponseDto(success = true)
                 )
             }
@@ -438,6 +449,8 @@ class TicketsViewModelTest {
         assertThat(state.isReplying).isFalse()
         assertThat(state.replyError).isNull()
         assertThat(state.ticketDetail).isNotNull()
+        assertThat(state.ticketDetail?.thread).isNotEmpty()
+        assertThat(state.ticketDetail?.thread?.single()?.body).isEqualTo("This is my reply.")
     }
 
     @Test
@@ -799,6 +812,17 @@ class TicketsViewModelTest {
                         success = true,
                         data = TicketDetailDto(id = 101, ticketNo = "HD-000101", subject = "Login issue", status = "open")
                     ),
+                    ticketMessagesResponse = TicketMessagesResponseDto(
+                        items = listOf(
+                            TicketThreadEntryDto(
+                                id = 9301,
+                                authorType = "agent",
+                                authorName = "Support Agent",
+                                body = "Internal note text.",
+                                isInternal = JsonParser.parseString("true")
+                            )
+                        )
+                    ),
                     noteResponse = NoteResponseDto(success = true)
                 )
             }
@@ -816,6 +840,8 @@ class TicketsViewModelTest {
         assertThat(state.isAddingNote).isFalse()
         assertThat(state.noteError).isNull()
         assertThat(state.ticketDetail).isNotNull()
+        assertThat(state.ticketDetail?.thread).isNotEmpty()
+        assertThat(state.ticketDetail?.thread?.single()?.isInternal).isTrue()
     }
 
     @Test

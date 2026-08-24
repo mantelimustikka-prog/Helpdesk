@@ -30,7 +30,7 @@ data class ReplyResultDto(
     @SerializedName("author_type") val authorType: String? = null,
     @SerializedName("author_name") val authorName: String? = null,
     @SerializedName("body") val body: String? = null,
-    @SerializedName("is_internal") val isInternal: Int? = null
+    @SerializedName("is_internal") val isInternal: JsonElement? = null
 ) {
     fun toThreadEntryOrNull(): TicketThreadEntry? {
         if (id == null || authorType == null || body == null) {
@@ -42,7 +42,7 @@ data class ReplyResultDto(
             authorName = authorName,
             body = body,
             createdAt = createdAt,
-            isInternal = isInternal == 1
+            isInternal = isInternal.toInternalFlag()
         )
     }
 }
@@ -58,7 +58,7 @@ data class ReplyResponseDto(
     @SerializedName("author_type") val authorType: String? = null,
     @SerializedName("author_name") val authorName: String? = null,
     @SerializedName("body") val body: String? = null,
-    @SerializedName("is_internal") val isInternal: Int? = null
+    @SerializedName("is_internal") val isInternal: JsonElement? = null
 ) {
     fun requireResult(): ReplyResultDto {
         check(success != false) { message ?: "Reply failed." }
@@ -106,7 +106,7 @@ data class NoteResultDto(
     @SerializedName("author_type") val authorType: String? = null,
     @SerializedName("author_name") val authorName: String? = null,
     @SerializedName("body") val body: String? = null,
-    @SerializedName("is_internal") val isInternal: Int? = null,
+    @SerializedName("is_internal") val isInternal: JsonElement? = null,
     @SerializedName("created_at") val createdAt: String? = null
 ) {
     fun toThreadEntryOrNull(): TicketThreadEntry? {
@@ -134,7 +134,7 @@ data class NoteResponseDto(
     @SerializedName("author_type") val authorType: String? = null,
     @SerializedName("author_name") val authorName: String? = null,
     @SerializedName("body") val body: String? = null,
-    @SerializedName("is_internal") val isInternal: Int? = null,
+    @SerializedName("is_internal") val isInternal: JsonElement? = null,
     @SerializedName("created_at") val createdAt: String? = null
 ) {
     fun requireResult(): NoteResultDto {
@@ -230,4 +230,18 @@ private fun JsonObject.primitiveOrNull(name: String): JsonElement? {
     val value = get(name) ?: return null
     if (value.isJsonNull || !value.isJsonPrimitive) return null
     return value
+}
+
+private fun JsonElement?.toInternalFlag(): Boolean {
+    if (this == null || isJsonNull || !isJsonPrimitive) return false
+    val primitive = asJsonPrimitive
+    return when {
+        primitive.isBoolean -> primitive.asBoolean
+        primitive.isNumber -> runCatching { primitive.asInt != 0 }.getOrDefault(false)
+        primitive.isString -> {
+            val normalized = primitive.asString.trim()
+            normalized == "1" || normalized.equals("true", ignoreCase = true)
+        }
+        else -> false
+    }
 }
