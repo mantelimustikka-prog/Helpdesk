@@ -550,6 +550,20 @@ private fun ConversationSection(thread: List<TicketThreadEntry>, appearanceColor
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Conversation", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "TEMP DEBUG: thread size = ${thread.size}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (thread.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "TEMP DEBUG: first author = ${thread.first().authorType}, preview = ${thread.first().body.take(40)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (thread.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("No messages yet.", style = MaterialTheme.typography.bodySmall)
