@@ -26,6 +26,12 @@ class LogsPage {
 			return;
 		}
 
+		// Only act when we're on the logs page.
+		$page = isset( $_GET['page'] ) ? sanitize_key( (string) $_GET['page'] ) : '';
+		if ( 'wp-helpdesk-logs' !== $page ) {
+			return;
+		}
+
 		if ( ! current_user_can( 'hd_manage_tickets' ) ) {
 			wp_die( esc_html__( 'You do not have permission to perform this action.', 'wp-helpdesk' ) );
 		}
@@ -169,8 +175,8 @@ class LogsPage {
 						<tbody>
 							<?php foreach ( $entries as $entry ) : ?>
 								<?php
-								$ts        = esc_html( (string) ( $entry['timestamp'] ?? '' ) );
-								$act       = esc_html( (string) ( $entry['action'] ?? '' ) );
+								$ts        = (string) ( $entry['timestamp'] ?? '' );
+								$act       = (string) ( $entry['action'] ?? '' );
 								$tid       = isset( $entry['ticket_id'] ) ? (int) $entry['ticket_id'] : '—';
 								$uid       = isset( $entry['user_id'] ) ? (int) $entry['user_id'] : '—';
 								$extra     = $entry;
@@ -224,6 +230,12 @@ class LogsPage {
 	 */
 	public function maybeServeDownload(): void {
 		if ( ! isset( $_GET['hd_logs_download'] ) ) {
+			return;
+		}
+
+		// Only act when we're on the logs page.
+		$page = isset( $_GET['page'] ) ? sanitize_key( (string) $_GET['page'] ) : '';
+		if ( 'wp-helpdesk-logs' !== $page ) {
 			return;
 		}
 
