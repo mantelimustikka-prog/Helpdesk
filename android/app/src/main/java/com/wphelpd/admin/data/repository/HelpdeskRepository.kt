@@ -1,7 +1,5 @@
 package com.wphelpd.admin.data.repository
 
-import android.util.Log
-
 import com.wphelpd.admin.core.network.ApiClientFactory
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.core.network.NetworkResult
@@ -23,7 +21,6 @@ class HelpdeskRepository(
     private val apiProvider: (AuthConfig) -> HelpdeskAdminApi = ApiClientFactory::create
 ) {
     companion object {
-        private const val TEMP_DEBUG_TAG = "HelpdeskTempDebug"
         val statusOptions: List<String> = listOf(
             "new",
             "pending_agent_reply",
@@ -70,10 +67,6 @@ class HelpdeskRepository(
         val api = apiProvider(config)
         val detail = api.getTicket(ticketId).toTicketDetail()
         if (detail.thread.isNotEmpty()) {
-            Log.d(
-                TEMP_DEBUG_TAG,
-                "TEMP DEBUG: fetchTicketDetail ticketId=$ticketId fallbackMessages=false embeddedThreadCount=${detail.thread.size}"
-            )
             detail
         } else {
             val thread = try {
@@ -81,21 +74,7 @@ class HelpdeskRepository(
             } catch (throwable: CancellationException) {
                 throw throwable
             } catch (throwable: Throwable) {
-                Log.w(
-                    TEMP_DEBUG_TAG,
-                    "TEMP DEBUG: fetchTicketDetail ticketId=$ticketId fallbackMessages=true embeddedThreadCount=0 fallbackFetchFailed=${throwable::class.java.simpleName}"
-                )
                 return@execute detail
-            }
-            Log.d(
-                TEMP_DEBUG_TAG,
-                "TEMP DEBUG: fetchTicketDetail ticketId=$ticketId fallbackMessages=true embeddedThreadCount=0 fallbackThreadCount=${thread.size}"
-            )
-            if (thread.isEmpty() && detail.ticket.messageCount > 0) {
-                Log.w(
-                    TEMP_DEBUG_TAG,
-                    "TEMP DEBUG: fetchTicketDetail ticketId=$ticketId expectedMessages=${detail.ticket.messageCount} but both embedded and fallback thread payloads were empty"
-                )
             }
             detail.copy(thread = thread)
         }
