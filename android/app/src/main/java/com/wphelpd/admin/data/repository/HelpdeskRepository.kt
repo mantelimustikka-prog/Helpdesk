@@ -91,6 +91,12 @@ class HelpdeskRepository(
                 TEMP_DEBUG_TAG,
                 "TEMP DEBUG: fetchTicketDetail ticketId=$ticketId fallbackMessages=true embeddedThreadCount=0 fallbackThreadCount=${thread.size}"
             )
+            if (thread.isEmpty() && detail.ticket.messageCount > 0) {
+                Log.w(
+                    TEMP_DEBUG_TAG,
+                    "TEMP DEBUG: fetchTicketDetail ticketId=$ticketId expectedMessages=${detail.ticket.messageCount} but both embedded and fallback thread payloads were empty"
+                )
+            }
             detail.copy(thread = thread)
         }
     }
