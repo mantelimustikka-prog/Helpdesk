@@ -203,6 +203,7 @@ final class PushServiceTest extends TestCase {
 		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_MODE ]     = 'v1';
 		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_PROJECT_ID ] = 'project-id';
 		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] = '{"client_email":"bot@example.test"}';
+		$GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ] = array( 'ticket_assigned' );
 
 		$service->notifyAssigned( array( 'id' => 12, 'ticket_no' => 'HD-12' ), 77 );
 

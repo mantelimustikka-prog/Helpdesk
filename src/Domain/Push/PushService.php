@@ -136,6 +136,10 @@ class PushService {
 			return;
 		}
 
+		if ( ! $this->shouldSendEvent( 'ticket_assigned' ) ) {
+			return;
+		}
+
 		$tokens = $this->getUserTokens( $assigned_to );
 		if ( empty( $tokens ) ) {
 			HelpdeskLogger::log( 'push.no_tokens', array( 'event' => 'ticket_assigned', 'ticket_id' => $ticket_id, 'assigned_to' => $assigned_to ) );
