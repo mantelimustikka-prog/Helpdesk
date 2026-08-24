@@ -1,6 +1,7 @@
 package com.wphelpd.admin.data.api.dto
 
 import com.google.common.truth.Truth.assertThat
+import com.google.gson.Gson
 import com.google.gson.JsonParser
 import org.junit.Test
 
@@ -65,6 +66,42 @@ class TicketMessagesResponseDtoTest {
         assertThat(thread).hasSize(1)
         assertThat(thread.single().id).isEqualTo(1011)
         assertThat(thread.single().body).isEqualTo("From messages.")
+    }
+
+    @Test
+    fun toThread_usesTopLevelMessagesWhenTopLevelItemsContainOnlyInvalidRows() {
+        val response = Gson().fromJson(
+            """
+            {
+              "success": true,
+              "items": [
+                {
+                  "id": 1012,
+                  "body": "Missing author_type row should be skipped."
+                }
+              ],
+              "messages": [
+                {
+                  "id": 1013,
+                  "author_type": "customer",
+                  "author_name": "Customer",
+                  "body": "Valid top-level messages fallback.",
+                  "created_at": "2026-08-22T13:10:00Z",
+                  "is_internal": 0
+                }
+              ]
+            }
+            """.trimIndent(),
+            TicketMessagesResponseDto::class.java
+        )
+
+        val thread = response.toThread()
+
+        assertThat(thread).hasSize(1)
+        assertThat(thread.single().id).isEqualTo(1013)
+        assertThat(thread.single().body).isEqualTo("Valid top-level messages fallback.")
+        assertThat(thread.single().createdAt).isEqualTo("2026-08-22T13:10:00Z")
+        assertThat(thread.single().isInternal).isFalse()
     }
 
     @Test
