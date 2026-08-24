@@ -111,12 +111,12 @@ data class TicketCustomerDto(
 )
 
 data class TicketThreadEntryDto(
-    @SerializedName("id") val id: Int,
-    @SerializedName("author_type") val authorType: String,
-    @SerializedName("author_name") val authorName: String? = null,
-    @SerializedName("body") val body: String,
-    @SerializedName("created_at") val createdAt: String? = null,
-    @SerializedName("is_internal") val isInternal: Int? = null
+    @SerializedName(value = "id", alternate = ["message_id"]) val id: Int,
+    @SerializedName(value = "author_type", alternate = ["authorType"]) val authorType: String,
+    @SerializedName(value = "author_name", alternate = ["authorName"]) val authorName: String? = null,
+    @SerializedName(value = "body", alternate = ["message"]) val body: String,
+    @SerializedName(value = "created_at", alternate = ["createdAt"]) val createdAt: String? = null,
+    @SerializedName(value = "is_internal", alternate = ["isInternal"]) val isInternal: Int? = null
 ) {
     fun toModel(): TicketThreadEntry = TicketThreadEntry(
         id = id,

@@ -183,26 +183,40 @@ private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEn
     return entries.mapNotNull { entry ->
         if (!entry.isJsonObject) return@mapNotNull null
         val payload = entry.asJsonObject
-        val id = payload.intOrNull("id") ?: return@mapNotNull null
-        val authorType = payload.stringOrNull("author_type") ?: return@mapNotNull null
-        val body = payload.stringOrNull("body") ?: return@mapNotNull null
+        val id = payload.intOrNull("id")
+            ?: payload.intOrNull("message_id")
+            ?: return@mapNotNull null
+        val authorType = payload.stringOrNull("author_type")
+            ?: payload.stringOrNull("authorType")
+            ?: return@mapNotNull null
+        val body = payload.stringOrNull("body")
+            ?: payload.stringOrNull("message")
+            ?: return@mapNotNull null
         TicketThreadEntryDto(
             id = id,
             authorType = authorType,
-            authorName = payload.stringOrNull("author_name"),
+            authorName = payload.stringOrNull("author_name")
+                ?: payload.stringOrNull("authorName"),
             body = body,
-            createdAt = payload.stringOrNull("created_at"),
+            createdAt = payload.stringOrNull("created_at")
+                ?: payload.stringOrNull("createdAt"),
             isInternal = payload.intOrNull("is_internal")
+                ?: payload.intOrNull("isInternal")
         )
     }.ifEmpty { null }
 }
 
 private fun JsonObject.stringOrNull(name: String): String? {
     val value = get(name) ?: return null
-    return if (value.isJsonNull) null else value.asString
+    if (value.isJsonNull || !value.isJsonPrimitive) return null
+    return runCatching { value.asString }.getOrNull()
 }
 
 private fun JsonObject.intOrNull(name: String): Int? {
     val value = get(name) ?: return null
-    return if (value.isJsonNull) null else value.asInt
+    if (value.isJsonNull || !value.isJsonPrimitive) return null
+    return when {
+        value.asJsonPrimitive.isBoolean -> if (value.asBoolean) 1 else 0
+        else -> runCatching { value.asInt }.getOrNull()
+    }
 }

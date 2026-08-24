@@ -425,6 +425,56 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_fallsBackToCamelCaseWrappedItemsPayload() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "items": [
+                            {
+                              "message_id": "8205",
+                              "authorType": "agent",
+                              "authorName": "Admin User",
+                              "message": "Mapped from camelCase payload.",
+                              "createdAt": "2026-08-22T12:46:00Z",
+                              "isInternal": true
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        val entry = detail.thread.single()
+        assertThat(entry.id).isEqualTo(8205)
+        assertThat(entry.authorType).isEqualTo("agent")
+        assertThat(entry.authorName).isEqualTo("Admin User")
+        assertThat(entry.body).isEqualTo("Mapped from camelCase payload.")
+        assertThat(entry.createdAt).isEqualTo("2026-08-22T12:46:00Z")
+        assertThat(entry.isInternal).isTrue()
+    }
+
+    @Test
     fun fetchTicketDetail_mapsFlatResponseMessagesAndAttachments() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(
