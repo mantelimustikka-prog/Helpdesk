@@ -29,10 +29,10 @@ final class NetworkMenuTest extends TestCase {
 
 		$inline_css = (string) ( $GLOBALS['wp_inline_styles']['wp-helpdesk-admin'] ?? '' );
 
-		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--new{background-color:#112233 !important;}', $inline_css );
-		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--pending_agent_reply{background-color:#445566 !important;}', $inline_css );
-		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--pending_client_reply{background-color:#778899 !important;}', $inline_css );
-		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--resolved{background-color:#aabbcc !important;}', $inline_css );
-		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--closed{background-color:#ddee00 !important;}', $inline_css );
+		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--new{background-color:#112233 !important;color:#000000 !important;}', $inline_css );
+		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--pending_agent_reply{background-color:#445566 !important;color:#000000 !important;}', $inline_css );
+		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--pending_client_reply{background-color:#778899 !important;color:#000000 !important;}', $inline_css );
+		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--resolved{background-color:#aabbcc !important;color:#000000 !important;}', $inline_css );
+		self::assertStringContainsString( '.hd-admin-wrap .hd-status-badge--closed{background-color:#ddee00 !important;color:#000000 !important;}', $inline_css );
 	}
 }

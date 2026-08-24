@@ -140,7 +140,7 @@ class NetworkMenu {
 		foreach ( $status_option_map as $canonical => $option_key ) {
 			$color = sanitize_hex_color( (string) get_site_option( $option_key, '' ) );
 			if ( $color ) {
-				$inline_css .= '.hd-admin-wrap .hd-status-badge--' . $canonical . '{background-color:' . $color . ' !important;}';
+				$inline_css .= '.hd-admin-wrap .hd-status-badge--' . $canonical . '{background-color:' . $color . ' !important;color:#000000 !important;}';
 			}
 		}
 		if ( $inline_css ) {
