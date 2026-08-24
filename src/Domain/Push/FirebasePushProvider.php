@@ -6,6 +6,7 @@
 namespace WPHelpdesk\Domain\Push;
 
 use WPHelpdesk\Support\Constants;
+use WPHelpdesk\Support\HelpdeskLogger;
 
 class FirebasePushProvider implements PushProviderInterface {
 
@@ -45,9 +46,11 @@ class FirebasePushProvider implements PushProviderInterface {
 		}
 
 		if ( 'v1' === $this->mode ) {
+			HelpdeskLogger::log( 'push.fcm_mode', array( 'mode' => 'v1', 'token_count' => count( $device_tokens ) ) );
 			return $this->sendV1( $device_tokens, $title, $body, $data );
 		}
 
+		HelpdeskLogger::log( 'push.fcm_mode', array( 'mode' => 'legacy', 'token_count' => count( $device_tokens ) ) );
 		return $this->sendLegacy( $device_tokens, $title, $body, $data );
 	}
 
@@ -100,13 +103,17 @@ class FirebasePushProvider implements PushProviderInterface {
 	private function sendV1( array $device_tokens, string $title, string $body, array $data ): bool {
 		$project_id = trim( $this->project_id );
 		if ( '' === $project_id ) {
-			error_log( 'WP Helpdesk Push: FCM v1 requires a project ID.' );
+			$msg = 'WP Helpdesk Push: FCM v1 requires a project ID.';
+			error_log( $msg );
+			HelpdeskLogger::log( 'push.fcm_error', array( 'error' => 'missing_project_id' ) );
 			return false;
 		}
 
 		$bearer = $this->getAccessToken();
 		if ( null === $bearer ) {
-			error_log( 'WP Helpdesk Push: Unable to obtain FCM OAuth2 access token.' );
+			$msg = 'WP Helpdesk Push: Unable to obtain FCM OAuth2 access token.';
+			error_log( $msg );
+			HelpdeskLogger::log( 'push.fcm_error', array( 'error' => 'oauth2_token_unavailable' ) );
 			return false;
 		}
 
@@ -138,14 +145,18 @@ class FirebasePushProvider implements PushProviderInterface {
 			);
 
 			if ( is_wp_error( $response ) ) {
-				error_log( 'WP Helpdesk Push: FCM v1 request error – ' . $response->get_error_message() );
+				$err_msg = 'WP Helpdesk Push: FCM v1 request error – ' . $response->get_error_message();
+				error_log( $err_msg );
+				HelpdeskLogger::log( 'push.fcm_error', array( 'error' => 'wp_error', 'token_prefix' => substr( $token, 0, 8 ), 'message' => $response->get_error_message() ) );
 				$success = false;
 				continue;
 			}
 
 			$code = (int) wp_remote_retrieve_response_code( $response );
 			if ( 200 !== $code ) {
-				error_log( sprintf( 'WP Helpdesk Push: FCM v1 returned HTTP %d for token %s', $code, substr( $token, 0, 8 ) ) );
+				$err_msg = sprintf( 'WP Helpdesk Push: FCM v1 returned HTTP %d for token %s', $code, substr( $token, 0, 8 ) );
+				error_log( $err_msg );
+				HelpdeskLogger::log( 'push.fcm_error', array( 'error' => 'http_error', 'http_code' => $code, 'token_prefix' => substr( $token, 0, 8 ) ) );
 				$success = false;
 			}
 		}

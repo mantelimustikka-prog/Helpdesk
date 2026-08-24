@@ -19,7 +19,7 @@ class SettingsPage {
 	private const VALID_TIMEZONE_MODES = array( 'network', 'site', 'utc' );
 	private const VALID_DATE_FORMATS   = array( 'wp_default', 'iso8601' );
 	private const VALID_FCM_MODES      = array( 'legacy', 'v1' );
-	private const VALID_PUSH_EVENTS    = array( 'ticket_created', 'ticket_replied', 'status_changed' );
+	private const VALID_PUSH_EVENTS    = array( 'ticket_created', 'ticket_replied', 'status_changed', 'ticket_assigned' );
 
 	/**
 	 * Handle settings form submissions.
@@ -790,14 +790,15 @@ class SettingsPage {
 				</tr>
 			</table>
 
-			<h2><?php esc_html_e( 'Push Notifications (FCM)', 'wp-helpdesk' ); ?></h2>
+			<h2><?php esc_html_e( 'Push Notifications (Android App – FCM)', 'wp-helpdesk' ); ?></h2>
+			<p class="description"><?php esc_html_e( 'Push notifications are delivered exclusively to the WP Helpdesk Android app via Firebase Cloud Messaging (FCM).', 'wp-helpdesk' ); ?></p>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><?php esc_html_e( 'Enable Push', 'wp-helpdesk' ); ?></th>
 					<td>
 						<label>
 							<input type="checkbox" name="hd_push_enabled" value="1" <?php checked( $push_enabled, 1 ); ?>>
-							<?php esc_html_e( 'Enable push notifications', 'wp-helpdesk' ); ?>
+							<?php esc_html_e( 'Enable push notifications for the Android app', 'wp-helpdesk' ); ?>
 						</label>
 					</td>
 				</tr>
@@ -839,6 +840,7 @@ class SettingsPage {
 							'ticket_created' => __( 'Ticket created', 'wp-helpdesk' ),
 							'ticket_replied' => __( 'Ticket replied', 'wp-helpdesk' ),
 							'status_changed' => __( 'Status changed', 'wp-helpdesk' ),
+							'ticket_assigned' => __( 'Ticket assigned (to the assignee only)', 'wp-helpdesk' ),
 						);
 						foreach ( $event_labels as $event_key => $event_label ) :
 							?>
