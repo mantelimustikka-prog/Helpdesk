@@ -24,7 +24,10 @@ data class TicketDetailResponseDto(
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("updated_at") val updatedAt: String? = null,
     @SerializedName("message_count") val messageCount: Int? = null,
-    @SerializedName("messages") val messages: List<TicketThreadEntryDto>? = null,
+    @SerializedName(
+        value = "messages",
+        alternate = ["thread", "conversation"]
+    ) val messages: List<TicketThreadEntryDto>? = null,
     @SerializedName("attachments") val attachments: List<TicketAttachmentDto>? = null
 ) {
     fun toTicketDetail(): TicketDetail {
@@ -66,7 +69,10 @@ data class TicketDetailDto(
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("updated_at") val updatedAt: String? = null,
     @SerializedName("message_count") val messageCount: Int = 0,
-    @SerializedName("messages") val messages: List<TicketThreadEntryDto>? = null,
+    @SerializedName(
+        value = "messages",
+        alternate = ["thread", "conversation"]
+    ) val messages: List<TicketThreadEntryDto>? = null,
     @SerializedName("attachments") val attachments: List<TicketAttachmentDto>? = null
 ) {
     fun toModel(): TicketDetail {

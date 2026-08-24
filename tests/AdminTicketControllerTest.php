@@ -189,6 +189,47 @@ final class AdminTicketControllerTest extends TestCase {
 		self::assertSame( 'Where is my order?', $response->data['items'][0]['body'] );
 	}
 
+	public function testGetTicketAndGetMessagesExposeSameNormalizedRows(): void {
+		$ticket = array(
+			'id'        => 44,
+			'ticket_no' => 'HD-000044',
+			'subject'   => 'Parity check',
+			'status'    => 'open',
+		);
+		$messages = array(
+			array(
+				'id'             => 601,
+				'ticket_id'      => 44,
+				'author_user_id' => 0,
+				'author_type'    => 'guest',
+				'body'           => 'Public message',
+				'is_internal'    => 0,
+				'created_at'     => '2026-08-24 09:00:00',
+			),
+			array(
+				'id'             => 602,
+				'ticket_id'      => 44,
+				'author_user_id' => 7,
+				'author_type'    => 'agent',
+				'body'           => 'Internal follow-up',
+				'is_internal'    => 1,
+				'created_at'     => '2026-08-24 09:10:00',
+			),
+		);
+		$GLOBALS['wp_users_index'][7] = (object) array( 'display_name' => 'Agent Smith' );
+
+		$controller = new FakeAdminTicketController( $ticket, $messages );
+		$request    = new WP_REST_Request();
+		$request['id'] = 44;
+
+		$ticket_response   = $controller->getTicket( $request );
+		$messages_response = $controller->getMessages( $request );
+
+		self::assertSame( 200, $ticket_response->status );
+		self::assertSame( 200, $messages_response->status );
+		self::assertSame( $ticket_response->data['data']['messages'], $messages_response->data['items'] );
+	}
+
 	public function testReplyReturnsWrappedNormalizedMessage(): void {
 		global $wpdb;
 
