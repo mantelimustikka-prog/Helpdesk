@@ -203,4 +203,188 @@ class TicketMessagesResponseDtoTest {
         assertThat(entry.createdAt).isEqualTo("2026-08-22T13:05:00Z")
         assertThat(entry.isInternal).isTrue()
     }
+
+    @Test
+    fun toThread_parsesNestedDataComments() {
+        val response = TicketMessagesResponseDto(
+            success = true,
+            data = JsonParser.parseString(
+                """
+                {
+                  "comments": [
+                    {
+                      "id": 1051,
+                      "author_type": "customer",
+                      "body": "From comments."
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val thread = response.toThread()
+
+        assertThat(thread).hasSize(1)
+        assertThat(thread.single().id).isEqualTo(1051)
+        assertThat(thread.single().body).isEqualTo("From comments.")
+    }
+
+    @Test
+    fun toThread_parsesNestedDataReplies() {
+        val response = TicketMessagesResponseDto(
+            success = true,
+            data = JsonParser.parseString(
+                """
+                {
+                  "replies": [
+                    {
+                      "id": 1061,
+                      "author_type": "agent",
+                      "body": "From replies."
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val thread = response.toThread()
+
+        assertThat(thread).hasSize(1)
+        assertThat(thread.single().id).isEqualTo(1061)
+        assertThat(thread.single().body).isEqualTo("From replies.")
+    }
+
+    @Test
+    fun toThread_parsesNestedDataConversation() {
+        val response = TicketMessagesResponseDto(
+            success = true,
+            data = JsonParser.parseString(
+                """
+                {
+                  "conversation": [
+                    {
+                      "id": 1071,
+                      "author_type": "customer",
+                      "body": "From conversation."
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val thread = response.toThread()
+
+        assertThat(thread).hasSize(1)
+        assertThat(thread.single().id).isEqualTo(1071)
+        assertThat(thread.single().body).isEqualTo("From conversation.")
+    }
+
+    @Test
+    fun toThread_parsesNestedDataThreadMessages() {
+        val response = TicketMessagesResponseDto(
+            success = true,
+            data = JsonParser.parseString(
+                """
+                {
+                  "thread_messages": [
+                    {
+                      "id": 1081,
+                      "author_type": "agent",
+                      "body": "From thread_messages."
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val thread = response.toThread()
+
+        assertThat(thread).hasSize(1)
+        assertThat(thread.single().id).isEqualTo(1081)
+        assertThat(thread.single().body).isEqualTo("From thread_messages.")
+    }
+
+    @Test
+    fun toThread_parsesBodyAliasText() {
+        val response = TicketMessagesResponseDto(
+            success = true,
+            data = JsonParser.parseString(
+                """
+                {
+                  "items": [
+                    {
+                      "id": 1091,
+                      "author_type": "agent",
+                      "text": "Body via text alias."
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val thread = response.toThread()
+
+        assertThat(thread).hasSize(1)
+        assertThat(thread.single().id).isEqualTo(1091)
+        assertThat(thread.single().body).isEqualTo("Body via text alias.")
+    }
+
+    @Test
+    fun toThread_parsesAuthorAliasRole() {
+        val response = TicketMessagesResponseDto(
+            success = true,
+            data = JsonParser.parseString(
+                """
+                {
+                  "items": [
+                    {
+                      "id": 1101,
+                      "role": "agent",
+                      "body": "Author via role alias."
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val thread = response.toThread()
+
+        assertThat(thread).hasSize(1)
+        assertThat(thread.single().id).isEqualTo(1101)
+        assertThat(thread.single().authorType).isEqualTo("agent")
+        assertThat(thread.single().body).isEqualTo("Author via role alias.")
+    }
+
+    @Test
+    fun toThread_parsesRoleAndTextAliasesTogether() {
+        val response = TicketMessagesResponseDto(
+            success = true,
+            data = JsonParser.parseString(
+                """
+                {
+                  "items": [
+                    {
+                      "id": 1111,
+                      "role": "customer",
+                      "text": "Body via role+text aliases."
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val thread = response.toThread()
+
+        assertThat(thread).hasSize(1)
+        assertThat(thread.single().id).isEqualTo(1111)
+        assertThat(thread.single().authorType).isEqualTo("customer")
+        assertThat(thread.single().body).isEqualTo("Body via role+text aliases.")
+    }
 }

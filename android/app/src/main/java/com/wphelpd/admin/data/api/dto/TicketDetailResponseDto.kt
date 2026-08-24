@@ -70,6 +70,7 @@ data class TicketDetailDto(
     @SerializedName("attachments") val attachments: List<TicketAttachmentDto>? = null
 ) {
     fun toModel(): TicketDetail {
+        val threadEntries = messages.orEmpty()
         return TicketDetail(
             ticket = Ticket(
                 id = id,
@@ -82,10 +83,10 @@ data class TicketDetailDto(
                 createdAt = createdAt,
                 updatedAt = updatedAt,
                 messageCount = messageCount,
-                lastMessageExcerpt = messages?.lastOrNull()?.body
+                lastMessageExcerpt = threadEntries.lastOrNull()?.body
             ),
             assignedToName = assignedToName(),
-            thread = messages.orEmpty().map(TicketThreadEntryDto::toModel),
+            thread = threadEntries.map(TicketThreadEntryDto::toModel),
             attachments = attachments.orEmpty().map(TicketAttachmentDto::toModel)
         )
     }
@@ -113,9 +114,10 @@ data class TicketCustomerDto(
 
 data class TicketThreadEntryDto(
     @SerializedName(value = "id", alternate = ["message_id"]) val id: Int,
-    @SerializedName(value = "author_type", alternate = ["authorType"]) val authorType: String,
+    // Aliases kept in sync with parseThreadEntriesFromJson in TicketMutationDto.kt.
+    @SerializedName(value = "author_type", alternate = ["authorType", "role"]) val authorType: String,
     @SerializedName(value = "author_name", alternate = ["authorName"]) val authorName: String? = null,
-    @SerializedName(value = "body", alternate = ["message"]) val body: String,
+    @SerializedName(value = "body", alternate = ["message", "content", "text"]) val body: String,
     @SerializedName(value = "created_at", alternate = ["createdAt"]) val createdAt: String? = null,
     @SerializedName(value = "is_internal", alternate = ["isInternal"]) val isInternal: JsonElement? = null
 ) {

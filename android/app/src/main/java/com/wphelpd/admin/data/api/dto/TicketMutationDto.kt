@@ -243,6 +243,10 @@ private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {
                 ?: parseThreadEntriesFromJson(objectData.get("messages"))
                 ?: parseThreadEntriesFromJson(objectData.get("thread"))
                 ?: parseThreadEntriesFromJson(objectData.get("entries"))
+                ?: parseThreadEntriesFromJson(objectData.get("comments"))
+                ?: parseThreadEntriesFromJson(objectData.get("replies"))
+                ?: parseThreadEntriesFromJson(objectData.get("conversation"))
+                ?: parseThreadEntriesFromJson(objectData.get("thread_messages"))
                 ?: objectData.get("data")?.takeIf { it.isJsonArray }?.let { parseThreadEntriesFromJson(it) }
         }
         isJsonArray -> parseThreadEntriesFromJson(this)
@@ -264,10 +268,16 @@ private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEn
             // "type" is accepted as an alias when author_type/authorType are absent.
             // Expected values: "agent", "customer".
             ?: payload.stringOrNull("type")
+            // "role" is accepted as a further alias.
+            // Keep in sync with TicketThreadEntryDto @SerializedName alternates in TicketDetailResponseDto.kt.
+            ?: payload.stringOrNull("role")
             ?: return@mapNotNull null
         val body = payload.stringOrNull("body")
             ?: payload.stringOrNull("message")
             ?: payload.stringOrNull("content")
+            // "text" is accepted as an alias.
+            // Keep in sync with TicketThreadEntryDto @SerializedName alternates in TicketDetailResponseDto.kt.
+            ?: payload.stringOrNull("text")
             ?: return@mapNotNull null
         TicketThreadEntryDto(
             id = id,
@@ -332,6 +342,10 @@ private fun JsonElement?.debugShape(): String = when {
         asJsonObject.get("messages")?.isJsonArray == true -> "data.messages"
         asJsonObject.get("thread")?.isJsonArray == true -> "data.thread"
         asJsonObject.get("entries")?.isJsonArray == true -> "data.entries"
+        asJsonObject.get("comments")?.isJsonArray == true -> "data.comments"
+        asJsonObject.get("replies")?.isJsonArray == true -> "data.replies"
+        asJsonObject.get("conversation")?.isJsonArray == true -> "data.conversation"
+        asJsonObject.get("thread_messages")?.isJsonArray == true -> "data.thread_messages"
         asJsonObject.get("data")?.isJsonArray == true -> "data.data"
         else -> "data.object"
     }
