@@ -85,7 +85,9 @@ class TicketMessagesResponseDtoTest {
                   "id": 1013,
                   "author_type": "customer",
                   "author_name": "Customer",
-                  "body": "Valid top-level messages fallback."
+                  "body": "Valid top-level messages fallback.",
+                  "created_at": "2026-08-22T13:10:00Z",
+                  "is_internal": 0
                 }
               ]
             }
@@ -98,6 +100,8 @@ class TicketMessagesResponseDtoTest {
         assertThat(thread).hasSize(1)
         assertThat(thread.single().id).isEqualTo(1013)
         assertThat(thread.single().body).isEqualTo("Valid top-level messages fallback.")
+        assertThat(thread.single().createdAt).isEqualTo("2026-08-22T13:10:00Z")
+        assertThat(thread.single().isInternal).isFalse()
     }
 
     @Test

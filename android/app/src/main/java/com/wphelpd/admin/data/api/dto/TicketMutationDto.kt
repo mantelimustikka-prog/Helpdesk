@@ -162,17 +162,29 @@ data class TicketMessagesResponseDto(
         return (
             items.toThreadOrNull()
                 ?: messages.toThreadOrNull()
-                ?: data.toThreadEntriesOrNull()?.toThreadOrNull()
+                ?: data.toThreadEntriesOrNull().toThreadOrNull()
                 ?: emptyList()
             )
     }
 }
 
 private fun List<TicketThreadEntryDto>?.toThreadOrNull(): List<TicketThreadEntry>? {
-    val entries = this?.mapNotNull { entry ->
-        runCatching { entry.toModel() }.getOrNull()
-    }.orEmpty()
+    val entries = this?.mapNotNull(TicketThreadEntryDto::toModelOrNull).orEmpty()
     return entries.ifEmpty { null }
+}
+
+private fun TicketThreadEntryDto.toModelOrNull(): TicketThreadEntry? {
+    val normalizedId = id.takeIf { it > 0 } ?: return null
+    val normalizedAuthorType = (authorType as? String)?.takeIf { it.isNotBlank() } ?: return null
+    val normalizedBody = (body as? String)?.takeIf { it.isNotBlank() } ?: return null
+    return TicketThreadEntry(
+        id = normalizedId,
+        authorType = normalizedAuthorType,
+        authorName = authorName,
+        body = normalizedBody,
+        createdAt = createdAt,
+        isInternal = isInternal.toInternalFlag()
+    )
 }
 
 private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {
