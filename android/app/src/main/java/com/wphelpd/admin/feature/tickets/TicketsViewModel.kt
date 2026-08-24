@@ -1,5 +1,6 @@
 package com.wphelpd.admin.feature.tickets
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -203,6 +204,7 @@ class TicketsViewModel(
                     copy(isReplying = false, replyError = result.message)
                 }
                 is NetworkResult.Success -> {
+                    Log.d(TAG, "submitReply: reply succeeded for ticketId=$ticketId — refreshing detail")
                     if (updateStateForSelection(selection) {
                             copy(isReplying = false, replyText = "", replyError = null)
                         }
@@ -270,6 +272,7 @@ class TicketsViewModel(
                     copy(isAddingNote = false, noteError = result.message)
                 }
                 is NetworkResult.Success -> {
+                    Log.d(TAG, "submitNote: note succeeded for ticketId=$ticketId — refreshing detail")
                     if (updateStateForSelection(selection) {
                             copy(isAddingNote = false, noteText = "", noteError = null)
                         }
@@ -344,7 +347,11 @@ class TicketsViewModel(
     }
 
     private suspend fun refreshTicketDetailIfStillSelected(config: AuthConfig, selection: TicketSelection) {
-        if (!isSelectionCurrent(selection)) return
+        if (!isSelectionCurrent(selection)) {
+            Log.d(TAG, "refreshTicketDetailIfStillSelected: skipped — selection changed (ticketId=${selection.ticketId} sessionId=${selection.sessionId})")
+            return
+        }
+        Log.d(TAG, "refreshTicketDetailIfStillSelected: executing refresh for ticketId=${selection.ticketId} sessionId=${selection.sessionId}")
         loadTicketDetail(
             config = config,
             selection = selection,
@@ -498,6 +505,8 @@ class TicketsViewModel(
     )
 
     companion object {
+        private const val TAG = "TicketsViewModel"
+
         fun factory(
             repository: HelpdeskRepository = HelpdeskRepository(),
             serverConfigRepository: ServerConfigRepository = NoOpServerConfigRepository

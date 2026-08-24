@@ -1,5 +1,6 @@
 package com.wphelpd.admin.data.api.dto
 
+import android.util.Log
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
@@ -160,10 +161,27 @@ data class TicketMessagesResponseDto(
 ) {
     fun toThread(): List<TicketThreadEntry> {
         check(success != false) { "Ticket messages request failed." }
-        val threadEntries = items?.takeIf { it.isNotEmpty() }
-            ?: messages?.takeIf { it.isNotEmpty() }
-            ?: data.toThreadEntriesOrNull()
-        return threadEntries.orEmpty().map(TicketThreadEntryDto::toModel)
+        val source: String
+        val threadEntries = when {
+            items?.isNotEmpty() == true -> {
+                source = "items"
+                items
+            }
+            messages?.isNotEmpty() == true -> {
+                source = "messages"
+                messages
+            }
+            else -> {
+                source = "data"
+                data.toThreadEntriesOrNull()
+            }
+        }
+        val result = threadEntries.orEmpty().map(TicketThreadEntryDto::toModel)
+        Log.d("TicketMessagesResponseDto", "toThread: source=$source parsedEntries=${result.size}")
+        result.forEach { entry ->
+            Log.d("TicketMessagesResponseDto", "  entry id=${entry.id} authorType=${entry.authorType} authorName=${entry.authorName} createdAt=${entry.createdAt} isInternal=${entry.isInternal} body=${entry.body.take(80)}")
+        }
+        return result
     }
 }
 

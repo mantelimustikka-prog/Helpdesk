@@ -1,5 +1,6 @@
 package com.wphelpd.admin.feature.tickets
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -385,6 +386,7 @@ private fun TicketDetailScreen(
             }
 
             uiState.ticketDetail?.let { detail ->
+                Log.d("TicketsScreen", "render: selectedTicketId=${uiState.selectedTicketId} isDetailLoading=${uiState.isDetailLoading} detailError=${uiState.detailErrorMessage} threadSize=${detail.thread.size}")
                 val areDetailActionsEnabled = !uiState.isDetailActionInProgress
                 item {
                     Spacer(modifier = Modifier.height(4.dp))

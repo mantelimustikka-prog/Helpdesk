@@ -1,5 +1,6 @@
 package com.wphelpd.admin.data.api.dto
 
+import android.util.Log
 import com.google.gson.annotations.SerializedName
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -70,24 +71,27 @@ data class TicketDetailDto(
     @SerializedName("messages") val messages: List<TicketThreadEntryDto>? = null,
     @SerializedName("attachments") val attachments: List<TicketAttachmentDto>? = null
 ) {
-    fun toModel(): TicketDetail = TicketDetail(
-        ticket = Ticket(
-            id = id,
-            ticketNo = ticketNo,
-            subject = subject,
-            status = status,
-            priority = priority,
-            customerName = customer?.name ?: customerName ?: requesterName,
-            customerEmail = customer?.email ?: customerEmail ?: requesterEmail,
-            createdAt = createdAt,
-            updatedAt = updatedAt,
-            messageCount = messageCount,
-            lastMessageExcerpt = messages?.lastOrNull()?.body
-        ),
-        assignedToName = assignedToName(),
-        thread = messages.orEmpty().map(TicketThreadEntryDto::toModel),
-        attachments = attachments.orEmpty().map(TicketAttachmentDto::toModel)
-    )
+    fun toModel(): TicketDetail {
+        Log.d("TicketDetailDto", "toModel: ticketNo=$ticketNo threadSize=${messages.orEmpty().size} attachmentsSize=${attachments.orEmpty().size} messageCount=$messageCount")
+        return TicketDetail(
+            ticket = Ticket(
+                id = id,
+                ticketNo = ticketNo,
+                subject = subject,
+                status = status,
+                priority = priority,
+                customerName = customer?.name ?: customerName ?: requesterName,
+                customerEmail = customer?.email ?: customerEmail ?: requesterEmail,
+                createdAt = createdAt,
+                updatedAt = updatedAt,
+                messageCount = messageCount,
+                lastMessageExcerpt = messages?.lastOrNull()?.body
+            ),
+            assignedToName = assignedToName(),
+            thread = messages.orEmpty().map(TicketThreadEntryDto::toModel),
+            attachments = attachments.orEmpty().map(TicketAttachmentDto::toModel)
+        )
+    }
 }
 
 private fun TicketDetailDto.assignedToName(): String? {
