@@ -1,6 +1,4 @@
 package com.wphelpd.admin.data.api.dto
-
-import android.util.Log
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
@@ -161,38 +159,25 @@ data class TicketMessagesResponseDto(
 ) {
     fun toThread(): List<TicketThreadEntry> {
         check(success != false) { "Ticket messages request failed." }
-        val source: String
-        val threadEntries = when {
-            items?.isNotEmpty() == true -> {
-                source = "items"
-                items
-            }
-            messages?.isNotEmpty() == true -> {
-                source = "messages"
-                messages
-            }
-            else -> {
-                source = "data"
-                data.toThreadEntriesOrNull()
-            }
-        }
-        val result = threadEntries.orEmpty().map(TicketThreadEntryDto::toModel)
-        Log.d("TicketMessagesResponseDto", "toThread: source=$source parsedEntries=${result.size}")
-        result.forEach { entry ->
-            Log.d("TicketMessagesResponseDto", "  entry id=${entry.id} authorType=${entry.authorType} authorName=${entry.authorName} createdAt=${entry.createdAt} isInternal=${entry.isInternal} body=${entry.body.take(80)}")
-        }
-        return result
+        return (
+            items?.takeIf { it.isNotEmpty() }
+                ?: messages?.takeIf { it.isNotEmpty() }
+                ?: data.toThreadEntriesOrNull()
+            ).orEmpty().map(TicketThreadEntryDto::toModel)
     }
 }
 
 private fun JsonElement?.toThreadEntriesOrNull(): List<TicketThreadEntryDto>? {
     if (this == null || isJsonNull) return null
-    if (isJsonArray) return parseThreadEntriesFromJson(this)
-    if (!isJsonObject) return null
-
-    val objectData = asJsonObject
-    return parseThreadEntriesFromJson(objectData.get("items"))
-        ?: parseThreadEntriesFromJson(objectData.get("messages"))
+    return when {
+        isJsonObject -> {
+            val objectData = asJsonObject
+            parseThreadEntriesFromJson(objectData.get("items"))
+                ?: parseThreadEntriesFromJson(objectData.get("messages"))
+        }
+        isJsonArray -> parseThreadEntriesFromJson(this)
+        else -> null
+    }
 }
 
 private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEntryDto>? {

@@ -1,6 +1,4 @@
 package com.wphelpd.admin.data.api.dto
-
-import android.util.Log
 import com.google.gson.annotations.SerializedName
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -72,7 +70,6 @@ data class TicketDetailDto(
     @SerializedName("attachments") val attachments: List<TicketAttachmentDto>? = null
 ) {
     fun toModel(): TicketDetail {
-        Log.d("TicketDetailDto", "toModel: ticketNo=$ticketNo threadSize=${messages.orEmpty().size} attachmentsSize=${attachments.orEmpty().size} messageCount=$messageCount")
         return TicketDetail(
             ticket = Ticket(
                 id = id,

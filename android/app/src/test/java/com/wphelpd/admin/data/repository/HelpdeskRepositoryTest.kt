@@ -175,27 +175,26 @@ class HelpdeskRepositoryTest {
 
     @Test
     fun fetchTicketDetail_fallsBackToMessagesEndpoint() = runTest {
-        val repository = HelpdeskRepository {
-            FakeHelpdeskAdminApi(
-                ticketDetailResponse = TicketDetailResponseDto(
-                    id = 101,
-                    ticketNo = "HD-000101",
-                    subject = "Login issue",
-                    status = "open",
-                    messageCount = 1
-                ),
-                ticketMessagesResponse = TicketMessagesResponseDto(
-                    items = listOf(
-                        TicketThreadEntryDto(
-                            id = 8001,
-                            authorType = "agent",
-                            authorName = "Admin User",
-                            body = "Please reset your password."
-                        )
+        val api = FakeHelpdeskAdminApi(
+            ticketDetailResponse = TicketDetailResponseDto(
+                id = 101,
+                ticketNo = "HD-000101",
+                subject = "Login issue",
+                status = "open",
+                messageCount = 1
+            ),
+            ticketMessagesResponse = TicketMessagesResponseDto(
+                items = listOf(
+                    TicketThreadEntryDto(
+                        id = 8001,
+                        authorType = "agent",
+                        authorName = "Admin User",
+                        body = "Please reset your password."
                     )
                 )
             )
-        }
+        )
+        val repository = HelpdeskRepository { api }
 
         val result = repository.fetchTicketDetail(config, 101)
 
@@ -203,6 +202,7 @@ class HelpdeskRepositoryTest {
         val detail = (result as NetworkResult.Success).value
         assertThat(detail.thread).hasSize(1)
         assertThat(detail.thread.single().authorType).isEqualTo("agent")
+        assertThat(api.ticketMessagesRequestsById[101]).isEqualTo(1)
     }
 
     @Test
@@ -689,6 +689,7 @@ private class FakeHelpdeskAdminApi(
 ) : HelpdeskAdminApi {
     var lastRegisterRequest: DeviceTokenRequestDto? = null
     var lastUnregisterRequest: DeviceTokenRequestDto? = null
+    val ticketMessagesRequestsById: MutableMap<Int, Int> = mutableMapOf()
 
     override suspend fun authCheck(): AuthCheckResponseDto = authResponse
 
@@ -701,7 +702,10 @@ private class FakeHelpdeskAdminApi(
 
     override suspend fun getTicket(id: Int): TicketDetailResponseDto = ticketDetailResponse
 
-    override suspend fun getTicketMessages(id: Int): TicketMessagesResponseDto = ticketMessagesResponse
+    override suspend fun getTicketMessages(id: Int): TicketMessagesResponseDto {
+        ticketMessagesRequestsById[id] = (ticketMessagesRequestsById[id] ?: 0) + 1
+        return ticketMessagesResponse
+    }
 
     override suspend fun replyToTicket(id: Int, request: ReplyRequestDto): ReplyResponseDto = replyResponse
 
