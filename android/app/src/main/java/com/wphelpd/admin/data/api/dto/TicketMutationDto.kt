@@ -1,13 +1,9 @@
 package com.wphelpd.admin.data.api.dto
 
-import android.util.Log
-
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 import com.wphelpd.admin.domain.model.TicketThreadEntry
-
-private const val TEMP_DEBUG_TAG = "HelpdeskTempDebug"
 
 data class ReplyRequestDto(
     @SerializedName("message") val message: String,
@@ -164,54 +160,17 @@ data class TicketMessagesResponseDto(
 ) {
     fun toThread(): List<TicketThreadEntry> {
         check(success != false) { "Ticket messages request failed." }
-        val dataShape = data.debugShape()
         items.toThreadOrNull()?.let { thread ->
-            logThreadDebug(
-                source = "topLevelItems",
-                dataShape = dataShape,
-                candidateCount = items?.size ?: 0,
-                parsedCount = thread.size
-            )
             return thread
         }
         messages.toThreadOrNull()?.let { thread ->
-            logThreadDebug(
-                source = "topLevelMessages",
-                dataShape = dataShape,
-                candidateCount = messages?.size ?: 0,
-                parsedCount = thread.size
-            )
             return thread
         }
         val dataEntries = data.toThreadEntriesOrNull()
         dataEntries.toThreadOrNull()?.let { thread ->
-            logThreadDebug(
-                source = "nestedData",
-                dataShape = dataShape,
-                candidateCount = dataEntries?.size ?: 0,
-                parsedCount = thread.size
-            )
             return thread
         }
-        logThreadDebug(
-            source = "none",
-            dataShape = dataShape,
-            candidateCount = dataEntries?.size ?: 0,
-            parsedCount = 0
-        )
         return emptyList()
-    }
-
-    private fun logThreadDebug(
-        source: String,
-        dataShape: String,
-        candidateCount: Int,
-        parsedCount: Int
-    ) {
-        Log.d(
-            TEMP_DEBUG_TAG,
-            "TEMP DEBUG: TicketMessagesResponseDto.toThread sawItems=${items != null} sawMessages=${messages != null} dataShape=$dataShape parsedSource=$source candidateCount=$candidateCount parsedCount=$parsedCount"
-        )
     }
 }
 
@@ -332,22 +291,4 @@ private fun JsonElement?.toInternalFlag(): Boolean {
         }
         else -> false
     }
-}
-
-private fun JsonElement?.debugShape(): String = when {
-    this == null || isJsonNull -> "none"
-    isJsonArray -> "data.array"
-    isJsonObject -> when {
-        asJsonObject.get("items")?.isJsonArray == true -> "data.items"
-        asJsonObject.get("messages")?.isJsonArray == true -> "data.messages"
-        asJsonObject.get("thread")?.isJsonArray == true -> "data.thread"
-        asJsonObject.get("entries")?.isJsonArray == true -> "data.entries"
-        asJsonObject.get("comments")?.isJsonArray == true -> "data.comments"
-        asJsonObject.get("replies")?.isJsonArray == true -> "data.replies"
-        asJsonObject.get("conversation")?.isJsonArray == true -> "data.conversation"
-        asJsonObject.get("thread_messages")?.isJsonArray == true -> "data.thread_messages"
-        asJsonObject.get("data")?.isJsonArray == true -> "data.data"
-        else -> "data.object"
-    }
-    else -> "data.other"
 }

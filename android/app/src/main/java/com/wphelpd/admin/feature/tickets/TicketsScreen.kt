@@ -547,55 +547,11 @@ private fun AttachmentSection(attachments: List<TicketAttachment>) {
 
 @Composable
 private fun ConversationSection(detail: TicketDetail, appearanceColors: AppearanceColors = AppearanceColors.Empty) {
-    // TEMP DEBUG: richer diagnostic panel — remove this block when hydration issue is resolved
     val thread = detail.thread
-    val firstEntry = thread.firstOrNull()
-    val fallbackHydrated = thread.isNotEmpty() && detail.ticket.messageCount > 0 &&
-        detail.ticket.lastMessageExcerpt == null // heuristic: excerpt is set when embedded messages ship with the ticket payload
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Conversation", style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(4.dp))
-            // TEMP DEBUG: begin diagnostic lines
-            Text(
-                text = "TEMP DEBUG: thread size = ${thread.size}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "TEMP DEBUG: ticket id = ${detail.ticket.id} / #${detail.ticket.ticketNo}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (firstEntry != null) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "TEMP DEBUG: first author = ${firstEntry.authorType}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "TEMP DEBUG: first preview = ${firstEntry.body.take(40)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "TEMP DEBUG: first createdAt = ${firstEntry.createdAt ?: "null"}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "TEMP DEBUG: first isInternal = ${firstEntry.isInternal}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                text = "TEMP DEBUG: fallback hydrated = $fallbackHydrated",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            // TEMP DEBUG: end diagnostic lines
             if (thread.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("No messages yet.", style = MaterialTheme.typography.bodySmall)
