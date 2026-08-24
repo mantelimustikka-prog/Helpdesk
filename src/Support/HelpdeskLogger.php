@@ -63,6 +63,12 @@ class HelpdeskLogger {
 	 * @return void
 	 */
 	public static function log( string $action, array $context = array() ): void {
+		// Capture every call into a global array when running under PHPUnit so
+		// tests can assert on log side-effects without touching the filesystem.
+		if ( defined( 'WP_HELPDESK_TESTING' ) && WP_HELPDESK_TESTING ) {
+			$GLOBALS['hd_log_calls'][] = array( 'action' => $action, 'context' => $context );
+		}
+
 		if ( ! self::isEnabled() ) {
 			return;
 		}
