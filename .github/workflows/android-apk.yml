@@ -46,3 +46,30 @@ jobs:
           name: wp-helpd-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Get version from build.gradle
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: version
+        run: |
+          VERSION=$(grep -m 1 '^\s*versionName\s' app/build.gradle | sed 's/.*"\(.*\)".*/\1/' | tr -d ' ')
+          echo "app_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "App version: $VERSION"
+
+      - name: Create Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/debug/*.apk
+          tag_name: v${{ steps.version.outputs.app_version }}-build-${{ github.run_number }}
+          name: "Android Debug APK - ${{ steps.version.outputs.app_version }} (Build #${{ github.run_number }})"
+          body: |
+            **Android Debug Build**
+
+            - Version: ${{ steps.version.outputs.app_version }}
+            - Build: #${{ github.run_number }}
+            - Commit: ${{ github.sha }}
+            - Branch: ${{ github.ref_name }}
+          prerelease: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
