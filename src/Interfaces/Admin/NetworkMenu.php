@@ -6,6 +6,7 @@
 namespace WPHelpdesk\Interfaces\Admin;
 
 use WPHelpdesk\Interfaces\Admin\Pages\DashboardPage;
+use WPHelpdesk\Interfaces\Admin\Pages\LogsPage;
 use WPHelpdesk\Interfaces\Admin\Pages\SettingsPage;
 use WPHelpdesk\Interfaces\Admin\Pages\TicketsPage;
 use WPHelpdesk\Interfaces\Admin\Pages\TopicsPage;
@@ -18,12 +19,14 @@ class NetworkMenu {
 	protected TicketsPage $tickets_page;
 	protected TopicsPage $topics_page;
 	protected SettingsPage $settings_page;
+	protected LogsPage $logs_page;
 
 	public function __construct() {
 		$this->dashboard_page = new DashboardPage();
 		$this->tickets_page   = new TicketsPage();
 		$this->topics_page    = new TopicsPage();
 		$this->settings_page  = new SettingsPage();
+		$this->logs_page      = new LogsPage();
 	}
 
 	/**
@@ -79,10 +82,20 @@ class NetworkMenu {
 			array( $this->settings_page, 'render' )
 		);
 
+		$logs_hook = add_submenu_page(
+			'wp-helpdesk',
+			__( 'Logs', 'wp-helpdesk' ),
+			__( 'Logs', 'wp-helpdesk' ),
+			'hd_manage_tickets',
+			'wp-helpdesk-logs',
+			array( $this->logs_page, 'render' )
+		);
+
 		add_action( 'load-' . $main_hook, array( $this, 'bootstrapPages' ) );
 		add_action( 'load-' . $tickets_hook, array( $this, 'bootstrapPages' ) );
 		add_action( 'load-' . $topics_hook, array( $this, 'bootstrapPages' ) );
 		add_action( 'load-' . $settings_hook, array( $this, 'bootstrapPages' ) );
+		add_action( 'load-' . $logs_hook, array( $this, 'bootstrapPages' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueueAssets' ) );
 	}
 
@@ -94,6 +107,8 @@ class NetworkMenu {
 	public function bootstrapPages(): void {
 		$this->topics_page->handlePost();
 		$this->settings_page->handlePost();
+		$this->logs_page->handlePost();
+		$this->logs_page->maybeServeDownload();
 	}
 
 	/**

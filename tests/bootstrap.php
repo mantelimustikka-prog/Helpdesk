@@ -78,6 +78,7 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_remote_post_responses'] = array();
 		$GLOBALS['wp_remote_post_log']       = array();
 		$GLOBALS['wp_posts_index'] = array();
+		$GLOBALS['wp_upload_dir_override'] = array();
 		$GLOBALS['wc_page_permalinks'] = array(
 			'myaccount' => 'https://example.test/my-account/',
 		);
@@ -589,6 +590,15 @@ if ( ! function_exists( 'wp_mail' ) ) {
 if ( ! function_exists( 'wp_json_encode' ) ) {
 	function wp_json_encode( $value ): string {
 		return (string) json_encode( $value );
+	}
+}
+
+if ( ! function_exists( 'wp_upload_dir' ) ) {
+	function wp_upload_dir(): array {
+		if ( ! empty( $GLOBALS['wp_upload_dir_override'] ) ) {
+			return $GLOBALS['wp_upload_dir_override'];
+		}
+		return array( 'basedir' => sys_get_temp_dir() . '/wp_uploads_test' );
 	}
 }
 

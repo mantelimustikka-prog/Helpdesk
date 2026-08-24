@@ -11,6 +11,7 @@ use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Support\Helpers;
+use WPHelpdesk\Support\HelpdeskLogger;
 
 class AdminTicketController {
 	/**
@@ -62,15 +63,45 @@ class AdminTicketController {
 	 * @return WP_REST_Response
 	 */
 	public function getTicket( WP_REST_Request $request ): WP_REST_Response {
-		$ticket = $this->findTicket( (int) $request['id'] );
+		$ticket_id = (int) $request['id'];
+
+		HelpdeskLogger::log(
+			'getTicket.start',
+			array(
+				'ticket_id'    => $ticket_id,
+				'user_id'      => get_current_user_id(),
+				'is_admin_api' => true,
+			)
+		);
+
+		$ticket = $this->findTicket( $ticket_id );
 
 		if ( empty( $ticket ) ) {
+			HelpdeskLogger::log(
+				'getTicket.not_found',
+				array(
+					'ticket_id' => $ticket_id,
+					'user_id'   => get_current_user_id(),
+				)
+			);
 			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
 		}
 
-		$messages = array_map(
+		$raw_messages = $this->fetchMessagesForTicket( (int) $ticket['id'] );
+		$messages     = array_map(
 			array( $this, 'normalizeMessageForResponse' ),
-			$this->fetchMessagesForTicket( (int) $ticket['id'] )
+			$raw_messages
+		);
+
+		HelpdeskLogger::log(
+			'getTicket.messages_fetched',
+			array(
+				'ticket_id'     => (int) $ticket['id'],
+				'user_id'       => get_current_user_id(),
+				'message_count' => count( $messages ),
+				'source'        => 'embedded_detail',
+				'response_keys' => array( 'success', 'data.messages' ),
+			)
 		);
 
 		$data             = $this->normalizeTicketForResponse( $ticket );
@@ -91,14 +122,44 @@ class AdminTicketController {
 	 * @return WP_REST_Response
 	 */
 	public function getMessages( WP_REST_Request $request ): WP_REST_Response {
-		$ticket = $this->findTicket( (int) $request['id'] );
+		$ticket_id = (int) $request['id'];
+
+		HelpdeskLogger::log(
+			'getMessages.start',
+			array(
+				'ticket_id'    => $ticket_id,
+				'user_id'      => get_current_user_id(),
+				'is_admin_api' => true,
+			)
+		);
+
+		$ticket = $this->findTicket( $ticket_id );
 		if ( empty( $ticket ) ) {
+			HelpdeskLogger::log(
+				'getMessages.not_found',
+				array(
+					'ticket_id' => $ticket_id,
+					'user_id'   => get_current_user_id(),
+				)
+			);
 			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
 		}
 
-		$messages = array_map(
+		$raw_messages = $this->fetchMessagesForTicket( (int) $ticket['id'] );
+		$messages     = array_map(
 			array( $this, 'normalizeMessageForResponse' ),
-			$this->fetchMessagesForTicket( (int) $ticket['id'] )
+			$raw_messages
+		);
+
+		HelpdeskLogger::log(
+			'getMessages.messages_fetched',
+			array(
+				'ticket_id'     => (int) $ticket['id'],
+				'user_id'       => get_current_user_id(),
+				'message_count' => count( $messages ),
+				'source'        => 'messages_endpoint',
+				'response_keys' => array( 'items' ),
+			)
 		);
 
 		return new WP_REST_Response( array( 'items' => $messages ) );
