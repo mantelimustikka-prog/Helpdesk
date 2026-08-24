@@ -563,6 +563,320 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_parsesDataThreadWrapper() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "thread": [
+                            {
+                              "id": 8301,
+                              "author_type": "agent",
+                              "author_name": "Admin User",
+                              "body": "Reply from data.thread wrapper.",
+                              "created_at": "2026-08-22T13:00:00Z",
+                              "is_internal": 0
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        val entry = detail.thread.single()
+        assertThat(entry.id).isEqualTo(8301)
+        assertThat(entry.body).isEqualTo("Reply from data.thread wrapper.")
+    }
+
+    @Test
+    fun fetchTicketDetail_parsesDataEntriesWrapper() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "entries": [
+                            {
+                              "id": 8302,
+                              "author_type": "customer",
+                              "author_name": "Jane Smith",
+                              "body": "Reply from data.entries wrapper.",
+                              "created_at": "2026-08-22T13:05:00Z",
+                              "is_internal": 0
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        val entry = detail.thread.single()
+        assertThat(entry.id).isEqualTo(8302)
+        assertThat(entry.body).isEqualTo("Reply from data.entries wrapper.")
+    }
+
+    @Test
+    fun fetchTicketDetail_parsesDirectDataArray() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        [
+                          {
+                            "id": 8303,
+                            "author_type": "agent",
+                            "body": "Reply from direct data array.",
+                            "is_internal": 0
+                          }
+                        ]
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        val entry = detail.thread.single()
+        assertThat(entry.id).isEqualTo(8303)
+        assertThat(entry.body).isEqualTo("Reply from direct data array.")
+    }
+
+    @Test
+    fun fetchTicketDetail_parsesTypeAliasForAuthorType() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "thread": [
+                            {
+                              "id": 8304,
+                              "type": "agent",
+                              "body": "Reply with type alias.",
+                              "is_internal": 0
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        val entry = detail.thread.single()
+        assertThat(entry.id).isEqualTo(8304)
+        assertThat(entry.authorType).isEqualTo("agent")
+        assertThat(entry.body).isEqualTo("Reply with type alias.")
+    }
+
+    @Test
+    fun fetchTicketDetail_parsesContentAliasForBody() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "entries": [
+                            {
+                              "id": 8305,
+                              "author_type": "customer",
+                              "content": "Reply with content alias.",
+                              "is_internal": 0
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        val entry = detail.thread.single()
+        assertThat(entry.id).isEqualTo(8305)
+        assertThat(entry.body).isEqualTo("Reply with content alias.")
+    }
+
+    @Test
+    fun fetchTicketDetail_parsesInternalAliasForIsInternal() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "thread": [
+                            {
+                              "id": 8306,
+                              "author_type": "agent",
+                              "body": "Internal note with alias.",
+                              "internal": 1
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        val entry = detail.thread.single()
+        assertThat(entry.id).isEqualTo(8306)
+        assertThat(entry.isInternal).isTrue()
+    }
+
+    @Test
+    fun fetchTicketDetail_skipsRowsMissingRequiredFieldsWithoutFailingWholeResponse() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    success = true,
+                    data = JsonParser.parseString(
+                        """
+                        {
+                          "thread": [
+                            { "id": 8400, "type": "agent" },
+                            { "author_type": "agent", "content": "Missing id row." },
+                            {
+                              "id": 8401,
+                              "author_type": "agent",
+                              "body": "Valid row after malformed rows.",
+                              "is_internal": 0
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().id).isEqualTo(8401)
+        assertThat(detail.thread.single().body).isEqualTo("Valid row after malformed rows.")
+        // IDs 8400 (missing body) and the row without an id must not appear in the thread.
+        assertThat(detail.thread.none { it.id == 8400 }).isTrue()
+    }
+
+    @Test
     fun fetchTicketDetail_mapsFlatResponseMessagesAndAttachments() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(
