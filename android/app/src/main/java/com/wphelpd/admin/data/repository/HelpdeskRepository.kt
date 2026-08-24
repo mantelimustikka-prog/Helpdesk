@@ -1,5 +1,6 @@
 package com.wphelpd.admin.data.repository
 
+import android.util.Log
 import com.wphelpd.admin.core.network.ApiClientFactory
 import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.core.network.NetworkResult
@@ -21,6 +22,7 @@ class HelpdeskRepository(
     private val apiProvider: (AuthConfig) -> HelpdeskAdminApi = ApiClientFactory::create
 ) {
     companion object {
+        private const val TAG = "HelpdeskRepository"
         val statusOptions: List<String> = listOf(
             "new",
             "pending_agent_reply",
@@ -65,17 +67,24 @@ class HelpdeskRepository(
         ticketId: Int
     ): NetworkResult<TicketDetail> = execute {
         val api = apiProvider(config)
-        val detail = api.getTicket(ticketId).toTicketDetail()
+        val rawResponse = api.getTicket(ticketId)
+        Log.d(TAG, "fetchTicketDetail: getTicket($ticketId) success=${rawResponse.success} hasData=${rawResponse.data != null} topLevelId=${rawResponse.id}")
+        val detail = rawResponse.toTicketDetail()
+        Log.d(TAG, "fetchTicketDetail: mapped detail ticketNo=${detail.ticket.ticketNo} threadSize=${detail.thread.size}")
         if (detail.thread.isNotEmpty()) {
             detail
         } else {
+            Log.d(TAG, "fetchTicketDetail: thread is empty — triggering fallback getTicketMessages($ticketId)")
             val thread = try {
-                api.getTicketMessages(ticketId).toThread()
+                val rawMessages = api.getTicketMessages(ticketId)
+                Log.d(TAG, "fetchTicketDetail: getTicketMessages($ticketId) success=${rawMessages.success} hasData=${rawMessages.data != null} itemsSize=${rawMessages.items?.size} messagesSize=${rawMessages.messages?.size}")
+                rawMessages.toThread()
             } catch (throwable: CancellationException) {
                 throw throwable
             } catch (_: Throwable) {
                 return@execute detail
             }
+            Log.d(TAG, "fetchTicketDetail: fallback thread size=${thread.size}")
             detail.copy(thread = thread)
         }
     }
