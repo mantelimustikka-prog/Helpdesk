@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -386,7 +387,9 @@ private fun TicketDetailScreen(
             }
 
             uiState.ticketDetail?.let { detail ->
-                Log.d("TicketsScreen", "render: selectedTicketId=${uiState.selectedTicketId} isDetailLoading=${uiState.isDetailLoading} detailError=${uiState.detailErrorMessage} threadSize=${detail.thread.size}")
+                SideEffect {
+                    Log.d("TicketsScreen", "render: selectedTicketId=${uiState.selectedTicketId} isDetailLoading=${uiState.isDetailLoading} detailError=${uiState.detailErrorMessage} threadSize=${detail.thread.size}")
+                }
                 val areDetailActionsEnabled = !uiState.isDetailActionInProgress
                 item {
                     Spacer(modifier = Modifier.height(4.dp))

@@ -68,7 +68,7 @@ class HelpdeskRepository(
     ): NetworkResult<TicketDetail> = execute {
         val api = apiProvider(config)
         val rawResponse = api.getTicket(ticketId)
-        Log.d(TAG, "fetchTicketDetail: raw getTicket($ticketId) response=$rawResponse")
+        Log.d(TAG, "fetchTicketDetail: getTicket($ticketId) success=${rawResponse.success} hasData=${rawResponse.data != null} topLevelId=${rawResponse.id}")
         val detail = rawResponse.toTicketDetail()
         Log.d(TAG, "fetchTicketDetail: mapped detail ticketNo=${detail.ticket.ticketNo} threadSize=${detail.thread.size}")
         if (detail.thread.isNotEmpty()) {
@@ -77,7 +77,7 @@ class HelpdeskRepository(
             Log.d(TAG, "fetchTicketDetail: thread is empty — triggering fallback getTicketMessages($ticketId)")
             val thread = try {
                 val rawMessages = api.getTicketMessages(ticketId)
-                Log.d(TAG, "fetchTicketDetail: raw getTicketMessages($ticketId) response=$rawMessages")
+                Log.d(TAG, "fetchTicketDetail: getTicketMessages($ticketId) success=${rawMessages.success} hasData=${rawMessages.data != null} itemsSize=${rawMessages.items?.size} messagesSize=${rawMessages.messages?.size}")
                 rawMessages.toThread()
             } catch (throwable: CancellationException) {
                 throw throwable
