@@ -200,8 +200,8 @@ private fun parseThreadEntriesFromJson(value: JsonElement?): List<TicketThreadEn
             body = body,
             createdAt = payload.stringOrNull("created_at")
                 ?: payload.stringOrNull("createdAt"),
-            isInternal = payload.intOrNull("is_internal")
-                ?: payload.intOrNull("isInternal")
+            isInternal = payload.primitiveOrNull("is_internal")
+                ?: payload.primitiveOrNull("isInternal")
         )
     }.ifEmpty { null }
 }
@@ -217,6 +217,17 @@ private fun JsonObject.intOrNull(name: String): Int? {
     if (value.isJsonNull || !value.isJsonPrimitive) return null
     return when {
         value.asJsonPrimitive.isBoolean -> if (value.asBoolean) 1 else 0
+        value.asJsonPrimitive.isString -> when (value.asString.trim().lowercase()) {
+            "true" -> 1
+            "false" -> 0
+            else -> runCatching { value.asInt }.getOrNull()
+        }
         else -> runCatching { value.asInt }.getOrNull()
     }
+}
+
+private fun JsonObject.primitiveOrNull(name: String): JsonElement? {
+    val value = get(name) ?: return null
+    if (value.isJsonNull || !value.isJsonPrimitive) return null
+    return value
 }

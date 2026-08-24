@@ -206,6 +206,43 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
+    fun fetchTicketDetail_fallsBackToMessagesEndpointWhenInternalFlagIsBoolean() = runTest {
+        val repository = HelpdeskRepository {
+            FakeHelpdeskAdminApi(
+                ticketDetailResponse = TicketDetailResponseDto(
+                    success = true,
+                    data = TicketDetailDto(
+                        id = 101,
+                        ticketNo = "HD-000101",
+                        subject = "Login issue",
+                        status = "open",
+                        messages = emptyList()
+                    )
+                ),
+                ticketMessagesResponse = TicketMessagesResponseDto(
+                    items = listOf(
+                        TicketThreadEntryDto(
+                            id = 8002,
+                            authorType = "agent",
+                            authorName = "Admin User",
+                            body = "Internal note saved from fallback endpoint.",
+                            isInternal = JsonParser.parseString("true")
+                        )
+                    )
+                )
+            )
+        }
+
+        val result = repository.fetchTicketDetail(config, 101)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val detail = (result as NetworkResult.Success).value
+        assertThat(detail.thread).hasSize(1)
+        assertThat(detail.thread.single().id).isEqualTo(8002)
+        assertThat(detail.thread.single().isInternal).isTrue()
+    }
+
+    @Test
     fun fetchTicketDetail_fallsBackToMessagesEndpointWhenEmbeddedMessagesAreEmpty() = runTest {
         val repository = HelpdeskRepository {
             FakeHelpdeskAdminApi(
@@ -408,7 +445,7 @@ class HelpdeskRepositoryTest {
                             authorName = "Admin User",
                             body = "Fallback from top-level messages.",
                             createdAt = "2026-08-22T12:45:00Z",
-                            isInternal = 0
+                            isInternal = JsonParser.parseString("0")
                         )
                     )
                 )
@@ -450,7 +487,7 @@ class HelpdeskRepositoryTest {
                               "authorName": "Admin User",
                               "message": "Mapped from camelCase payload.",
                               "createdAt": "2026-08-22T12:46:00Z",
-                              "isInternal": true
+                              "isInternal": "true"
                             }
                           ]
                         }
@@ -529,7 +566,7 @@ class HelpdeskRepositoryTest {
                         authorName = "Admin User",
                         body = "Saved mobile reply.",
                         createdAt = "2026-08-22T12:00:00Z",
-                        isInternal = 0
+                        isInternal = JsonParser.parseString("0")
                     )
                 )
             )

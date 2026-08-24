@@ -116,7 +116,7 @@ data class TicketThreadEntryDto(
     @SerializedName(value = "author_name", alternate = ["authorName"]) val authorName: String? = null,
     @SerializedName(value = "body", alternate = ["message"]) val body: String,
     @SerializedName(value = "created_at", alternate = ["createdAt"]) val createdAt: String? = null,
-    @SerializedName(value = "is_internal", alternate = ["isInternal"]) val isInternal: Int? = null
+    @SerializedName(value = "is_internal", alternate = ["isInternal"]) val isInternal: JsonElement? = null
 ) {
     fun toModel(): TicketThreadEntry = TicketThreadEntry(
         id = id,
@@ -124,8 +124,22 @@ data class TicketThreadEntryDto(
         authorName = authorName,
         body = body,
         createdAt = createdAt,
-        isInternal = isInternal == 1
+        isInternal = isInternal.toInternalFlag()
     )
+}
+
+private fun JsonElement?.toInternalFlag(): Boolean {
+    if (this == null || isJsonNull || !isJsonPrimitive) return false
+    val primitive = asJsonPrimitive
+    return when {
+        primitive.isBoolean -> primitive.asBoolean
+        primitive.isNumber -> runCatching { primitive.asInt != 0 }.getOrDefault(false)
+        primitive.isString -> {
+            val normalized = primitive.asString.trim()
+            normalized == "1" || normalized.equals("true", ignoreCase = true)
+        }
+        else -> false
+    }
 }
 
 data class TicketAttachmentDto(
