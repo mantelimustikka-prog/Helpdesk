@@ -159,11 +159,12 @@ data class TicketMessagesResponseDto(
 ) {
     fun toThread(): List<TicketThreadEntry> {
         check(success != false) { "Ticket messages request failed." }
-        return (
+        val threadEntries = (
             items?.takeIf { it.isNotEmpty() }
                 ?: messages?.takeIf { it.isNotEmpty() }
                 ?: data.toThreadEntriesOrNull()
-            ).orEmpty().map(TicketThreadEntryDto::toModel)
+        ).orEmpty()
+        return threadEntries.map(TicketThreadEntryDto::toModel)
     }
 }
 
