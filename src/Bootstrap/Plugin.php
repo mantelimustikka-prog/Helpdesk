@@ -10,6 +10,7 @@ use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseService;
 use WPHelpdesk\Domain\Notification\EmailTemplateDefaults;
 use WPHelpdesk\Domain\Notification\NotificationService;
 use WPHelpdesk\Domain\Privacy\GdprHandler;
+use WPHelpdesk\Domain\Privacy\RetentionService;
 use WPHelpdesk\Domain\Routing\RoutingService;
 use WPHelpdesk\Domain\SLA\SlaService;
 use WPHelpdesk\Domain\Ticket\TicketLifecycleService;
