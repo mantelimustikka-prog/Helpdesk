@@ -29,9 +29,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -453,6 +455,31 @@ private fun TicketDetailScreen(
 }
 
 @Composable
+private fun StatusBadge(
+    status: String,
+    label: String,
+    appearanceColors: AppearanceColors = AppearanceColors.Empty,
+    modifier: Modifier = Modifier
+) {
+    val colorHex = appearanceColors.statusColor(status)
+    val backgroundColor = (if (colorHex.isNotEmpty()) {
+        try { Color(android.graphics.Color.parseColor(colorHex)) } catch (_: IllegalArgumentException) { null }
+    } else null) ?: MaterialTheme.colorScheme.surfaceVariant
+    Surface(
+        color = backgroundColor,
+        shape = RoundedCornerShape(4.dp),
+        modifier = modifier
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.Black,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+
+@Composable
 private fun TicketCard(ticket: Ticket, onClick: () -> Unit, appearanceColors: AppearanceColors = AppearanceColors.Empty) {
     Card(
         modifier = Modifier
@@ -465,12 +492,11 @@ private fun TicketCard(ticket: Ticket, onClick: () -> Unit, appearanceColors: Ap
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(4.dp))
-            val statusColor = appearanceColors.statusColor(ticket.status).toComposeColorOrNull()
             Row {
-                Text(
-                    text = ticket.statusLabel(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = statusColor ?: Color.Unspecified
+                StatusBadge(
+                    status = ticket.status,
+                    label = ticket.statusLabel(),
+                    appearanceColors = appearanceColors
                 )
                 listOfNotNull(ticket.priority, ticket.customerName).forEach { value ->
                     Text(
@@ -498,8 +524,20 @@ private fun TicketMetadata(detail: TicketDetail, appearanceColors: AppearanceCol
             Text("Details", style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(8.dp))
             MetadataLine("Ticket number", detail.ticket.ticketNo)
-            val statusColor = appearanceColors.statusColor(detail.ticket.status).toComposeColorOrNull()
-            MetadataLine("Status", detail.ticket.statusLabel(), valueColor = statusColor)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Status", style = MaterialTheme.typography.bodyMedium)
+                StatusBadge(
+                    status = detail.ticket.status,
+                    label = detail.ticket.statusLabel(),
+                    appearanceColors = appearanceColors
+                )
+            }
             MetadataLine("Priority", detail.ticket.priority ?: "—")
             MetadataLine("Customer", detail.ticket.customerName ?: "—")
             MetadataLine("Customer email", detail.ticket.customerEmail ?: "—")
@@ -675,17 +713,20 @@ private fun StatusActions(
                             enabled = false,
                             colors = ButtonDefaults.buttonColors(
                                 disabledContainerColor = statusColor ?: MaterialTheme.colorScheme.surfaceVariant,
-                                disabledContentColor = MaterialTheme.colorScheme.onSurface
+                                disabledContentColor = Color.Black
                             )
                         ) {
                             Text(status.ticketStatusLabel())
                         }
                     } else {
-                        TextButton(
+                        Button(
                             onClick = { onStatusChange(status) },
                             enabled = actionsEnabled,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = statusColor ?: MaterialTheme.colorScheme.primary
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = statusColor ?: MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = Color.Black,
+                                disabledContainerColor = (statusColor ?: MaterialTheme.colorScheme.surfaceVariant).copy(alpha = 0.38f),
+                                disabledContentColor = Color.Black.copy(alpha = 0.38f)
                             )
                         ) {
                             Text(status.ticketStatusLabel())
