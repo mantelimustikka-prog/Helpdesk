@@ -52,6 +52,13 @@ class NotificationPoller(
                         TAG,
                         "Poll found ${newTickets.size} new ticket(s) and ${newReplies.size} new reply/replies."
                     )
+                    // Show system notification visible on lock screen / notification panel.
+                    NotificationChannelManager.showNotification(
+                        applicationContext,
+                        newTickets.size,
+                        newReplies.size
+                    )
+                    // Also post in-app event for when the user is actively viewing the app.
                     NotificationEventBus.post(
                         NotificationEvent(
                             newTicketCount = newTickets.size,
