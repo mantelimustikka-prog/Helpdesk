@@ -20,6 +20,7 @@ use WPHelpdesk\Interfaces\Frontend\FrontendRouter;
 use WPHelpdesk\Interfaces\Frontend\WooCommerceAccountHelpdesk;
 use WPHelpdesk\Interfaces\Rest\Routes;
 use WPHelpdesk\Bootstrap\RewriteRuleManager;
+use WPHelpdesk\Services\FCMService;
 
 class Plugin {
 	protected NetworkMenu $network_menu;
@@ -36,6 +37,7 @@ class Plugin {
 	protected RetentionService $retention_service;
 	protected TicketLifecycleService $ticket_lifecycle_service;
 	protected RewriteRuleManager $rewrite_manager;
+	protected FCMService $fcm_service;
 
 	public function __construct(
 		?NetworkMenu $network_menu = null,
@@ -51,7 +53,8 @@ class Plugin {
 		?GdprHandler $gdpr_handler = null,
 		?RetentionService $retention_service = null,
 		?TicketLifecycleService $ticket_lifecycle_service = null,
-		?RewriteRuleManager $rewrite_manager = null
+		?RewriteRuleManager $rewrite_manager = null,
+		?FCMService $fcm_service = null
 	) {
 		$this->network_menu         = $network_menu ?: new NetworkMenu();
 		$this->routes               = $routes ?: new Routes();
@@ -67,6 +70,7 @@ class Plugin {
 		$this->retention_service    = $retention_service ?: new RetentionService();
 		$this->ticket_lifecycle_service = $ticket_lifecycle_service ?: new TicketLifecycleService();
 		$this->rewrite_manager      = $rewrite_manager ?: new RewriteRuleManager();
+		$this->fcm_service          = $fcm_service ?: new FCMService();
 	}
 
 	/**
@@ -163,6 +167,21 @@ class Plugin {
 
 		$this->notification_service->sendTicketCreatedAdmin( $ticket );
 
+		// FCM push to all admin app users so the notification arrives instantly
+		// even when the Android app is in the background or Doze mode is active.
+		$subject = isset( $ticket['subject'] ) ? (string) $ticket['subject'] : __( 'New ticket', 'wp-helpdesk' );
+		foreach ( $this->getAdminUserIds() as $admin_id ) {
+			$this->fcm_service->sendPush(
+				$admin_id,
+				__( 'New Helpdesk Ticket', 'wp-helpdesk' ),
+				$subject,
+				array(
+					'new_tickets' => '1',
+					'new_replies' => '0',
+				)
+			);
+		}
+
 		// P3: stamp SLA deadlines.
 		$this->sla_service->stampDeadlines( $ticket );
 	}
@@ -178,6 +197,22 @@ class Plugin {
 		if ( ! empty( $ticket['requester_email'] ) ) {
 			$this->notification_service->sendTicketReply( $ticket, $message, (string) $ticket['requester_email'] );
 		}
+
+		// FCM push: notify all admin app users of the new reply so it arrives instantly.
+		$excerpt = isset( $message['body'] )
+			? mb_substr( wp_strip_all_tags( (string) $message['body'] ), 0, 100 )
+			: __( 'New reply', 'wp-helpdesk' );
+		foreach ( $this->getAdminUserIds() as $admin_id ) {
+			$this->fcm_service->sendPush(
+				$admin_id,
+				__( 'New Helpdesk Reply', 'wp-helpdesk' ),
+				$excerpt,
+				array(
+					'new_tickets' => '0',
+					'new_replies' => '1',
+				)
+			);
+		}
 	}
 
 	/**
@@ -192,5 +227,29 @@ class Plugin {
 		if ( ! empty( $ticket['requester_email'] ) ) {
 			$this->notification_service->sendStatusChanged( $ticket, $old_status, $new_status, (string) $ticket['requester_email'] );
 		}
+	}
+
+	/**
+	 * Return the WordPress user IDs of all users with helpdesk management or
+	 * reply capabilities (i.e. all potential Android admin-app users).
+	 *
+	 * @return int[]
+	 */
+	private function getAdminUserIds(): array {
+		$limit = 200;
+		$users = get_users(
+			array(
+				'capability' => array( 'hd_manage_tickets', 'hd_reply_tickets' ),
+				'fields'     => 'ID',
+				'number'     => $limit,
+			)
+		);
+
+		if ( count( $users ) >= $limit ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'WP Helpdesk FCM: admin user query hit the limit of ' . $limit . '. Some users may not receive push notifications.' );
+		}
+
+		return array_map( 'intval', $users );
 	}
 }

@@ -13,7 +13,12 @@ private const val TAG = "NotificationPoller"
 /**
  * WorkManager worker that polls the server for new tickets and replies.
  *
- * Runs every 5 minutes (scheduled by [NotificationScheduler]).
+ * Runs every 15 minutes (scheduled by [NotificationScheduler]) as a reliable fallback
+ * when FCM push delivery is unavailable or delayed.  When FCM delivers a push message
+ * via [com.wphelpd.admin.core.firebase.HelpdeskMessagingService], it advances the
+ * last-checked timestamp so this poller will not re-surface the same items as
+ * duplicates.
+ *
  * Uses the stored auth config to authenticate and the [NotificationPreferences]
  * to track the last-checked timestamp.
  */
@@ -36,7 +41,7 @@ class NotificationPoller(
             if (stored > 0L) stored else (System.currentTimeMillis() / 1000L) - DEFAULT_LOOKBACK_SECONDS
         }
 
-        Log.d(TAG, "Polling for notifications since $sinceTimestamp")
+        Log.d(TAG, "Polling for notifications since $sinceTimestamp (fallback poll — FCM is primary)")
 
         return when (val result = repository.getNotificationsSince(config, sinceTimestamp)) {
             is NetworkResult.Success -> {

@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -71,6 +72,8 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.work.runtime)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)

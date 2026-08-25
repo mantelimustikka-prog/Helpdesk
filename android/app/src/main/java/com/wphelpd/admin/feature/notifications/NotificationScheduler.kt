@@ -21,6 +21,9 @@ object NotificationScheduler {
      * Schedules a periodic poll every [POLL_INTERVAL_MINUTES] minutes.
      * Safe to call multiple times — uses [ExistingPeriodicWorkPolicy.KEEP] so an
      * existing job is not replaced.
+     *
+     * The interval is 15 minutes to align with Android's Doze maintenance windows,
+     * acting as a reliable fallback when FCM push delivery is unavailable.
      */
     fun schedule(context: Context) {
         val constraints = Constraints.Builder()
@@ -50,5 +53,7 @@ object NotificationScheduler {
         Log.d(TAG, "Notification polling cancelled.")
     }
 
-    private const val POLL_INTERVAL_MINUTES = 5L
+    // 15 minutes aligns with Android Doze maintenance windows and acts as a
+    // reliable fallback when FCM push delivery is delayed or unavailable.
+    private const val POLL_INTERVAL_MINUTES = 15L
 }

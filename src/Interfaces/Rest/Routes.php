@@ -20,6 +20,7 @@ class Routes {
 	protected AttachmentController $attachment_controller;
 	protected PublicTicketController $public_ticket_controller;
 	protected AppPasswordResetController $app_password_reset_controller;
+	protected FCMTokenController $fcm_token_controller;
 
 	public function __construct() {
 		$this->admin_api_controller          = new AdminApiController();
@@ -31,6 +32,7 @@ class Routes {
 		$this->attachment_controller         = new AttachmentController( new AttachmentService() );
 		$this->public_ticket_controller      = new PublicTicketController();
 		$this->app_password_reset_controller = new AppPasswordResetController();
+		$this->fcm_token_controller          = new FCMTokenController();
 	}
 
 	/**
@@ -144,6 +146,26 @@ class Routes {
 			array(
 				'methods'             => 'GET',
 				'callback'            => array( $this->notification_controller, 'since' ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/notifications/register-device',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this->fcm_token_controller, 'registerDevice' ),
+				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
+			)
+		);
+
+		register_rest_route(
+			$namespace,
+			'/notifications/unregister-device',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this->fcm_token_controller, 'unregisterDevice' ),
 				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);

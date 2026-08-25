@@ -7,3 +7,7 @@ local.properties
 
 # Ignore Kotlin plugin data
 .kotlin
+
+# Firebase configuration — generated per-project, contains app credentials.
+# Place your google-services.json in android/app/ before building.
+google-services.json
