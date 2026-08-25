@@ -7,8 +7,7 @@ import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.data.api.HelpdeskAdminApi
 import com.wphelpd.admin.data.api.dto.AuthCheckResponseDto
 import com.wphelpd.admin.data.api.dto.AppearanceColorsDto
-import com.wphelpd.admin.data.api.dto.DeviceTokenRequestDto
-import com.wphelpd.admin.data.api.dto.DeviceTokenResponseDto
+import com.wphelpd.admin.data.api.dto.NotificationsSinceResponseDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
 import com.wphelpd.admin.data.api.dto.NoteResponseDto
 import com.wphelpd.admin.data.api.dto.PaginationDto
@@ -1312,11 +1311,8 @@ private class FakeHelpdeskAdminApi(
         return noteResponse
     }
 
-    override suspend fun registerDeviceToken(request: DeviceTokenRequestDto): DeviceTokenResponseDto =
-        DeviceTokenResponseDto(registered = true)
-
-    override suspend fun unregisterDeviceToken(request: DeviceTokenRequestDto): DeviceTokenResponseDto =
-        DeviceTokenResponseDto(registered = false)
+    override suspend fun getNotificationsSince(sinceTimestamp: Long): NotificationsSinceResponseDto =
+        NotificationsSinceResponseDto(success = true, newTickets = emptyList(), newReplies = emptyList())
 }
 
 private fun ticketDetailResponse(id: Int, subject: String): TicketDetailResponseDto = TicketDetailResponseDto(

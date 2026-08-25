@@ -7,8 +7,9 @@ import com.wphelpd.admin.core.network.AuthConfig
 import com.wphelpd.admin.core.network.NetworkResult
 import com.wphelpd.admin.data.api.HelpdeskAdminApi
 import com.wphelpd.admin.data.api.dto.AuthCheckResponseDto
-import com.wphelpd.admin.data.api.dto.DeviceTokenRequestDto
-import com.wphelpd.admin.data.api.dto.DeviceTokenResponseDto
+import com.wphelpd.admin.data.api.dto.NotificationReplyDto
+import com.wphelpd.admin.data.api.dto.NotificationTicketDto
+import com.wphelpd.admin.data.api.dto.NotificationsSinceResponseDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
 import com.wphelpd.admin.data.api.dto.NoteResponseDto
 import com.wphelpd.admin.data.api.dto.PaginationDto
@@ -981,51 +982,43 @@ class HelpdeskRepositoryTest {
     }
 
     @Test
-    fun registerDeviceToken_callsApiWithExpectedPayload() = runTest {
+    fun getNotificationsSince_returnsNewItemsFromApi() = runTest {
+        val sinceTs = 1724544000L
         val api = FakeHelpdeskAdminApi(
-            deviceTokenRegisterResponse = DeviceTokenResponseDto(registered = true)
+            notificationsSinceResponse = NotificationsSinceResponseDto(
+                success = true,
+                newTickets = listOf(
+                    NotificationTicketDto(
+                        id = 42,
+                        ticketNo = "HD-42",
+                        subject = "Test ticket",
+                        status = "open",
+                        createdAt = "2026-08-24T20:00:00Z"
+                    )
+                ),
+                newReplies = listOf(
+                    NotificationReplyDto(
+                        id = 10,
+                        ticketId = 42,
+                        ticketNo = "HD-42",
+                        author = "Staff",
+                        messageExcerpt = "Reply body",
+                        createdAt = "2026-08-24T20:05:00Z"
+                    )
+                )
+            )
         )
         val repository = HelpdeskRepository { api }
 
-        val result = repository.registerDeviceToken(
-            config = config,
-            deviceToken = "fcm-token-123",
-            appVersion = "0.1.0"
-        )
+        val result = repository.getNotificationsSince(config, sinceTs)
 
         assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
-        assertThat((result as NetworkResult.Success).value).isTrue()
-        assertThat(api.lastRegisterRequest).isEqualTo(
-            DeviceTokenRequestDto(
-                deviceToken = "fcm-token-123",
-                platform = "android",
-                appVersion = "0.1.0"
-            )
-        )
-    }
-
-    @Test
-    fun unregisterDeviceToken_callsApiWithExpectedPayload() = runTest {
-        val api = FakeHelpdeskAdminApi(
-            deviceTokenUnregisterResponse = DeviceTokenResponseDto(registered = false)
-        )
-        val repository = HelpdeskRepository { api }
-
-        val result = repository.unregisterDeviceToken(
-            config = config,
-            deviceToken = "fcm-token-123",
-            appVersion = "0.1.0"
-        )
-
-        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
-        assertThat((result as NetworkResult.Success).value).isFalse()
-        assertThat(api.lastUnregisterRequest).isEqualTo(
-            DeviceTokenRequestDto(
-                deviceToken = "fcm-token-123",
-                platform = "android",
-                appVersion = "0.1.0"
-            )
-        )
+        val response = (result as NetworkResult.Success).value
+        assertThat(response.success).isTrue()
+        assertThat(response.newTickets).hasSize(1)
+        assertThat(response.newTickets[0].id).isEqualTo(42)
+        assertThat(response.newReplies).hasSize(1)
+        assertThat(response.newReplies[0].ticketId).isEqualTo(42)
     }
 }
 
@@ -1049,11 +1042,12 @@ private class FakeHelpdeskAdminApi(
     private val replyResponse: ReplyResponseDto = ReplyResponseDto(success = true),
     private val statusResponse: StatusUpdateResponseDto = StatusUpdateResponseDto(success = true),
     private val noteResponse: NoteResponseDto = NoteResponseDto(success = true),
-    private val deviceTokenRegisterResponse: DeviceTokenResponseDto = DeviceTokenResponseDto(registered = true),
-    private val deviceTokenUnregisterResponse: DeviceTokenResponseDto = DeviceTokenResponseDto(registered = false)
+    private val notificationsSinceResponse: NotificationsSinceResponseDto = NotificationsSinceResponseDto(
+        success = true,
+        newTickets = emptyList(),
+        newReplies = emptyList()
+    )
 ) : HelpdeskAdminApi {
-    var lastRegisterRequest: DeviceTokenRequestDto? = null
-    var lastUnregisterRequest: DeviceTokenRequestDto? = null
     val ticketMessagesRequestsById: MutableMap<Int, Int> = mutableMapOf()
 
     override suspend fun authCheck(): AuthCheckResponseDto = authResponse
@@ -1078,13 +1072,6 @@ private class FakeHelpdeskAdminApi(
 
     override suspend fun addTicketNote(id: Int, request: NoteRequestDto): NoteResponseDto = noteResponse
 
-    override suspend fun registerDeviceToken(request: DeviceTokenRequestDto): DeviceTokenResponseDto {
-        lastRegisterRequest = request
-        return deviceTokenRegisterResponse
-    }
-
-    override suspend fun unregisterDeviceToken(request: DeviceTokenRequestDto): DeviceTokenResponseDto {
-        lastUnregisterRequest = request
-        return deviceTokenUnregisterResponse
-    }
+    override suspend fun getNotificationsSince(sinceTimestamp: Long): NotificationsSinceResponseDto =
+        notificationsSinceResponse
 }

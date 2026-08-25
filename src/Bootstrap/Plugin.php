@@ -10,9 +10,6 @@ use WPHelpdesk\Domain\KnowledgeBase\KnowledgeBaseService;
 use WPHelpdesk\Domain\Notification\EmailTemplateDefaults;
 use WPHelpdesk\Domain\Notification\NotificationService;
 use WPHelpdesk\Domain\Privacy\GdprHandler;
-use WPHelpdesk\Domain\Privacy\RetentionService;
-use WPHelpdesk\Domain\Push\FirebasePushProvider;
-use WPHelpdesk\Domain\Push\PushService;
 use WPHelpdesk\Domain\Routing\RoutingService;
 use WPHelpdesk\Domain\SLA\SlaService;
 use WPHelpdesk\Domain\Ticket\TicketLifecycleService;
@@ -26,7 +23,6 @@ class Plugin {
 	protected NetworkMenu $network_menu;
 	protected Routes $routes;
 	protected NotificationService $notification_service;
-	protected PushService $push_service;
 	protected AttachmentService $attachment_service;
 	protected Logger $logger;
 	protected FrontendRouter $frontend_router;
@@ -42,7 +38,6 @@ class Plugin {
 		?NetworkMenu $network_menu = null,
 		?Routes $routes = null,
 		?NotificationService $notification_service = null,
-		?PushService $push_service = null,
 		?AttachmentService $attachment_service = null,
 		?Logger $logger = null,
 		?FrontendRouter $frontend_router = null,
@@ -57,7 +52,6 @@ class Plugin {
 		$this->network_menu         = $network_menu ?: new NetworkMenu();
 		$this->routes               = $routes ?: new Routes();
 		$this->notification_service = $notification_service ?: new NotificationService();
-		$this->push_service         = $push_service ?: new PushService( new FirebasePushProvider() );
 		$this->attachment_service   = $attachment_service ?: new AttachmentService();
 		$this->logger               = $logger ?: new Logger();
 		$this->frontend_router      = $frontend_router ?: new FrontendRouter();
@@ -93,12 +87,11 @@ class Plugin {
 		// WooCommerce in the plugin load order.
 		add_action( 'init', array( $this->woocommerce_account_helpdesk, 'register' ), 1 );
 
-		// Ticket lifecycle hooks (notifications + push).
+		// Ticket lifecycle hooks (notifications).
 		add_action( 'hd_ticket_replied', array( $this, 'handleTicketReplied' ), 10, 2 );
 		add_action( 'hd_ticket_replied', array( $this->ticket_lifecycle_service, 'syncStatusAfterReply' ), 20, 2 );
 		add_action( 'hd_ticket_status_changed', array( $this, 'handleTicketStatusChanged' ), 10, 3 );
 		add_action( 'hd_ticket_created', array( $this, 'handleTicketCreated' ), 10, 1 );
-		add_action( 'hd_ticket_assigned', array( $this, 'handleTicketAssigned' ), 10, 2 );
 
 		// P3: SLA cron.
 		add_filter( 'cron_schedules', array( $this, 'addCronSchedules' ) );
@@ -160,7 +153,6 @@ class Plugin {
 		}
 
 		$this->notification_service->sendTicketCreatedAdmin( $ticket );
-		$this->push_service->notifyNewTicket( $ticket );
 
 		// P3: stamp SLA deadlines.
 		$this->sla_service->stampDeadlines( $ticket );
@@ -177,8 +169,6 @@ class Plugin {
 		if ( ! empty( $ticket['requester_email'] ) ) {
 			$this->notification_service->sendTicketReply( $ticket, $message, (string) $ticket['requester_email'] );
 		}
-
-		$this->push_service->notifyNewReply( $ticket, $message );
 	}
 
 	/**
@@ -192,21 +182,6 @@ class Plugin {
 	public function handleTicketStatusChanged( array $ticket, string $old_status, string $new_status ): void {
 		if ( ! empty( $ticket['requester_email'] ) ) {
 			$this->notification_service->sendStatusChanged( $ticket, $old_status, $new_status, (string) $ticket['requester_email'] );
-		}
-
-		$this->push_service->notifyStatusChanged( $ticket, $new_status );
-	}
-
-	/**
-	 * Trigger push notifications for assignments.
-	 *
-	 * @param array<string, mixed> $ticket      Ticket data.
-	 * @param int                  $assigned_to Assignee user ID.
-	 * @return void
-	 */
-	public function handleTicketAssigned( array $ticket, int $assigned_to ): void {
-		if ( $assigned_to > 0 ) {
-			$this->push_service->notifyAssigned( $ticket, $assigned_to );
 		}
 	}
 }

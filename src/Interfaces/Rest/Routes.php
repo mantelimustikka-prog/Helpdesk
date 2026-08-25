@@ -16,7 +16,7 @@ class Routes {
 	protected AdminTicketController $admin_ticket_controller;
 	protected AdminUserController $admin_user_controller;
 	protected AdminAttachmentController $admin_attachment_controller;
-	protected DeviceController $device_controller;
+	protected NotificationController $notification_controller;
 	protected AttachmentController $attachment_controller;
 	protected PublicTicketController $public_ticket_controller;
 
@@ -26,7 +26,7 @@ class Routes {
 		$this->admin_ticket_controller     = new AdminTicketController();
 		$this->admin_user_controller       = new AdminUserController();
 		$this->admin_attachment_controller = new AdminAttachmentController();
-		$this->device_controller          = new DeviceController();
+		$this->notification_controller     = new NotificationController();
 		$this->attachment_controller       = new AttachmentController( new AttachmentService() );
 		$this->public_ticket_controller    = new PublicTicketController();
 	}
@@ -138,20 +138,10 @@ class Routes {
 
 		register_rest_route(
 			$namespace,
-			'/devices/register',
+			'/notifications/since',
 			array(
-				'methods'             => 'POST',
-				'callback'            => array( $this->device_controller, 'register' ),
-				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
-			)
-		);
-
-		register_rest_route(
-			$namespace,
-			'/devices/unregister',
-			array(
-				'methods'             => 'POST',
-				'callback'            => array( $this->device_controller, 'unregister' ),
+				'methods'             => 'GET',
+				'callback'            => array( $this->notification_controller, 'since' ),
 				'permission_callback' => array( $this->admin_api_controller, 'canAccess' ),
 			)
 		);

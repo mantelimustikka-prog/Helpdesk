@@ -14,10 +14,9 @@ This directory contains the initial Android admin client scaffold for the WP Hel
   - `POST /tickets/{id}/reply`
   - `POST /tickets/{id}/status`
   - `POST /tickets/{id}/note`
-- Push scaffolding:
-  - `POST /devices/register`
-  - `POST /devices/unregister`
-  - FCM background notifications for `ticket_created` and `ticket_replied` payloads
+- In-app polling notifications:
+  - `GET /notifications/since?since={timestamp}` — polls every 5 minutes for new tickets/replies
+  - In-app dialog shown when new items are found
 - Compose UI + `TicketsViewModel` for auth check, loading and error states, ticket list, ticket detail, and reply/status/note actions
 - JVM unit tests for auth and ticket response mapping
 
@@ -35,5 +34,4 @@ Open the `/android` directory as a standalone Gradle project.
 
 - Enter either the site root URL (`https://example.com`) or the full admin API base URL (`https://example.com/wp-json/helpdesk/v1/admin/`).
 - The ticket DTO supports both the documented contract payload (`data` + `pagination`) and the current plugin scaffold payload (`items` + `page`/`per_page`) so the first app iteration can work while the backend evolves.
-- Push behavior assumes backend support for `ticket_created` / `ticket_replied` payloads and valid device registration endpoints.
-- FCM delivery should be verified against real server configuration because plugin push delivery still has legacy placeholder areas noted in the root README.
+- Polling notifications require the user to be logged in; polling is cancelled on logout and resumed on login.
