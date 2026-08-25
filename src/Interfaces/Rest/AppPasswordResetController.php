@@ -356,7 +356,7 @@ class AppPasswordResetController extends AdminApiController {
 	protected function sendResetEmail( string $email, string $code ): void {
 		wp_mail(
 			$email,
-			'WP HelpD App Password Reset',
+			'WP HelpDesk App Password Reset',
 			"Your password reset code is: {$code}. Valid for 15 minutes."
 		);
 	}

@@ -69,6 +69,9 @@ class AppLockViewModel(
         }
     }
 
+    /** Returns the email address stored during setup, used as a hint in the reset flow. */
+    fun getStoredEmail(): String? = repository.getEmail()
+
     companion object {
         /** Minimum password length enforced by product requirements. */
         private const val MIN_PASSWORD_LENGTH = 4

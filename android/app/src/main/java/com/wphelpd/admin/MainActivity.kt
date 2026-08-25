@@ -180,13 +180,12 @@ class MainActivity : ComponentActivity() {
                     }
                     else -> {
                         var showPasswordResetFlow by remember { mutableStateOf(false) }
-                        val lockManager = AppLockManager(applicationContext)
                         val siteUrl = serverConfigRepository.load()?.siteUrl
 
                         if (showPasswordResetFlow && siteUrl != null) {
                             PasswordResetFlow(
                                 siteUrl = siteUrl,
-                                hintEmail = lockManager.getEmail(),
+                                hintEmail = lockViewModel.getStoredEmail(),
                                 onResetSuccess = { newPassword ->
                                     lockViewModel.updatePassword(newPassword)
                                     showPasswordResetFlow = false

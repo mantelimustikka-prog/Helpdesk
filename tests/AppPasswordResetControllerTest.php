@@ -124,7 +124,7 @@ final class AppPasswordResetControllerTest extends TestCase {
 
 		self::assertCount( 1, $GLOBALS['wp_mail_calls'] );
 		self::assertSame( 'user@example.com', $GLOBALS['wp_mail_calls'][0]['to'] );
-		self::assertSame( 'WP HelpD App Password Reset', $GLOBALS['wp_mail_calls'][0]['subject'] );
+		self::assertSame( 'WP HelpDesk App Password Reset', $GLOBALS['wp_mail_calls'][0]['subject'] );
 	}
 
 	public function testRequestResetCodeReusesCodeIfRequestedWithinFiveMinutes(): void {

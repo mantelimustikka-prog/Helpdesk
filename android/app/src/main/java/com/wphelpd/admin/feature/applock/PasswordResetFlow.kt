@@ -55,8 +55,6 @@ fun PasswordResetFlow(
     onResetSuccess: (newPassword: String) -> Unit,
     onCancel: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-
     var step by rememberSaveable { mutableStateOf(ResetStep.EMAIL) }
     var email by rememberSaveable { mutableStateOf(hintEmail ?: "") }
     var resetToken by rememberSaveable { mutableStateOf("") }
@@ -66,21 +64,7 @@ fun PasswordResetFlow(
             PasswordResetEmailScreen(
                 email = email,
                 onEmailChange = { email = it },
-                onSubmit = {
-                    scope.launch {
-                        try {
-                            val api = HelpdeskPublicApi.create(siteUrl)
-                            val response = api.requestPasswordResetCode(
-                                RequestResetCodeRequestDto(email = email)
-                            )
-                            if (response.success) {
-                                step = ResetStep.CODE
-                            }
-                        } catch (_: Exception) {
-                            // Errors are surfaced inside the screen via the isLoading/error pattern
-                        }
-                    }
-                },
+                onSubmit = { step = ResetStep.CODE },
                 onCancel = onCancel,
                 siteUrl = siteUrl
             )
