@@ -29,14 +29,30 @@ class NotificationPreferences(context: Context) {
     }
 
     /**
-     * Clears the stored timestamp (e.g. on logout).
+     * Returns the wall-clock millisecond timestamp of the last successful poll,
+     * or 0 if never recorded.
+     */
+    fun getLastSuccessfulPollTime(): Long {
+        return prefs.getLong(KEY_LAST_SUCCESSFUL_POLL, 0L)
+    }
+
+    /**
+     * Persists the wall-clock millisecond timestamp of the last successful poll.
+     */
+    fun setLastSuccessfulPollTime(timestamp: Long) {
+        prefs.edit().putLong(KEY_LAST_SUCCESSFUL_POLL, timestamp).apply()
+    }
+
+    /**
+     * Clears all stored notification state (e.g. on logout).
      */
     fun clear() {
-        prefs.edit().remove(KEY_LAST_CHECKED).apply()
+        prefs.edit().clear().apply()
     }
 
     companion object {
         private const val PREFS_NAME = "hd_notification_prefs"
         private const val KEY_LAST_CHECKED = "last_notification_check"
+        private const val KEY_LAST_SUCCESSFUL_POLL = "last_successful_poll"
     }
 }
