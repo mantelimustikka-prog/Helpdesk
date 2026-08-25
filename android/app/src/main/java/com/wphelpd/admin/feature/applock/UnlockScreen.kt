@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +35,8 @@ import com.wphelpd.admin.R
 @Composable
 fun UnlockScreen(
     errorMessage: String?,
-    onUnlock: (password: String) -> Unit
+    onUnlock: (password: String) -> Unit,
+    onForgotPassword: (() -> Unit)? = null
 ) {
     var password by rememberSaveable { mutableStateOf("") }
 
@@ -97,6 +99,15 @@ fun UnlockScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Unlock")
+            }
+
+            if (onForgotPassword != null) {
+                TextButton(
+                    onClick = onForgotPassword,
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text("Forgot Password?", color = Color.White)
+                }
             }
         }
     }

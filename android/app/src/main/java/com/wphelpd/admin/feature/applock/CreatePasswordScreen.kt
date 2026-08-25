@@ -34,10 +34,11 @@ import com.wphelpd.admin.R
 @Composable
 fun CreatePasswordScreen(
     errorMessage: String?,
-    onCreatePassword: (password: String, confirm: String) -> Unit
+    onCreatePassword: (password: String, confirm: String, email: String) -> Unit
 ) {
     var password by rememberSaveable { mutableStateOf("") }
     var confirm by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
@@ -67,6 +68,12 @@ fun CreatePasswordScreen(
             Text(
                 text = "Set a local password to protect the app. You will need to enter it every time you open the app.",
                 style = MaterialTheme.typography.bodyMedium,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Your email is stored locally and used only if you need to reset your password.",
+                style = MaterialTheme.typography.bodySmall,
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -103,6 +110,22 @@ fun CreatePasswordScreen(
                 )
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email (for password reset)", color = Color.White) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedLabelColor = Color.White,
+                    unfocusedLabelColor = Color.White
+                )
+            )
+
             if (errorMessage != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
@@ -110,7 +133,7 @@ fun CreatePasswordScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
             Button(
-                onClick = { onCreatePassword(password, confirm) },
+                onClick = { onCreatePassword(password, confirm, email) },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Set Password")

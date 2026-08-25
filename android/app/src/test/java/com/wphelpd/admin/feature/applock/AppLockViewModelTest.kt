@@ -134,9 +134,12 @@ private class FakeAppLockRepository(
     private val hasPassword: Boolean,
     private val correctPassword: String = ""
 ) : AppLockRepository {
+    private var storedEmail: String? = null
     override fun isPasswordSet(): Boolean = hasPassword
     override fun setPassword(password: String) { /* no-op in tests */ }
     override fun verifyPassword(password: String): Boolean = password == correctPassword
+    override fun getEmail(): String? = storedEmail
+    override fun setEmail(email: String) { storedEmail = email }
 }
 
 private class MainDispatcherRule(

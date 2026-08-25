@@ -25,7 +25,7 @@ class AppLockViewModel(
     }
 
     /** Called from the create-password screen. */
-    fun createPassword(password: String, confirm: String) {
+    fun createPassword(password: String, confirm: String, email: String = "") {
         if (password.length < MIN_PASSWORD_LENGTH) {
             _uiState.update { it.copy(errorMessage = "Password must be at least $MIN_PASSWORD_LENGTH characters.") }
             return
@@ -36,6 +36,9 @@ class AppLockViewModel(
         }
         viewModelScope.launch(Dispatchers.IO) {
             repository.setPassword(password)
+            if (email.isNotBlank()) {
+                repository.setEmail(email)
+            }
             _uiState.update { it.copy(isFirstRun = false, isUnlocked = true, errorMessage = null) }
         }
     }
@@ -57,6 +60,13 @@ class AppLockViewModel(
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    /** Called after a successful password reset to update the locally stored password. */
+    fun updatePassword(newPassword: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.setPassword(newPassword)
+        }
     }
 
     companion object {

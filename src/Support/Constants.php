@@ -80,7 +80,8 @@ class Constants {
 	public const TABLE_TICKET_EVENTS       = 'ticket_events';
 	public const TABLE_ATTACHMENTS         = 'attachments';
 	public const TABLE_RATE_LIMITS         = 'rate_limits';
-	public const TABLE_ROUTING_RULES       = 'routing_rules';
+	public const TABLE_ROUTING_RULES         = 'routing_rules';
+	public const TABLE_APP_PASSWORD_RESETS   = 'app_password_resets';
 
 	/**
 	 * Get known network option keys.
@@ -157,6 +158,7 @@ class Constants {
 			self::TABLE_ATTACHMENTS,
 			self::TABLE_RATE_LIMITS,
 			self::TABLE_ROUTING_RULES,
+			self::TABLE_APP_PASSWORD_RESETS,
 		);
 	}
 }

@@ -37,9 +37,7 @@ class AppLockManager(context: Context) : AppLockRepository {
     private val secureRandom = SecureRandom()
 
     /** Returns true if a local password has already been set. */
-    override fun isPasswordSet(): Boolean = prefs.contains(KEY_HASH) && prefs.contains(KEY_SALT)
-
-    /**
+    override fun isPasswordSet(): Boolean = prefs.contains(KEY_HASH) && prefs.contains(KEY_SALT)    /**
      * Creates and stores the app password hash.
      * Overwrites any previously stored hash.
      */
@@ -64,6 +62,14 @@ class AppLockManager(context: Context) : AppLockRepository {
         )
     }
 
+    /** Returns the email address stored during first-run setup, or null if not set. */
+    override fun getEmail(): String? = prefs.getString(KEY_EMAIL, null)
+
+    /** Persists the email address used for password reset OTP. */
+    override fun setEmail(email: String) {
+        prefs.edit().putString(KEY_EMAIL, email).apply()
+    }
+
     @OptIn(ExperimentalEncodingApi::class)
     private fun hash(password: String, salt: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -76,6 +82,7 @@ class AppLockManager(context: Context) : AppLockRepository {
         private const val PREFS_NAME = "app_lock_prefs"
         private const val KEY_HASH = "password_hash"
         private const val KEY_SALT = "password_salt"
+        private const val KEY_EMAIL = "reset_email"
         private const val SALT_LENGTH = 16
     }
 }

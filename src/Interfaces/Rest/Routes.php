@@ -19,16 +19,18 @@ class Routes {
 	protected NotificationController $notification_controller;
 	protected AttachmentController $attachment_controller;
 	protected PublicTicketController $public_ticket_controller;
+	protected AppPasswordResetController $app_password_reset_controller;
 
 	public function __construct() {
-		$this->admin_api_controller        = new AdminApiController();
-		$this->admin_auth_controller       = new AdminAuthController();
-		$this->admin_ticket_controller     = new AdminTicketController();
-		$this->admin_user_controller       = new AdminUserController();
-		$this->admin_attachment_controller = new AdminAttachmentController();
-		$this->notification_controller     = new NotificationController();
-		$this->attachment_controller       = new AttachmentController( new AttachmentService() );
-		$this->public_ticket_controller    = new PublicTicketController();
+		$this->admin_api_controller          = new AdminApiController();
+		$this->admin_auth_controller         = new AdminAuthController();
+		$this->admin_ticket_controller       = new AdminTicketController();
+		$this->admin_user_controller         = new AdminUserController();
+		$this->admin_attachment_controller   = new AdminAttachmentController();
+		$this->notification_controller       = new NotificationController();
+		$this->attachment_controller         = new AttachmentController( new AttachmentService() );
+		$this->public_ticket_controller      = new PublicTicketController();
+		$this->app_password_reset_controller = new AppPasswordResetController();
 	}
 
 	/**
@@ -147,5 +149,37 @@ class Routes {
 		);
 
 		$this->public_ticket_controller->register( Helpers::restNamespace() );
+
+		$public_ns = Helpers::restNamespace();
+
+		register_rest_route(
+			$public_ns,
+			'/public/app/request-reset-code',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this->app_password_reset_controller, 'requestResetCode' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$public_ns,
+			'/public/app/verify-reset-code',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this->app_password_reset_controller, 'verifyResetCode' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			$public_ns,
+			'/public/app/reset-password',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this->app_password_reset_controller, 'resetPassword' ),
+				'permission_callback' => '__return_true',
+			)
+		);
 	}
 }

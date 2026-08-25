@@ -41,6 +41,7 @@ import com.wphelpd.admin.feature.applock.AppLockLifecyclePolicy
 import com.wphelpd.admin.feature.applock.AppLockManager
 import com.wphelpd.admin.feature.applock.AppLockViewModel
 import com.wphelpd.admin.feature.applock.CreatePasswordScreen
+import com.wphelpd.admin.feature.applock.PasswordResetFlow
 import com.wphelpd.admin.feature.applock.UnlockScreen
 import com.wphelpd.admin.feature.notifications.NotificationDialog
 import com.wphelpd.admin.feature.notifications.NotificationEvent
@@ -62,6 +63,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var lockViewModel: AppLockViewModel
     private lateinit var ticketsViewModel: TicketsViewModel
     private lateinit var notificationPreferences: NotificationPreferences
+    private lateinit var serverConfigRepository: SecureServerConfigRepository
     private val processLifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStop(owner: LifecycleOwner) {
             if (!::lockViewModel.isInitialized || !::ticketsViewModel.isInitialized) return
@@ -171,16 +173,35 @@ class MainActivity : ComponentActivity() {
                     lockState.isFirstRun -> {
                         CreatePasswordScreen(
                             errorMessage = lockState.errorMessage,
-                            onCreatePassword = { pw, confirm ->
-                                lockViewModel.createPassword(pw, confirm)
+                            onCreatePassword = { pw, confirm, email ->
+                                lockViewModel.createPassword(pw, confirm, email)
                             }
                         )
                     }
                     else -> {
-                        UnlockScreen(
-                            errorMessage = lockState.errorMessage,
-                            onUnlock = { pw -> lockViewModel.unlock(pw) }
-                        )
+                        var showPasswordResetFlow by remember { mutableStateOf(false) }
+                        val lockManager = AppLockManager(applicationContext)
+                        val siteUrl = serverConfigRepository.load()?.siteUrl
+
+                        if (showPasswordResetFlow && siteUrl != null) {
+                            PasswordResetFlow(
+                                siteUrl = siteUrl,
+                                hintEmail = lockManager.getEmail(),
+                                onResetSuccess = { newPassword ->
+                                    lockViewModel.updatePassword(newPassword)
+                                    showPasswordResetFlow = false
+                                },
+                                onCancel = { showPasswordResetFlow = false }
+                            )
+                        } else {
+                            UnlockScreen(
+                                errorMessage = lockState.errorMessage,
+                                onUnlock = { pw -> lockViewModel.unlock(pw) },
+                                onForgotPassword = if (siteUrl != null) {
+                                    { showPasswordResetFlow = true }
+                                } else null
+                            )
+                        }
                     }
                 }
             }
@@ -200,6 +221,7 @@ class MainActivity : ComponentActivity() {
             pendingTicketId.value = extractTicketIdFromIntent(intent)
             val lockManager = AppLockManager(applicationContext)
             val serverConfigRepository = SecureServerConfigRepository(applicationContext)
+            this.serverConfigRepository = serverConfigRepository
             notificationPreferences = NotificationPreferences(applicationContext)
             lockViewModel = ViewModelProvider(
                 this,
