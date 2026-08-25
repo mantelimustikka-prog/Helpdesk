@@ -13,7 +13,7 @@ private const val TAG = "NotificationPoller"
 /**
  * WorkManager worker that polls the server for new tickets and replies.
  *
- * Runs every 5 minutes (scheduled by [NotificationScheduler]).
+ * Runs every 15 minutes (scheduled by [NotificationScheduler]).
  * Uses the stored auth config to authenticate and the [NotificationPreferences]
  * to track the last-checked timestamp.
  */
@@ -27,6 +27,8 @@ class NotificationPoller(
     private val serverConfigRepository = SecureServerConfigRepository(appContext)
 
     override suspend fun doWork(): Result {
+        Log.d(TAG, "NotificationPoller.doWork() started (attempt ${runAttemptCount + 1})")
+
         val config = serverConfigRepository.load() ?: run {
             Log.d(TAG, "No auth config stored — skipping poll.")
             return Result.success()
@@ -43,9 +45,6 @@ class NotificationPoller(
                 val response = result.value
                 val newTickets = response.newTickets
                 val newReplies = response.newReplies
-
-                // Update the last-checked timestamp.
-                prefs.setLastCheckedTimestamp(System.currentTimeMillis() / 1000L)
 
                 if (newTickets.isNotEmpty() || newReplies.isNotEmpty()) {
                     Log.i(
@@ -69,11 +68,15 @@ class NotificationPoller(
                     Log.d(TAG, "Poll found no new items.")
                 }
 
+                // Update the last-checked and last-successful-poll timestamps.
+                prefs.setLastCheckedTimestamp(System.currentTimeMillis() / 1000L)
+                prefs.setLastSuccessfulPollTime(System.currentTimeMillis())
+
                 Result.success()
             }
 
             is NetworkResult.Failure -> {
-                Log.w(TAG, "Poll failed: ${result.message}")
+                Log.w(TAG, "Poll failed: ${result.message} (attempt ${runAttemptCount + 1})")
                 Result.retry()
             }
         }
