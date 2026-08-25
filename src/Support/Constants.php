@@ -11,7 +11,6 @@ class Constants {
 	public const OPTION_APPLIED_MIGRATIONS = 'hd_applied_migrations';
 	public const OPTION_EMAIL_HEADER_HTML  = 'hd_email_header_html';
 	public const OPTION_EMAIL_FOOTER_HTML  = 'hd_email_footer_html';
-	public const OPTION_FCM_SERVER_KEY     = 'hd_fcm_server_key';
 	public const OPTION_TICKET_COUNTER     = 'hd_ticket_counter';
 	public const OPTION_TICKET_START       = 'hd_ticket_start_number';
 	public const OPTION_PAGINATION         = 'hd_pagination_per_page';
@@ -38,13 +37,6 @@ class Constants {
 	public const OPTION_EMAIL_REPLY_TO        = 'hd_email_reply_to_address';
 	public const OPTION_EMAIL_HEADER_ENABLED  = 'hd_email_header_enabled';
 	public const OPTION_EMAIL_FOOTER_ENABLED  = 'hd_email_footer_enabled';
-
-	// Integration – Push/FCM option keys.
-	public const OPTION_PUSH_ENABLED               = 'hd_push_enabled';
-	public const OPTION_FCM_PROJECT_ID             = 'hd_fcm_project_id';
-	public const OPTION_FCM_SERVICE_ACCOUNT_JSON   = 'hd_fcm_service_account_json';
-	public const OPTION_FCM_MODE                   = 'hd_fcm_mode';
-	public const OPTION_PUSH_TICKET_EVENTS         = 'hd_push_ticket_events';
 
 	// Integration – Android/API option keys.
 	public const OPTION_API_ENABLED                    = 'hd_api_enabled';
@@ -86,7 +78,6 @@ class Constants {
 	public const TABLE_TICKETS             = 'tickets';
 	public const TABLE_TICKET_MESSAGES     = 'ticket_messages';
 	public const TABLE_TICKET_EVENTS       = 'ticket_events';
-	public const TABLE_DEVICE_TOKENS       = 'device_tokens';
 	public const TABLE_ATTACHMENTS         = 'attachments';
 	public const TABLE_RATE_LIMITS         = 'rate_limits';
 	public const TABLE_ROUTING_RULES       = 'routing_rules';
@@ -101,7 +92,6 @@ class Constants {
 			self::OPTION_DB_VERSION,
 			self::OPTION_EMAIL_HEADER_HTML,
 			self::OPTION_EMAIL_FOOTER_HTML,
-			self::OPTION_FCM_SERVER_KEY,
 			self::OPTION_TICKET_COUNTER,
 			self::OPTION_TICKET_START,
 			self::OPTION_PAGINATION,
@@ -126,12 +116,6 @@ class Constants {
 			self::OPTION_EMAIL_REPLY_TO,
 			self::OPTION_EMAIL_HEADER_ENABLED,
 			self::OPTION_EMAIL_FOOTER_ENABLED,
-			// Integration – Push/FCM.
-			self::OPTION_PUSH_ENABLED,
-			self::OPTION_FCM_PROJECT_ID,
-			self::OPTION_FCM_SERVICE_ACCOUNT_JSON,
-			self::OPTION_FCM_MODE,
-			self::OPTION_PUSH_TICKET_EVENTS,
 			// Integration – API.
 			self::OPTION_API_ENABLED,
 			self::OPTION_API_REQUIRE_APP_PASSWORDS,
@@ -170,7 +154,6 @@ class Constants {
 			self::TABLE_TICKETS,
 			self::TABLE_TICKET_MESSAGES,
 			self::TABLE_TICKET_EVENTS,
-			self::TABLE_DEVICE_TOKENS,
 			self::TABLE_ATTACHMENTS,
 			self::TABLE_RATE_LIMITS,
 			self::TABLE_ROUTING_RULES,

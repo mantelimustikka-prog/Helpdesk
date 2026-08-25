@@ -18,8 +18,6 @@ class SettingsPage {
 	private const VALID_ASSIGN_MODES   = array( 'none', 'round_robin', 'least_open' );
 	private const VALID_TIMEZONE_MODES = array( 'network', 'site', 'utc' );
 	private const VALID_DATE_FORMATS   = array( 'wp_default', 'iso8601' );
-	private const VALID_FCM_MODES      = array( 'legacy', 'v1' );
-	private const VALID_PUSH_EVENTS    = array( 'ticket_created', 'ticket_replied', 'status_changed', 'ticket_assigned' );
 
 	/**
 	 * Handle settings form submissions.
@@ -217,13 +215,6 @@ class SettingsPage {
 		$header_enabled = $this->booleanFromPost( 'hd_email_header_enabled' );
 		$footer_enabled = $this->booleanFromPost( 'hd_email_footer_enabled' );
 
-		$push_enabled   = $this->booleanFromPost( 'hd_push_enabled' );
-		$fcm_mode       = $this->sanitizeEnumFromPost( 'hd_fcm_mode', self::VALID_FCM_MODES, 'v1', $errors, __( 'Invalid FCM mode.', 'wp-helpdesk' ) );
-		$fcm_server_key = $this->sanitizeSecretReplacement( 'hd_fcm_server_key', true, $errors, '' );
-		$fcm_project_id = isset( $_POST['hd_fcm_project_id'] ) ? sanitize_text_field( wp_unslash( $_POST['hd_fcm_project_id'] ) ) : '';
-		$service_json   = $this->sanitizeSecretReplacement( 'hd_fcm_service_account_json', false, $errors, __( 'FCM Service Account JSON is not valid JSON.', 'wp-helpdesk' ) );
-		$push_events    = $this->sanitizePushEvents();
-
 		$api_enabled       = $this->booleanFromPost( 'hd_api_enabled' );
 		$api_require_ap    = $this->booleanFromPost( 'hd_api_require_application_passwords' );
 		$api_rate_limit    = isset( $_POST['hd_api_rate_limit_per_minute'] ) ? (int) wp_unslash( $_POST['hd_api_rate_limit_per_minute'] ) : 60;
@@ -249,19 +240,6 @@ class SettingsPage {
 		update_site_option( Constants::OPTION_EMAIL_REPLY_TO, $reply_to );
 		update_site_option( Constants::OPTION_EMAIL_HEADER_ENABLED, $header_enabled );
 		update_site_option( Constants::OPTION_EMAIL_FOOTER_ENABLED, $footer_enabled );
-
-		update_site_option( Constants::OPTION_PUSH_ENABLED, $push_enabled );
-		update_site_option( Constants::OPTION_FCM_MODE, $fcm_mode );
-		update_site_option( Constants::OPTION_FCM_PROJECT_ID, $fcm_project_id );
-		update_site_option( Constants::OPTION_PUSH_TICKET_EVENTS, $push_events );
-
-		if ( null !== $fcm_server_key ) {
-			update_site_option( Constants::OPTION_FCM_SERVER_KEY, $fcm_server_key );
-		}
-
-		if ( null !== $service_json ) {
-			update_site_option( Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON, $service_json );
-		}
 
 		update_site_option( Constants::OPTION_API_ENABLED, $api_enabled );
 		update_site_option( Constants::OPTION_API_REQUIRE_APP_PASSWORDS, $api_require_ap );
@@ -730,13 +708,6 @@ class SettingsPage {
 		$header_enabled = (int) get_site_option( Constants::OPTION_EMAIL_HEADER_ENABLED, 1 );
 		$footer_enabled = (int) get_site_option( Constants::OPTION_EMAIL_FOOTER_ENABLED, 1 );
 
-		$push_enabled = (int) get_site_option( Constants::OPTION_PUSH_ENABLED, 0 );
-		$fcm_mode     = (string) get_site_option( Constants::OPTION_FCM_MODE, 'v1' );
-		$fcm_key_set  = '' !== (string) get_site_option( Constants::OPTION_FCM_SERVER_KEY, '' );
-		$fcm_project  = (string) get_site_option( Constants::OPTION_FCM_PROJECT_ID, '' );
-		$sa_json_set  = '' !== (string) get_site_option( Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON, '' );
-		$push_events  = (array) get_site_option( Constants::OPTION_PUSH_TICKET_EVENTS, array() );
-
 		$api_enabled    = (int) get_site_option( Constants::OPTION_API_ENABLED, 1 );
 		$api_require_ap = (int) get_site_option( Constants::OPTION_API_REQUIRE_APP_PASSWORDS, 1 );
 		$rate_limit     = (int) get_site_option( Constants::OPTION_API_RATE_LIMIT, 60 );
@@ -786,83 +757,6 @@ class SettingsPage {
 							<?php esc_html_e( 'Append email footer to outbound notifications', 'wp-helpdesk' ); ?>
 						</label>
 						<p class="description"><a href="<?php echo esc_url( network_admin_url( 'admin.php?page=wp-helpdesk-settings&tab=email-layout' ) ); ?>"><?php esc_html_e( 'Edit email footer HTML →', 'wp-helpdesk' ); ?></a></p>
-					</td>
-				</tr>
-			</table>
-
-			<h2><?php esc_html_e( 'Push Notifications (Android App – FCM)', 'wp-helpdesk' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'Push notifications are delivered exclusively to the WP Helpdesk Android app via Firebase Cloud Messaging (FCM).', 'wp-helpdesk' ); ?> <a href="https://firebase.google.com/docs/cloud-messaging" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Learn how to set up Firebase Cloud Messaging →', 'wp-helpdesk' ); ?></a></p>
-			<table class="form-table" role="presentation">
-				<tr>
-					<th scope="row"><?php esc_html_e( 'Enable Push', 'wp-helpdesk' ); ?></th>
-					<td>
-						<label>
-							<input type="checkbox" name="hd_push_enabled" value="1" <?php checked( $push_enabled, 1 ); ?>>
-							<?php esc_html_e( 'Enable push notifications for the Android app', 'wp-helpdesk' ); ?>
-						</label>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="hd_fcm_mode"><?php esc_html_e( 'FCM Mode', 'wp-helpdesk' ); ?></label></th>
-					<td>
-						<select id="hd_fcm_mode" name="hd_fcm_mode">
-							<option value="v1" <?php selected( $fcm_mode, 'v1' ); ?>><?php esc_html_e( 'FCM v1', 'wp-helpdesk' ); ?></option>
-							<option value="legacy" <?php selected( $fcm_mode, 'legacy' ); ?>><?php esc_html_e( 'Legacy', 'wp-helpdesk' ); ?></option>
-						</select>
-						<p class="description"><?php esc_html_e( 'FCM v1 is the default and recommended delivery mode. Legacy mode is only for older installations that still rely on a server key.', 'wp-helpdesk' ); ?></p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="hd_fcm_server_key"><?php esc_html_e( 'FCM Server Key', 'wp-helpdesk' ); ?></label></th>
-					<td>
-						<input type="password" id="hd_fcm_server_key" name="hd_fcm_server_key" value="<?php echo $fcm_key_set ? esc_attr( self::SECRET_PLACEHOLDER ) : ''; ?>" class="regular-text" autocomplete="new-password">
-						<p class="description"><?php echo esc_html( $fcm_key_set ? __( 'A key is stored. Enter a new value to replace it, or leave the masked value unchanged.', 'wp-helpdesk' ) : __( 'Enter the FCM server key used by legacy mode.', 'wp-helpdesk' ) ); ?></p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="hd_fcm_project_id"><?php esc_html_e( 'FCM Project ID', 'wp-helpdesk' ); ?></label></th>
-					<td>
-						<input type="text" id="hd_fcm_project_id" name="hd_fcm_project_id" value="<?php echo esc_attr( $fcm_project ); ?>" class="regular-text">
-						<p class="description"><?php esc_html_e( 'Your Firebase project ID. Find this in the Firebase Console under Settings → Project settings → Project ID. Only required for FCM v1 mode.', 'wp-helpdesk' ); ?></p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="hd_fcm_service_account_json"><?php esc_html_e( 'Service Account JSON', 'wp-helpdesk' ); ?></label></th>
-					<td>
-						<textarea id="hd_fcm_service_account_json" name="hd_fcm_service_account_json" rows="5" class="large-text code"><?php echo $sa_json_set ? esc_textarea( self::SECRET_PLACEHOLDER ) : ''; ?></textarea>
-						<p class="description"><?php echo esc_html( $sa_json_set ? __( 'A service account JSON is stored. Paste a new JSON to replace it, or leave the masked value unchanged.', 'wp-helpdesk' ) : __( 'Paste the Firebase service account JSON used by FCM v1 mode.', 'wp-helpdesk' ) ); ?></p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><?php esc_html_e( 'Trigger Events', 'wp-helpdesk' ); ?></th>
-					<td>
-						<?php
-						$event_labels = array(
-							'ticket_created'  => array(
-								'label'       => __( 'Ticket created', 'wp-helpdesk' ),
-								'description' => __( 'Notifies all admins when a new ticket is submitted.', 'wp-helpdesk' ),
-							),
-							'ticket_replied'  => array(
-								'label'       => __( 'Ticket replied', 'wp-helpdesk' ),
-								'description' => __( 'Notifies all admins when a customer replies to a ticket.', 'wp-helpdesk' ),
-							),
-							'status_changed'  => array(
-								'label'       => __( 'Status changed', 'wp-helpdesk' ),
-								'description' => __( 'Notifies all admins when a ticket status is updated.', 'wp-helpdesk' ),
-							),
-							'ticket_assigned' => array(
-								'label'       => __( 'Ticket assigned', 'wp-helpdesk' ),
-								'description' => __( 'Notifies the assigned user when a ticket is assigned to them.', 'wp-helpdesk' ),
-							),
-						);
-						foreach ( $event_labels as $event_key => $event_data ) :
-							?>
-							<label style="display:block;margin-bottom:4px">
-								<input type="checkbox" name="hd_push_ticket_events[]" value="<?php echo esc_attr( $event_key ); ?>" <?php checked( in_array( $event_key, $push_events, true ), true ); ?>>
-								<?php echo esc_html( $event_data['label'] ); ?>
-							</label>
-							<p class="description" style="margin:0 0 8px 20px"><?php echo esc_html( $event_data['description'] ); ?></p>
-						<?php endforeach; ?>
 					</td>
 				</tr>
 			</table>
@@ -1046,19 +940,6 @@ class SettingsPage {
 		}
 
 		return $raw;
-	}
-
-	/**
-	 * Sanitize selected push events.
-	 *
-	 * @return array<int, string>
-	 */
-	private function sanitizePushEvents(): array {
-		$events = isset( $_POST['hd_push_ticket_events'] ) && is_array( $_POST['hd_push_ticket_events'] )
-			? array_map( 'sanitize_key', wp_unslash( $_POST['hd_push_ticket_events'] ) )
-			: array();
-
-		return array_values( array_intersect( $events, self::VALID_PUSH_EVENTS ) );
 	}
 
 	/**

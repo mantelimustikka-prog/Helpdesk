@@ -21,6 +21,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,26 +32,24 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModelProvider
-import com.wphelpd.admin.core.config.SecureServerConfigRepository
 import com.wphelpd.admin.core.ui.theme.WpHelpdTheme
 import com.wphelpd.admin.feature.applock.AppLockLifecyclePolicy
 import com.wphelpd.admin.feature.applock.AppLockManager
 import com.wphelpd.admin.feature.applock.AppLockViewModel
 import com.wphelpd.admin.feature.applock.CreatePasswordScreen
 import com.wphelpd.admin.feature.applock.UnlockScreen
-import com.wphelpd.admin.feature.push.FirebaseSafeTokenFetcher
-import com.wphelpd.admin.feature.push.PushNotificationAccessGate
-import com.wphelpd.admin.feature.push.PushTokenStateStore
-import com.wphelpd.admin.feature.push.PushTokenSyncManager
+import com.wphelpd.admin.feature.notifications.NotificationDialog
+import com.wphelpd.admin.feature.notifications.NotificationEvent
+import com.wphelpd.admin.feature.notifications.NotificationEventBus
+import com.wphelpd.admin.feature.notifications.NotificationPreferences
+import com.wphelpd.admin.feature.notifications.NotificationScheduler
 import com.wphelpd.admin.feature.tickets.TicketsRoute
 import com.wphelpd.admin.feature.tickets.TicketsViewModel
 import com.wphelpd.admin.startup.StartupViewModel
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -59,8 +60,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var startupViewModel: StartupViewModel
     private lateinit var lockViewModel: AppLockViewModel
     private lateinit var ticketsViewModel: TicketsViewModel
-    private lateinit var pushTokenStateStore: PushTokenStateStore
-    private lateinit var pushTokenSyncManager: PushTokenSyncManager
+    private lateinit var notificationPreferences: NotificationPreferences
     private val processLifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStop(owner: LifecycleOwner) {
             if (!::lockViewModel.isInitialized || !::ticketsViewModel.isInitialized) return
@@ -103,51 +103,53 @@ class MainActivity : ComponentActivity() {
                     }
                     lockState.isUnlocked -> {
                         val ticketsState = ticketsViewModel.uiState.collectAsStateWithLifecycle().value
+                        var pendingNotification by remember { mutableStateOf<NotificationEvent?>(null) }
 
                         LaunchedEffect(lockState.isUnlocked) {
                             ticketsViewModel.restoreSessionFromSavedConfigIfNeeded()
                         }
 
-                        LaunchedEffect(
-                            lockState.isUnlocked,
-                            ticketsState.isBootstrapping,
-                            ticketsState.requiresSetup,
-                            ticketsState.currentUser,
-                            pendingTicket
-                        ) {
-                            val ticketIdToOpen = PushNotificationAccessGate.resolveTicketIdToOpen(
-                                pendingTicketId = pendingTicket,
-                                isUnlocked = lockState.isUnlocked,
-                                isBootstrapping = ticketsState.isBootstrapping,
-                                requiresSetup = ticketsState.requiresSetup,
-                                hasCurrentUser = ticketsState.currentUser != null
-                            )
-                            if (ticketIdToOpen != null) {
-                                if (ticketsState.selectedTicketId != ticketIdToOpen) {
-                                    ticketsViewModel.selectTicket(ticketIdToOpen)
-                                }
-                                pendingTicketId.value = null
+                        // Collect notification events from the polling service.
+                        LaunchedEffect(Unit) {
+                            NotificationEventBus.events.collect { event ->
+                                pendingNotification = event
                             }
                         }
 
+                        LaunchedEffect(lockState.isUnlocked, ticketsState.currentUser) {
+                            if (lockState.isUnlocked && ticketsState.currentUser != null) {
+                                NotificationScheduler.schedule(applicationContext)
+                            }
+                        }
+
+                        // Open ticket from deep link when the app is unlocked and ready.
                         LaunchedEffect(
                             lockState.isUnlocked,
                             ticketsState.currentUser,
-                            ticketsState.siteUrl,
-                            ticketsState.username,
-                            ticketsState.applicationPassword
+                            pendingTicket
                         ) {
                             if (
                                 lockState.isUnlocked &&
                                 ticketsState.currentUser != null &&
-                                ticketsState.siteUrl.isNotBlank() &&
-                                ticketsState.username.isNotBlank() &&
-                                ticketsState.applicationPassword.isNotBlank()
+                                pendingTicket != null
                             ) {
-                                pushTokenSyncManager.registerIfNeeded(
-                                    config = ticketsState.toAuthConfig()
-                                )
+                                ticketsViewModel.selectTicket(pendingTicket)
+                                pendingTicketId.value = null
                             }
+                        }
+
+                        // Show in-app notification dialog when poller finds new items.
+                        if (pendingNotification != null) {
+                            val event = pendingNotification!!
+                            NotificationDialog(
+                                newTicketCount = event.newTicketCount,
+                                newReplyCount = event.newReplyCount,
+                                onView = {
+                                    ticketsViewModel.refreshTickets()
+                                    pendingNotification = null
+                                },
+                                onDismiss = { pendingNotification = null }
+                            )
                         }
 
                         if (ticketsState.isBootstrapping) {
@@ -156,14 +158,11 @@ class MainActivity : ComponentActivity() {
                             TicketsRoute(
                                 viewModel = ticketsViewModel,
                                 onLogout = {
-                                    val config = ticketsState.toAuthConfig()
                                     pendingTicketId.value = null
-                                    pushTokenStateStore.clearHandledNotifications()
+                                    notificationPreferences.clear()
+                                    NotificationScheduler.cancel(applicationContext)
                                     ticketsViewModel.logout()
                                     lockViewModel.lock()
-                                    lifecycleScope.launch {
-                                        pushTokenSyncManager.unregisterIfNeeded(config)
-                                    }
                                 }
                             )
                         }
@@ -200,8 +199,7 @@ class MainActivity : ComponentActivity() {
             pendingTicketId.value = extractTicketIdFromIntent(intent)
             val lockManager = AppLockManager(applicationContext)
             val serverConfigRepository = SecureServerConfigRepository(applicationContext)
-            pushTokenStateStore = PushTokenStateStore(applicationContext)
-            pushTokenSyncManager = PushTokenSyncManager(stateStore = pushTokenStateStore)
+            notificationPreferences = NotificationPreferences(applicationContext)
             lockViewModel = ViewModelProvider(
                 this,
                 AppLockViewModel.factory(lockManager)
@@ -210,9 +208,6 @@ class MainActivity : ComponentActivity() {
                 this,
                 TicketsViewModel.factory(serverConfigRepository = serverConfigRepository)
             )[TicketsViewModel::class.java]
-            FirebaseSafeTokenFetcher.fetchToken { token ->
-                pushTokenStateStore.saveCurrentToken(token)
-            }
             ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
             ProcessLifecycleOwner.get().lifecycle.addObserver(processLifecycleObserver)
         } catch (e: Exception) {

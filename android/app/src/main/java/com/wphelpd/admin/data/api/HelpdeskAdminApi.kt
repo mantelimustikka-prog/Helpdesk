@@ -1,10 +1,9 @@
 package com.wphelpd.admin.data.api
 
 import com.wphelpd.admin.data.api.dto.AuthCheckResponseDto
-import com.wphelpd.admin.data.api.dto.DeviceTokenRequestDto
-import com.wphelpd.admin.data.api.dto.DeviceTokenResponseDto
 import com.wphelpd.admin.data.api.dto.NoteRequestDto
 import com.wphelpd.admin.data.api.dto.NoteResponseDto
+import com.wphelpd.admin.data.api.dto.NotificationsSinceResponseDto
 import com.wphelpd.admin.data.api.dto.ReplyRequestDto
 import com.wphelpd.admin.data.api.dto.ReplyResponseDto
 import com.wphelpd.admin.data.api.dto.StatusUpdateRequestDto
@@ -54,13 +53,8 @@ interface HelpdeskAdminApi {
         @Body request: NoteRequestDto
     ): NoteResponseDto
 
-    @POST("devices/register")
-    suspend fun registerDeviceToken(
-        @Body request: DeviceTokenRequestDto
-    ): DeviceTokenResponseDto
-
-    @POST("devices/unregister")
-    suspend fun unregisterDeviceToken(
-        @Body request: DeviceTokenRequestDto
-    ): DeviceTokenResponseDto
+    @GET("notifications/since")
+    suspend fun getNotificationsSince(
+        @Query("since") sinceTimestamp: Long
+    ): NotificationsSinceResponseDto
 }

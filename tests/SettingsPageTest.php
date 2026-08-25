@@ -95,55 +95,6 @@ final class SettingsPageTest extends TestCase {
 		$this->submit( 'general', array(), 'bad-nonce' );
 	}
 
-	public function testSecretMaskingAndReplacementFlowNeverExposesStoredValues(): void {
-		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ] = 'super-secret-key';
-		$GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] = '{"client_email":"hidden@example.test"}';
-
-		$_GET['tab'] = 'integrations';
-		ob_start();
-		$this->page->render();
-		$output = (string) ob_get_clean();
-
-		self::assertStringContainsString( '••••••••', $output );
-		self::assertStringNotContainsString( 'super-secret-key', $output );
-		self::assertStringNotContainsString( 'hidden@example.test', $output );
-
-		$this->submit(
-			'integrations',
-			array(
-				'hd_fcm_mode'                    => 'legacy',
-				'hd_fcm_server_key'              => '••••••••',
-				'hd_fcm_service_account_json'    => '••••••••',
-				'hd_api_rate_limit_per_minute'   => '60',
-			)
-		);
-
-		self::assertSame( 'super-secret-key', $GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ] );
-		self::assertSame( '{"client_email":"hidden@example.test"}', $GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] );
-
-		$this->submit(
-			'integrations',
-			array(
-				'hd_fcm_mode'                    => 'legacy',
-				'hd_fcm_server_key'              => 'replacement-key',
-				'hd_fcm_service_account_json'    => '{"client_email":"new@example.test"}',
-				'hd_api_rate_limit_per_minute'   => '60',
-			)
-		);
-
-		self::assertSame( 'replacement-key', $GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVER_KEY ] );
-		self::assertSame( '{"client_email":"new@example.test"}', $GLOBALS['wp_site_options'][ Constants::OPTION_FCM_SERVICE_ACCOUNT_JSON ] );
-	}
-
-	public function testIntegrationsRenderDefaultsToFcmV1WhenModeIsUnset(): void {
-		$_GET['tab'] = 'integrations';
-		ob_start();
-		$this->page->render();
-		$output = (string) ob_get_clean();
-
-		self::assertStringContainsString( '<option value="v1" selected="selected">', $output );
-		self::assertStringContainsString( 'FCM v1 is the default and recommended delivery mode.', $output );
-	}
 
 	public function testApiFlagsPersistAndAllowedOriginsAreSanitized(): void {
 		$this->submit(
@@ -251,40 +202,6 @@ final class SettingsPageTest extends TestCase {
 		// Blank submission clears the stored value.
 		self::assertSame( '', $GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_ADMIN_REPLY_COLOR ] );
 		self::assertSame( '#000000', $GLOBALS['wp_site_options'][ Constants::OPTION_APPEARANCE_CLIENT_REPLY_COLOR ] );
-	}
-
-	public function testIntegrationsSavePersistsPushTicketEvents(): void {
-		$this->submit(
-			'integrations',
-			array(
-				'hd_push_enabled'       => '1',
-				'hd_push_ticket_events' => array( 'ticket_created', 'ticket_replied', 'status_changed', 'ticket_assigned' ),
-				'hd_fcm_mode'           => 'legacy',
-			)
-		);
-
-		self::assertSame( 1, $GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_ENABLED ] );
-		$saved_events = $GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ];
-		self::assertContains( 'ticket_created', $saved_events );
-		self::assertContains( 'ticket_replied', $saved_events );
-		self::assertContains( 'status_changed', $saved_events );
-		self::assertContains( 'ticket_assigned', $saved_events );
-	}
-
-	public function testIntegrationsSaveRejectsUnknownPushEvents(): void {
-		$this->submit(
-			'integrations',
-			array(
-				'hd_push_enabled'       => '1',
-				'hd_push_ticket_events' => array( 'ticket_created', 'bogus_event', 'ticket_deleted' ),
-				'hd_fcm_mode'           => 'legacy',
-			)
-		);
-
-		$saved_events = $GLOBALS['wp_site_options'][ Constants::OPTION_PUSH_TICKET_EVENTS ] ?? array();
-		self::assertContains( 'ticket_created', $saved_events );
-		self::assertNotContains( 'bogus_event', $saved_events );
-		self::assertNotContains( 'ticket_deleted', $saved_events );
 	}
 
 	/**
