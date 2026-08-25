@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.wphelpd.admin"
-        minSdk = 28
+        minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
