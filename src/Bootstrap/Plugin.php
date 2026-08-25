@@ -19,6 +19,7 @@ use WPHelpdesk\Interfaces\Admin\NetworkMenu;
 use WPHelpdesk\Interfaces\Frontend\FrontendRouter;
 use WPHelpdesk\Interfaces\Frontend\WooCommerceAccountHelpdesk;
 use WPHelpdesk\Interfaces\Rest\Routes;
+use WPHelpdesk\Bootstrap\RewriteRuleManager;
 
 class Plugin {
 	protected NetworkMenu $network_menu;
@@ -34,6 +35,7 @@ class Plugin {
 	protected GdprHandler $gdpr_handler;
 	protected RetentionService $retention_service;
 	protected TicketLifecycleService $ticket_lifecycle_service;
+	protected RewriteRuleManager $rewrite_manager;
 
 	public function __construct(
 		?NetworkMenu $network_menu = null,
@@ -48,7 +50,8 @@ class Plugin {
 		?KnowledgeBaseService $kb_service = null,
 		?GdprHandler $gdpr_handler = null,
 		?RetentionService $retention_service = null,
-		?TicketLifecycleService $ticket_lifecycle_service = null
+		?TicketLifecycleService $ticket_lifecycle_service = null,
+		?RewriteRuleManager $rewrite_manager = null
 	) {
 		$this->network_menu         = $network_menu ?: new NetworkMenu();
 		$this->routes               = $routes ?: new Routes();
@@ -63,6 +66,7 @@ class Plugin {
 		$this->gdpr_handler         = $gdpr_handler ?: new GdprHandler();
 		$this->retention_service    = $retention_service ?: new RetentionService();
 		$this->ticket_lifecycle_service = $ticket_lifecycle_service ?: new TicketLifecycleService();
+		$this->rewrite_manager      = $rewrite_manager ?: new RewriteRuleManager();
 	}
 
 	/**
@@ -80,6 +84,10 @@ class Plugin {
 		add_action( 'admin_init', array( EmailTemplateDefaults::class, 'seedIfEmpty' ) );
 
 		$this->frontend_router->register();
+		// Register a wp_loaded heartbeat to detect and auto-fix missing rewrite
+		// rules on any front-end request, covering sites in a multisite network
+		// that may have been skipped during activation.
+		add_action( 'wp_loaded', array( $this->rewrite_manager, 'ensureRulesExist' ) );
 		// Defer WooCommerce My Account integration until `init` (priority 1) so
 		// that WooCommerce is guaranteed to have finished its own plugins_loaded
 		// callback before we call class_exists('WooCommerce') and

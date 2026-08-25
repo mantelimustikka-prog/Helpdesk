@@ -10,6 +10,7 @@ use WPHelpdesk\Support\Constants;
 use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Interfaces\Frontend\FormDefinitionFactory;
 use WPHelpdesk\Interfaces\Frontend\GuestTicketView;
+use WPHelpdesk\Bootstrap\RewriteRuleManager;
 
 /**
  * Registers WordPress rewrite rules for the customer-facing helpdesk pages
@@ -29,19 +30,22 @@ class FrontendRouter {
 	protected MemberTicketForm $member_form;
 	protected GuestTicketView $ticket_view;
 	protected WooCommerceAccountHelpdesk $member_helpdesk;
+	protected RewriteRuleManager $rewrite_manager;
 
 	public function __construct(
 		?HelpdeskPage $helpdesk_page = null,
 		?GuestTicketForm $guest_form = null,
 		?MemberTicketForm $member_form = null,
 		?GuestTicketView $ticket_view = null,
-		?WooCommerceAccountHelpdesk $member_helpdesk = null
+		?WooCommerceAccountHelpdesk $member_helpdesk = null,
+		?RewriteRuleManager $rewrite_manager = null
 	) {
-		$this->helpdesk_page = $helpdesk_page ?: new HelpdeskPage();
-		$this->guest_form    = $guest_form    ?: new GuestTicketForm();
-		$this->member_form   = $member_form   ?: new MemberTicketForm();
-		$this->ticket_view   = $ticket_view   ?: new GuestTicketView();
-		$this->member_helpdesk = $member_helpdesk ?: new WooCommerceAccountHelpdesk();
+		$this->helpdesk_page    = $helpdesk_page    ?: new HelpdeskPage();
+		$this->guest_form       = $guest_form       ?: new GuestTicketForm();
+		$this->member_form      = $member_form      ?: new MemberTicketForm();
+		$this->ticket_view      = $ticket_view      ?: new GuestTicketView();
+		$this->member_helpdesk  = $member_helpdesk  ?: new WooCommerceAccountHelpdesk();
+		$this->rewrite_manager  = $rewrite_manager  ?: new RewriteRuleManager();
 	}
 
 	/**
@@ -52,6 +56,7 @@ class FrontendRouter {
 	public function register(): void {
 		add_action( 'init', array( $this, 'addRewriteRules' ) );
 		add_action( 'init', array( $this, 'maybeFlushRewrites' ) );
+		add_action( 'init', array( $this->rewrite_manager, 'ensureRulesExist' ) );
 		add_filter( 'query_vars', array( $this, 'addQueryVars' ) );
 		add_action( 'template_redirect', array( $this, 'dispatch' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueueAssets' ) );
@@ -215,7 +220,15 @@ class FrontendRouter {
 	 * @return void
 	 */
 	public function enqueueAssets(): void {
-		if ( '' === get_query_var( 'hd_page', '' ) ) {
+		$hd_page = (string) get_query_var( 'hd_page', '' );
+
+		// When the query var is not set (e.g. rewrite rules not yet flushed),
+		// fall back to path-based detection so CSS/JS are still enqueued.
+		if ( '' === $hd_page ) {
+			$hd_page = $this->resolveFromPath();
+		}
+
+		if ( '' === $hd_page ) {
 			return;
 		}
 

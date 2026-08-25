@@ -86,6 +86,8 @@ if ( ! function_exists( 'wp_helpdesk_test_reset_state' ) ) {
 		$GLOBALS['wp_is_multisite']       = false;
 		$GLOBALS['wp_switch_to_blog_log'] = array();
 		$GLOBALS['wp_users_index']        = array();
+		$GLOBALS['wp_rewrite_rules']             = array();
+		$GLOBALS['wp_flush_rewrite_rules_calls'] = array();
 		// Simulate an initialised WP rewrite object so getAccountPageUrl()'s null
 		// guard passes in normal test scenarios. The test doubles for wc_get_page_permalink
 		// never call methods on this object, so a plain stdClass sentinel is safe here.
@@ -856,5 +858,17 @@ if ( ! function_exists( 'sanitize_file_name' ) ) {
 // tests that exercise the WC integration path.
 if ( ! class_exists( 'WooCommerce' ) ) {
 	class WooCommerce {
+	}
+}
+
+if ( ! function_exists( 'add_rewrite_rule' ) ) {
+	function add_rewrite_rule( string $regex, string $redirect, string $after = 'bottom' ): void {
+		$GLOBALS['wp_rewrite_rules'][] = array( $regex, $redirect, $after );
+	}
+}
+
+if ( ! function_exists( 'flush_rewrite_rules' ) ) {
+	function flush_rewrite_rules( bool $hard = true ): void {
+		$GLOBALS['wp_flush_rewrite_rules_calls'][] = $hard;
 	}
 }
