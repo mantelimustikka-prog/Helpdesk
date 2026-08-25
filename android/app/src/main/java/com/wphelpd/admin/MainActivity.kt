@@ -119,8 +119,8 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        LaunchedEffect(lockState.isUnlocked, ticketsState.currentUser) {
-                            if (lockState.isUnlocked && ticketsState.currentUser != null) {
+                        LaunchedEffect(ticketsState.currentUser) {
+                            if (ticketsState.currentUser != null) {
                                 NotificationScheduler.schedule(applicationContext)
                             }
                         }
