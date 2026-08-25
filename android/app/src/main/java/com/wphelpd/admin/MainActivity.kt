@@ -121,12 +121,11 @@ class MainActivity : ComponentActivity() {
 
                         LaunchedEffect(ticketsState.currentUser) {
                             if (ticketsState.currentUser != null) {
-                                NotificationScheduler.schedule(applicationContext)
-                                // Failsafe: if the job was dropped (e.g. force-stop recovery),
-                                // reschedule it again to guarantee polling resumes.
-                                if (!NotificationScheduler.isScheduled(applicationContext)) {
-                                    Log.w(TAG, "Polling not active after schedule() — retrying.")
+                                try {
                                     NotificationScheduler.schedule(applicationContext)
+                                    Log.d(TAG, "Notification polling scheduled successfully.")
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to schedule notifications: ${e.message}", e)
                                 }
                             }
                         }
