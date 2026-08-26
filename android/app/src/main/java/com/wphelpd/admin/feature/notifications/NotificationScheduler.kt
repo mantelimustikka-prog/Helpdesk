@@ -5,16 +5,19 @@ import android.os.Build
 import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "NotificationScheduler"
 private const val WORK_NAME = "hd_notification_poll"
+private const val BOOTSTRAP_WORK_NAME = "hd_notification_poll_bootstrap"
 
 /**
  * Manages scheduling and cancellation of the periodic [NotificationPoller] WorkManager job.
@@ -26,9 +29,10 @@ object NotificationScheduler {
      * Safe to call multiple times — uses [ExistingPeriodicWorkPolicy.KEEP] so an
      * existing job is not replaced.
      *
-     * Uses a 15-minute interval to align with Android Doze mode maintenance windows,
-     * exponential backoff for resilience after transient failures, and expedited
-     * execution on API 31+ to avoid being deferred when the job is first enqueued.
+     * Uses a 5-minute interval (matching the previous known-working setup),
+     * exponential backoff for resilience after transient failures, and an immediate
+     * one-time bootstrap run (expedited on API 31+) to avoid waiting for the first
+     * periodic window.
      */
     fun schedule(context: Context) {
         val constraints = Constraints.Builder()
@@ -59,7 +63,27 @@ object NotificationScheduler {
             request
         )
 
-        Log.d(TAG, "Notification polling scheduled (${POLL_INTERVAL_MINUTES}min interval).")
+        val bootstrapRequest = OneTimeWorkRequestBuilder<NotificationPoller>()
+            .setConstraints(constraints)
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                INITIAL_BACKOFF_DELAY_SECONDS,
+                TimeUnit.SECONDS
+            )
+            .apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                }
+            }
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            BOOTSTRAP_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            bootstrapRequest
+        )
+
+        Log.d(TAG, "Notification polling scheduled (${POLL_INTERVAL_MINUTES}min interval + bootstrap).")
     }
 
     /**
@@ -88,7 +112,7 @@ object NotificationScheduler {
         Log.d(TAG, "Notification polling cancelled.")
     }
 
-    /** Polling interval — 15 minutes aligns with Android Doze maintenance windows. */
-    private const val POLL_INTERVAL_MINUTES = 15L
+    /** Polling interval — 5 minutes from the last known working configuration. */
+    private const val POLL_INTERVAL_MINUTES = 5L
     private const val INITIAL_BACKOFF_DELAY_SECONDS = 60L
 }

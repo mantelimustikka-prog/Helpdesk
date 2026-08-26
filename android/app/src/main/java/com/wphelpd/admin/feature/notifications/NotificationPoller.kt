@@ -51,19 +51,23 @@ class NotificationPoller(
                         TAG,
                         "Poll found ${newTickets.size} new ticket(s) and ${newReplies.size} new reply/replies."
                     )
-                    // Show system notification visible on lock screen / notification panel.
-                    NotificationChannelManager.showNotification(
-                        applicationContext,
-                        newTickets.size,
-                        newReplies.size
-                    )
-                    // Also post in-app event for when the user is actively viewing the app.
-                    NotificationEventBus.post(
-                        NotificationEvent(
-                            newTicketCount = newTickets.size,
-                            newReplyCount = newReplies.size
+                    try {
+                        // Show system notification visible on lock screen / notification panel.
+                        NotificationChannelManager.showNotification(
+                            applicationContext,
+                            newTickets.size,
+                            newReplies.size
                         )
-                    )
+                        // Also post in-app event for when the user is actively viewing the app.
+                        NotificationEventBus.post(
+                            NotificationEvent(
+                                newTicketCount = newTickets.size,
+                                newReplyCount = newReplies.size
+                            )
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed while publishing notification event: ${e.message}", e)
+                    }
                 } else {
                     Log.d(TAG, "Poll found no new items.")
                 }
@@ -71,12 +75,14 @@ class NotificationPoller(
                 // Update the last-checked and last-successful-poll timestamps.
                 prefs.setLastCheckedTimestamp(System.currentTimeMillis() / 1000L)
                 prefs.setLastSuccessfulPollTime(System.currentTimeMillis())
+                Log.d(TAG, "NotificationPoller completed successfully.")
 
                 Result.success()
             }
 
             is NetworkResult.Failure -> {
                 Log.w(TAG, "Poll failed: ${result.message} (attempt ${runAttemptCount + 1})")
+                result.throwable?.let { Log.w(TAG, "Poll throwable: ${it.javaClass.simpleName}", it) }
                 Result.retry()
             }
         }
