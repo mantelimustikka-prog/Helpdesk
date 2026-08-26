@@ -67,6 +67,14 @@ class MainActivity : ComponentActivity() {
     private val processLifecycleObserver = object : DefaultLifecycleObserver {
         override fun onStop(owner: LifecycleOwner) {
             if (!::lockViewModel.isInitialized || !::ticketsViewModel.isInitialized) return
+
+            // Clear the in-app pending notification when the app goes to background so it
+            // doesn't re-appear on the next unlock for a notification the user may have
+            // already acted on via the system notification shade.
+            if (::notificationPreferences.isInitialized) {
+                notificationPreferences.clearLastPendingNotification()
+            }
+
             if (AppLockLifecyclePolicy.shouldRelockOnProcessStop(lockViewModel.uiState.value.isUnlocked)) {
                 ticketsViewModel.clearSensitiveSessionState()
                 lockViewModel.lock()
@@ -99,7 +107,10 @@ class MainActivity : ComponentActivity() {
 
                 val lockState = lockViewModel.uiState.collectAsStateWithLifecycle().value
                 val pendingTicket = pendingTicketId.asStateFlow().collectAsStateWithLifecycle().value
-                var pendingNotification by remember { mutableStateOf<NotificationEvent?>(null) }
+                // Restore any pending notification that survived a lock/unlock cycle.
+                var pendingNotification by remember {
+                    mutableStateOf<NotificationEvent?>(notificationPreferences.getLastPendingNotification())
+                }
 
                 // Collect notification events from the polling service regardless of lock
                 // state so that system-level notifications are never missed while the app is
@@ -108,6 +119,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     NotificationEventBus.events.collect { event ->
                         pendingNotification = event
+                        notificationPreferences.setLastPendingNotification(event)
                     }
                 }
 
@@ -156,10 +168,16 @@ class MainActivity : ComponentActivity() {
                                 newTicketCount = event.newTicketCount,
                                 newReplyCount = event.newReplyCount,
                                 onView = {
-                                    ticketsViewModel.refreshTickets()
+                                    notificationPreferences.setLastNotificationDismissTime(System.currentTimeMillis())
+                                    notificationPreferences.clearLastPendingNotification()
                                     pendingNotification = null
+                                    ticketsViewModel.refreshTickets()
                                 },
-                                onDismiss = { pendingNotification = null }
+                                onDismiss = {
+                                    notificationPreferences.setLastNotificationDismissTime(System.currentTimeMillis())
+                                    notificationPreferences.clearLastPendingNotification()
+                                    pendingNotification = null
+                                }
                             )
                         }
 

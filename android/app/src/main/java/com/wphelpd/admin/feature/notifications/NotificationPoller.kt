@@ -46,35 +46,44 @@ class NotificationPoller(
                 val newTickets = response.newTickets
                 val newReplies = response.newReplies
 
+                // Persist the timestamp BEFORE showing the notification so that even if the
+                // process is killed immediately after, we won't re-fetch the same window.
+                prefs.setLastCheckedTimestamp(System.currentTimeMillis() / 1000L)
+                prefs.setLastSuccessfulPollTime(System.currentTimeMillis())
+
                 if (newTickets.isNotEmpty() || newReplies.isNotEmpty()) {
                     Log.i(
                         TAG,
                         "Poll found ${newTickets.size} new ticket(s) and ${newReplies.size} new reply/replies."
                     )
-                    try {
-                        // Show system notification visible on lock screen / notification panel.
-                        NotificationChannelManager.showNotification(
-                            applicationContext,
-                            newTickets.size,
-                            newReplies.size
-                        )
-                        // Also post in-app event for when the user is actively viewing the app.
-                        NotificationEventBus.post(
-                            NotificationEvent(
-                                newTicketCount = newTickets.size,
-                                newReplyCount = newReplies.size
+
+                    val timeSinceDismiss = System.currentTimeMillis() - prefs.getLastNotificationDismissTime()
+
+                    // Only notify if enough time has passed since the user last dismissed.
+                    if (timeSinceDismiss >= DISMISS_COOLDOWN_MS) {
+                        try {
+                            // Show system notification visible on lock screen / notification panel.
+                            NotificationChannelManager.showNotification(
+                                applicationContext,
+                                newTickets.size,
+                                newReplies.size
                             )
-                        )
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed while publishing notification event: ${e.message}", e)
+                            // Also post in-app event for when the user is actively viewing the app.
+                            NotificationEventBus.post(
+                                NotificationEvent(
+                                    newTicketCount = newTickets.size,
+                                    newReplyCount = newReplies.size
+                                )
+                            )
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed while publishing notification event: ${e.message}", e)
+                        }
+                    } else {
+                        Log.d(TAG, "Skipping notification — within dismiss cooldown.")
                     }
                 } else {
                     Log.d(TAG, "Poll found no new items.")
                 }
-
-                // Update the last-checked and last-successful-poll timestamps.
-                prefs.setLastCheckedTimestamp(System.currentTimeMillis() / 1000L)
-                prefs.setLastSuccessfulPollTime(System.currentTimeMillis())
                 NotificationScheduler.scheduleNext(applicationContext)
                 Log.d(TAG, "NotificationPoller completed successfully.")
 
@@ -100,5 +109,7 @@ class NotificationPoller(
         private const val DEFAULT_LOOKBACK_SECONDS = 3600L
         /** Number of WorkManager retry attempts before scheduling the next poll window manually. */
         private const val MAX_INLINE_RETRY_ATTEMPTS = 2
+        /** Minimum time (ms) after a dismiss before the same poll window can trigger another notification. */
+        private const val DISMISS_COOLDOWN_MS = 30_000L
     }
 }

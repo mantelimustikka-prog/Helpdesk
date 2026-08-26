@@ -1,5 +1,6 @@
 package com.wphelpd.admin.feature.notifications
 
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -16,7 +17,11 @@ data class NotificationEvent(
  * them to show the [NotificationDialog].
  */
 object NotificationEventBus {
-    private val _events = MutableSharedFlow<NotificationEvent>(extraBufferCapacity = 8)
+    private val _events = MutableSharedFlow<NotificationEvent>(
+        replay = 0,
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     val events: SharedFlow<NotificationEvent> = _events.asSharedFlow()
 
     /**
