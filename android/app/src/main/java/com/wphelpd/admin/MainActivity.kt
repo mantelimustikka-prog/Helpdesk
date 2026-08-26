@@ -87,6 +87,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         startupViewModel = ViewModelProvider(this, StartupViewModel.factory)[StartupViewModel::class.java]
         initializeApp()
+        try {
+            NotificationScheduler.schedule(applicationContext)
+            Log.d(TAG, "Notification polling scheduled at app startup.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule notifications at startup: ${e.message}", e)
+        }
         setContent {
             WpHelpdTheme {
                 val errorMessage = startupViewModel.startupError.collectAsStateWithLifecycle().value
@@ -133,17 +139,6 @@ class MainActivity : ComponentActivity() {
 
                         LaunchedEffect(lockState.isUnlocked) {
                             ticketsViewModel.restoreSessionFromSavedConfigIfNeeded()
-                        }
-
-                        LaunchedEffect(ticketsState.currentUser) {
-                            if (ticketsState.currentUser != null) {
-                                try {
-                                    NotificationScheduler.schedule(applicationContext)
-                                    Log.d(TAG, "Notification polling scheduled successfully.")
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to schedule notifications: ${e.message}", e)
-                                }
-                            }
                         }
 
                         // Open ticket from deep link when the app is unlocked and ready.
