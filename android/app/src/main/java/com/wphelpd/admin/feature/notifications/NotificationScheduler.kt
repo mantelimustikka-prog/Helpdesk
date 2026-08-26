@@ -5,10 +5,10 @@ import android.os.Build
 import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OutOfQuotaPolicy
-import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
@@ -17,49 +17,58 @@ private const val TAG = "NotificationScheduler"
 private const val WORK_NAME = "hd_notification_poll"
 
 /**
- * Manages scheduling and cancellation of the periodic [NotificationPoller] WorkManager job.
+ * Manages scheduling and cancellation of the [NotificationPoller] WorkManager job.
  */
 object NotificationScheduler {
 
     /**
-     * Schedules a periodic poll every [POLL_INTERVAL_MINUTES] minutes.
-     * Safe to call multiple times — uses [ExistingPeriodicWorkPolicy.KEEP] so an
-     * existing job is not replaced.
-     *
-     * Uses a 15-minute interval to align with Android Doze mode maintenance windows,
-     * exponential backoff for resilience after transient failures, and expedited
-     * execution on API 31+ to avoid being deferred when the job is first enqueued.
+     * Schedules the initial poll immediately. The poll worker then chains itself
+     * for [POLL_INTERVAL_MINUTES]-minute delayed execution.
      */
     fun schedule(context: Context) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresCharging(false)
-            .setRequiresDeviceIdle(false)
-            .build()
+        enqueueOneTimeWork(context, delayMinutes = 0L, policy = ExistingWorkPolicy.REPLACE)
+        Log.d(TAG, "Notification polling scheduled (immediate bootstrap).")
+    }
 
-        val request = PeriodicWorkRequestBuilder<NotificationPoller>(
-            POLL_INTERVAL_MINUTES, TimeUnit.MINUTES
+    /**
+     * Schedules the next delayed poll run. Called by [NotificationPoller] after success.
+     */
+    fun scheduleNext(context: Context) {
+        enqueueOneTimeWork(
+            context = context,
+            delayMinutes = POLL_INTERVAL_MINUTES,
+            policy = ExistingWorkPolicy.KEEP
         )
-            .setConstraints(constraints)
+        Log.d(TAG, "Next notification poll scheduled in ${POLL_INTERVAL_MINUTES} minute(s).")
+    }
+
+    private fun enqueueOneTimeWork(
+        context: Context,
+        delayMinutes: Long,
+        policy: ExistingWorkPolicy
+    ) {
+        val request = OneTimeWorkRequestBuilder<NotificationPoller>()
+            .setInitialDelay(delayMinutes, TimeUnit.MINUTES)
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .setRequiresCharging(false)
+                    .setRequiresDeviceIdle(false)
+                    .build()
+            )
             .setBackoffCriteria(
                 BackoffPolicy.EXPONENTIAL,
                 INITIAL_BACKOFF_DELAY_SECONDS,
                 TimeUnit.SECONDS
             )
             .apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && delayMinutes == 0L) {
                     setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 }
             }
             .build()
 
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request
-        )
-
-        Log.d(TAG, "Notification polling scheduled (${POLL_INTERVAL_MINUTES}min interval).")
+        WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, policy, request)
     }
 
     /**
@@ -80,15 +89,13 @@ object NotificationScheduler {
         }
     }
 
-    /**
-     * Cancels the periodic poll job (e.g. on logout).
-     */
+    /** Cancels the poll job (e.g. on logout). */
     fun cancel(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
         Log.d(TAG, "Notification polling cancelled.")
     }
 
-    /** Polling interval — 15 minutes aligns with Android Doze maintenance windows. */
-    private const val POLL_INTERVAL_MINUTES = 15L
+    /** Polling interval target — 5 minutes for near-real-time ticket/reply visibility. */
+    private const val POLL_INTERVAL_MINUTES = 5L
     private const val INITIAL_BACKOFF_DELAY_SECONDS = 60L
 }

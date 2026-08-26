@@ -51,19 +51,23 @@ class NotificationPoller(
                         TAG,
                         "Poll found ${newTickets.size} new ticket(s) and ${newReplies.size} new reply/replies."
                     )
-                    // Show system notification visible on lock screen / notification panel.
-                    NotificationChannelManager.showNotification(
-                        applicationContext,
-                        newTickets.size,
-                        newReplies.size
-                    )
-                    // Also post in-app event for when the user is actively viewing the app.
-                    NotificationEventBus.post(
-                        NotificationEvent(
-                            newTicketCount = newTickets.size,
-                            newReplyCount = newReplies.size
+                    try {
+                        // Show system notification visible on lock screen / notification panel.
+                        NotificationChannelManager.showNotification(
+                            applicationContext,
+                            newTickets.size,
+                            newReplies.size
                         )
-                    )
+                        // Also post in-app event for when the user is actively viewing the app.
+                        NotificationEventBus.post(
+                            NotificationEvent(
+                                newTicketCount = newTickets.size,
+                                newReplyCount = newReplies.size
+                            )
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed while publishing notification event: ${e.message}", e)
+                    }
                 } else {
                     Log.d(TAG, "Poll found no new items.")
                 }
@@ -71,13 +75,22 @@ class NotificationPoller(
                 // Update the last-checked and last-successful-poll timestamps.
                 prefs.setLastCheckedTimestamp(System.currentTimeMillis() / 1000L)
                 prefs.setLastSuccessfulPollTime(System.currentTimeMillis())
+                NotificationScheduler.scheduleNext(applicationContext)
+                Log.d(TAG, "NotificationPoller completed successfully.")
 
                 Result.success()
             }
 
             is NetworkResult.Failure -> {
                 Log.w(TAG, "Poll failed: ${result.message} (attempt ${runAttemptCount + 1})")
-                Result.retry()
+                result.throwable?.let { Log.w(TAG, "Poll throwable: ${it.javaClass.simpleName}", it) }
+                if (runAttemptCount < MAX_INLINE_RETRY_ATTEMPTS) {
+                    Result.retry()
+                } else {
+                    Log.w(TAG, "Retry limit reached for this run — scheduling next poll window.")
+                    NotificationScheduler.scheduleNext(applicationContext)
+                    Result.failure()
+                }
             }
         }
     }
@@ -85,5 +98,7 @@ class NotificationPoller(
     companion object {
         /** Fall-back look-back window when no timestamp is stored (1 hour). */
         private const val DEFAULT_LOOKBACK_SECONDS = 3600L
+        /** Number of WorkManager retry attempts before scheduling the next poll window manually. */
+        private const val MAX_INLINE_RETRY_ATTEMPTS = 2
     }
 }
