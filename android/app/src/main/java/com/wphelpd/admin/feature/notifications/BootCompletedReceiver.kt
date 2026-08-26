@@ -4,35 +4,33 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.wphelpd.admin.core.config.SecureServerConfigRepository
 
 private const val TAG = "BootCompletedReceiver"
+private const val ACTION_QUICKBOOT_POWERON = "android.intent.action.QUICKBOOT_POWERON"
 
 /**
  * Restarts notification polling after a device reboot.
  *
- * WorkManager periodic jobs are cancelled when the device powers off. This receiver
- * listens for [Intent.ACTION_BOOT_COMPLETED] and re-schedules the poller so that
+ * WorkManager jobs are cleared when the device powers off. This receiver listens
+ * for [Intent.ACTION_BOOT_COMPLETED] and re-schedules the poller so that
  * notifications resume automatically without requiring the user to open the app.
  */
 class BootCompletedReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
-            intent.action != "android.intent.action.QUICKBOOT_POWERON"
-        ) {
+        if (!shouldRescheduleNotificationPolling(intent.action)) {
             return
         }
 
-        Log.d(TAG, "Device booted — checking whether user is logged in.")
-
-        // Only reschedule if the user is logged in (auth config exists).
-        val serverConfigRepository = SecureServerConfigRepository(context)
-        if (serverConfigRepository.load() != null) {
-            Log.d(TAG, "User is logged in — rescheduling notification polling.")
+        try {
+            Log.d(TAG, "Device boot completed — rescheduling notification polling.")
             NotificationScheduler.schedule(context)
-        } else {
-            Log.d(TAG, "No logged-in user — skipping polling reschedule.")
+            Log.d(TAG, "Notification poller rescheduled successfully.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to reschedule notifications on boot: ${e.message}", e)
         }
     }
 }
+
+internal fun shouldRescheduleNotificationPolling(action: String?): Boolean =
+    action == Intent.ACTION_BOOT_COMPLETED || action == ACTION_QUICKBOOT_POWERON
