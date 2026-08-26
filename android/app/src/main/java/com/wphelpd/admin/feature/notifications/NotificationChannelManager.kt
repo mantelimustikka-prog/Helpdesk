@@ -18,13 +18,24 @@ import com.wphelpd.admin.R
  * notification.  [showNotification] creates the channel lazily on every call so
  * it is safe to call from the background worker without a separate initialization
  * step.
+ *
+ * A rotating notification ID is used so each poll cycle posts a distinct
+ * notification rather than silently updating the existing one (which re-triggers
+ * sound and vibration even when the content is identical).
  */
 object NotificationChannelManager {
 
     private const val TAG = "NotificationChannelMgr"
     private const val CHANNEL_ID = "hd_notifications"
     private const val CHANNEL_NAME = "WP HelpD Notifications"
-    private const val NOTIFICATION_ID = 1001
+
+    /** Notification IDs rotate through this range to avoid stale re-alerts. */
+    private const val NOTIFICATION_ID_MIN = 2000
+    private const val NOTIFICATION_ID_MAX = 2099
+
+    private const val PREFS_NAME = "hd_notification_channel_prefs"
+    private const val KEY_NEXT_NOTIFICATION_ID = "next_notification_id"
+    private const val KEY_LAST_NOTIFICATION_ID = "last_notification_id"
 
     fun showNotification(
         context: Context,
@@ -63,6 +74,29 @@ object NotificationChannelManager {
                 return
             }
 
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+            // Cancel the previous notification before posting the next one so the
+            // system does not accumulate stale banners in the shade.
+            // Synchronized on the companion object to guard the read-increment-write
+            // cycle against concurrent calls from multiple WorkManager workers.
+            val notificationId: Int
+            synchronized(this) {
+                val lastId = prefs.getInt(KEY_LAST_NOTIFICATION_ID, -1)
+                if (lastId != -1) {
+                    notificationManager.cancel(lastId)
+                }
+
+                // Advance to the next notification ID (rotating range).
+                val currentId = prefs.getInt(KEY_NEXT_NOTIFICATION_ID, NOTIFICATION_ID_MIN)
+                notificationId = currentId
+                val following = if (currentId >= NOTIFICATION_ID_MAX) NOTIFICATION_ID_MIN else currentId + 1
+                prefs.edit()
+                    .putInt(KEY_NEXT_NOTIFICATION_ID, following)
+                    .putInt(KEY_LAST_NOTIFICATION_ID, notificationId)
+                    .commit()
+            }
+
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
@@ -83,8 +117,8 @@ object NotificationChannelManager {
                 .setContentIntent(pendingIntent)
                 .build()
 
-            notificationManager.notify(NOTIFICATION_ID, notification)
-            Log.i(TAG, "Notification posted (tickets=$newTicketCount, replies=$newReplyCount).")
+            notificationManager.notify(notificationId, notification)
+            Log.i(TAG, "Notification posted id=$notificationId (tickets=$newTicketCount, replies=$newReplyCount).")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to post notification: ${e.message}", e)
         }

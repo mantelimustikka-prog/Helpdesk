@@ -7,6 +7,7 @@ namespace WPHelpdesk\Interfaces\Rest;
 
 use WP_REST_Request;
 use WP_REST_Response;
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Infrastructure\Database\Schema;
 use WPHelpdesk\Support\Constants;
 
@@ -38,6 +39,19 @@ class NotificationController extends AdminApiController {
 	}
 
 	/**
+	 * Returns the list of storage-level ticket statuses that need agent attention.
+	 * Used as the IN(...) filter in {@see fetchNewTickets()}.
+	 *
+	 * @return array<int, string>
+	 */
+	protected function agentFacingStorageStatuses(): array {
+		return array_merge(
+			array( 'new' ),
+			TicketStatus::storageValuesForCanonical( TicketStatus::CANONICAL_PENDING_AGENT_REPLY )
+		);
+	}
+
+	/**
 	 * Fetch new tickets created after the given Unix timestamp.
 	 *
 	 * @param int $since Unix timestamp.
@@ -49,14 +63,22 @@ class NotificationController extends AdminApiController {
 		$table          = Schema::table( Constants::TABLE_TICKETS );
 		$since_datetime = gmdate( 'Y-m-d H:i:s', $since );
 
+		// Only include tickets that need agent attention: 'new' plus all storage
+		// values that map to CANONICAL_PENDING_AGENT_REPLY (in_progress, triaged, pending).
+		$agent_statuses = $this->agentFacingStorageStatuses();
+
+		$placeholders = implode( ', ', array_fill( 0, count( $agent_statuses ), '%s' ) );
+
 		$rows = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnquotedComplexPlaceholder
 				"SELECT id, ticket_no, subject, status, created_at
 				 FROM {$table}
 				 WHERE created_at > %s
+				   AND status IN ({$placeholders})
 				 ORDER BY created_at ASC
 				 LIMIT 50",
-				$since_datetime
+				array_merge( array( $since_datetime ), $agent_statuses )
 			),
 			ARRAY_A
 		);

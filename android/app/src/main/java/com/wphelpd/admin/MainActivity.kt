@@ -99,6 +99,17 @@ class MainActivity : ComponentActivity() {
 
                 val lockState = lockViewModel.uiState.collectAsStateWithLifecycle().value
                 val pendingTicket = pendingTicketId.asStateFlow().collectAsStateWithLifecycle().value
+                var pendingNotification by remember { mutableStateOf<NotificationEvent?>(null) }
+
+                // Collect notification events from the polling service regardless of lock
+                // state so that system-level notifications are never missed while the app is
+                // backgrounded or the screen is locked.  The in-app dialog is shown only when
+                // the app is unlocked (see below).
+                LaunchedEffect(Unit) {
+                    NotificationEventBus.events.collect { event ->
+                        pendingNotification = event
+                    }
+                }
 
                 when {
                     lockState.isInitialising -> {
@@ -106,17 +117,9 @@ class MainActivity : ComponentActivity() {
                     }
                     lockState.isUnlocked -> {
                         val ticketsState = ticketsViewModel.uiState.collectAsStateWithLifecycle().value
-                        var pendingNotification by remember { mutableStateOf<NotificationEvent?>(null) }
 
                         LaunchedEffect(lockState.isUnlocked) {
                             ticketsViewModel.restoreSessionFromSavedConfigIfNeeded()
-                        }
-
-                        // Collect notification events from the polling service.
-                        LaunchedEffect(Unit) {
-                            NotificationEventBus.events.collect { event ->
-                                pendingNotification = event
-                            }
                         }
 
                         LaunchedEffect(ticketsState.currentUser) {
