@@ -3,6 +3,7 @@ package com.wphelpd.admin.feature.notifications
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Test
 
 class NotificationPollerTest {
@@ -87,6 +88,25 @@ class NotificationPollerTest {
 
         val received = deferredFirst.await()
         assertThat(received).isEqualTo(expected)
+    }
+
+    @Test
+    fun notificationEventBus_replaysEventsPostedBeforeSubscription() = runTest {
+        val expected = NotificationEvent(newTicketCount = 97, newReplyCount = 53)
+        NotificationEventBus.post(expected)
+
+        val replayed = withTimeout(500) {
+            NotificationEventBus.events.first { it == expected }
+        }
+
+        assertThat(replayed).isEqualTo(expected)
+    }
+
+    @Test
+    fun hashNotificationEvent_returnsStableKey() {
+        assertThat(NotificationPoller.hashNotificationEvent(2, 4)).isEqualTo("2_4")
+        assertThat(NotificationPoller.hashNotificationEvent(2, 4)).isEqualTo("2_4")
+        assertThat(NotificationPoller.hashNotificationEvent(3, 4)).isNotEqualTo("2_4")
     }
 
     @Test
