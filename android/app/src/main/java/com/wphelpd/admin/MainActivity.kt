@@ -235,14 +235,6 @@ class MainActivity : ComponentActivity() {
                 this,
                 TicketsViewModel.factory(serverConfigRepository = serverConfigRepository)
             )[TicketsViewModel::class.java]
-            if (serverConfigRepository.load() != null) {
-                try {
-                    NotificationScheduler.schedule(applicationContext)
-                    Log.d(TAG, "Notification polling ensured during app initialization.")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to ensure notifications during init: ${e.message}", e)
-                }
-            }
             ProcessLifecycleOwner.get().lifecycle.removeObserver(processLifecycleObserver)
             ProcessLifecycleOwner.get().lifecycle.addObserver(processLifecycleObserver)
         } catch (e: Exception) {

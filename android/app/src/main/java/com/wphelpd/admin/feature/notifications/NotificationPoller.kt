@@ -75,6 +75,7 @@ class NotificationPoller(
                 // Update the last-checked and last-successful-poll timestamps.
                 prefs.setLastCheckedTimestamp(System.currentTimeMillis() / 1000L)
                 prefs.setLastSuccessfulPollTime(System.currentTimeMillis())
+                NotificationScheduler.scheduleNext(applicationContext)
                 Log.d(TAG, "NotificationPoller completed successfully.")
 
                 Result.success()
@@ -83,7 +84,13 @@ class NotificationPoller(
             is NetworkResult.Failure -> {
                 Log.w(TAG, "Poll failed: ${result.message} (attempt ${runAttemptCount + 1})")
                 result.throwable?.let { Log.w(TAG, "Poll throwable: ${it.javaClass.simpleName}", it) }
-                Result.retry()
+                if (runAttemptCount < MAX_INLINE_RETRY_ATTEMPTS) {
+                    Result.retry()
+                } else {
+                    Log.w(TAG, "Retry limit reached for this run — scheduling next poll window.")
+                    NotificationScheduler.scheduleNext(applicationContext)
+                    Result.failure()
+                }
             }
         }
     }
@@ -91,5 +98,7 @@ class NotificationPoller(
     companion object {
         /** Fall-back look-back window when no timestamp is stored (1 hour). */
         private const val DEFAULT_LOOKBACK_SECONDS = 3600L
+        /** Number of WorkManager retry attempts before scheduling the next poll window manually. */
+        private const val MAX_INLINE_RETRY_ATTEMPTS = 2
     }
 }
