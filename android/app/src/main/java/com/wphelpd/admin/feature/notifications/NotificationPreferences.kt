@@ -23,9 +23,12 @@ class NotificationPreferences(context: Context) {
 
     /**
      * Persists the Unix timestamp (seconds) of the last successful notification check.
+     * Uses synchronous commit() to guarantee the value is flushed to disk before the
+     * caller proceeds — prevents stale re-notifications if the process is killed before
+     * an async apply() write completes.
      */
     fun setLastCheckedTimestamp(timestamp: Long) {
-        prefs.edit().putLong(KEY_LAST_CHECKED, timestamp).apply()
+        prefs.edit().putLong(KEY_LAST_CHECKED, timestamp).commit()
     }
 
     /**

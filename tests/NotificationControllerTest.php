@@ -41,6 +41,15 @@ final class FakeNotificationController extends NotificationController {
 	protected function fetchNewReplies( int $since ): array {
 		return $this->replies;
 	}
+
+	/**
+	 * Expose the protected method for testing.
+	 *
+	 * @return array<int, string>
+	 */
+	public function getAgentFacingStorageStatuses(): array {
+		return $this->agentFacingStorageStatuses();
+	}
 }
 
 final class NotificationControllerTest extends TestCase {
@@ -218,5 +227,33 @@ final class NotificationControllerTest extends TestCase {
 
 		$result = $controller->callToIso8601( '2026-08-24 20:00:00' );
 		self::assertSame( '2026-08-24T20:00:00Z', $result );
+	}
+
+	public function testAgentFacingStorageStatusesIncludesNew(): void {
+		$controller = new FakeNotificationController();
+		$statuses   = $controller->getAgentFacingStorageStatuses();
+
+		self::assertContains( 'new', $statuses );
+	}
+
+	public function testAgentFacingStorageStatusesIncludesPendingAgentReplyValues(): void {
+		$controller = new FakeNotificationController();
+		$statuses   = $controller->getAgentFacingStorageStatuses();
+
+		// All legacy storage values that map to CANONICAL_PENDING_AGENT_REPLY must be included.
+		self::assertContains( 'in_progress', $statuses );
+		self::assertContains( 'triaged', $statuses );
+		self::assertContains( 'pending', $statuses );
+	}
+
+	public function testAgentFacingStorageStatusesExcludesClientFacingStatuses(): void {
+		$controller = new FakeNotificationController();
+		$statuses   = $controller->getAgentFacingStorageStatuses();
+
+		// Tickets waiting on the client must never trigger agent notifications.
+		self::assertNotContains( 'waiting_customer', $statuses );
+		self::assertNotContains( 'pending_client_reply', $statuses );
+		self::assertNotContains( 'resolved', $statuses );
+		self::assertNotContains( 'closed', $statuses );
 	}
 }
