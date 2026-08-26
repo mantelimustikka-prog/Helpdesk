@@ -18,8 +18,8 @@ data class NotificationEvent(
  */
 object NotificationEventBus {
     private val _events = MutableSharedFlow<NotificationEvent>(
-        replay = 0,
-        extraBufferCapacity = 16,
+        replay = 100,
+        extraBufferCapacity = 0,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val events: SharedFlow<NotificationEvent> = _events.asSharedFlow()

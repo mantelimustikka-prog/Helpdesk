@@ -46,6 +46,7 @@ import com.wphelpd.admin.feature.applock.UnlockScreen
 import com.wphelpd.admin.feature.notifications.NotificationDialog
 import com.wphelpd.admin.feature.notifications.NotificationEvent
 import com.wphelpd.admin.feature.notifications.NotificationEventBus
+import com.wphelpd.admin.feature.notifications.NotificationPoller
 import com.wphelpd.admin.feature.notifications.NotificationPreferences
 import com.wphelpd.admin.feature.notifications.NotificationScheduler
 import com.wphelpd.admin.feature.tickets.TicketsRoute
@@ -164,16 +165,22 @@ class MainActivity : ComponentActivity() {
                         // Show in-app notification dialog when poller finds new items.
                         if (pendingNotification != null) {
                             val event = pendingNotification!!
+                            val eventHash = NotificationPoller.hashNotificationEvent(
+                                event.newTicketCount,
+                                event.newReplyCount
+                            )
                             NotificationDialog(
                                 newTicketCount = event.newTicketCount,
                                 newReplyCount = event.newReplyCount,
                                 onView = {
+                                    notificationPreferences.setLastAcknowledgedEventHash(eventHash)
                                     notificationPreferences.setLastNotificationDismissTime(System.currentTimeMillis())
                                     notificationPreferences.clearLastPendingNotification()
                                     pendingNotification = null
                                     ticketsViewModel.refreshTickets()
                                 },
                                 onDismiss = {
+                                    notificationPreferences.setLastAcknowledgedEventHash(eventHash)
                                     notificationPreferences.setLastNotificationDismissTime(System.currentTimeMillis())
                                     notificationPreferences.clearLastPendingNotification()
                                     pendingNotification = null

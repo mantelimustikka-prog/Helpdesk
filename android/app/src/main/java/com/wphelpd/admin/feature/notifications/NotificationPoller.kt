@@ -57,10 +57,14 @@ class NotificationPoller(
                         "Poll found ${newTickets.size} new ticket(s) and ${newReplies.size} new reply/replies."
                     )
 
-                    val timeSinceDismiss = System.currentTimeMillis() - prefs.getLastNotificationDismissTime()
+                    val currentHash = hashNotificationEvent(newTickets.size, newReplies.size)
+                    val lastAcknowledgedHash = prefs.getLastAcknowledgedEventHash()
+                    val lastDismissTime = prefs.getLastNotificationDismissTime()
+                    val timeSinceDismiss = System.currentTimeMillis() - lastDismissTime
+                    val shouldNotify = (currentHash != lastAcknowledgedHash) ||
+                        (timeSinceDismiss >= DISMISS_COOLDOWN_MS)
 
-                    // Only notify if enough time has passed since the user last dismissed.
-                    if (timeSinceDismiss >= DISMISS_COOLDOWN_MS) {
+                    if (shouldNotify) {
                         try {
                             // Show system notification visible on lock screen / notification panel.
                             NotificationChannelManager.showNotification(
@@ -75,11 +79,15 @@ class NotificationPoller(
                                     newReplyCount = newReplies.size
                                 )
                             )
+                            Log.d(TAG, "Notification posted: $currentHash")
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed while publishing notification event: ${e.message}", e)
                         }
                     } else {
-                        Log.d(TAG, "Skipping notification — within dismiss cooldown.")
+                        Log.d(
+                            TAG,
+                            "Skipping notification - already acknowledged (hash=$currentHash, cooldown active)"
+                        )
                     }
                 } else {
                     Log.d(TAG, "Poll found no new items.")
@@ -111,5 +119,9 @@ class NotificationPoller(
         private const val MAX_INLINE_RETRY_ATTEMPTS = 2
         /** Minimum time (ms) after a dismiss before the same poll window can trigger another notification. */
         private const val DISMISS_COOLDOWN_MS = 30_000L
+
+        /** Creates a stable, comparable hash of a notification event. */
+        internal fun hashNotificationEvent(ticketCount: Int, replyCount: Int): String =
+            "${ticketCount}_${replyCount}"
     }
 }

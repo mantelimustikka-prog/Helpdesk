@@ -88,7 +88,7 @@ class NotificationPreferences(context: Context) {
         prefs.edit()
             .putInt(KEY_LAST_PENDING_TICKET_COUNT, event.newTicketCount)
             .putInt(KEY_LAST_PENDING_REPLY_COUNT, event.newReplyCount)
-            .apply()
+            .commit()
     }
 
     /** Removes the stored pending notification (after user views or dismisses). */
