@@ -87,6 +87,15 @@ class AdminTicketController {
 			return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
 		}
 
+		$current_status = (string) ( $ticket['status'] ?? '' );
+		if ( '' !== $current_status && TicketStatus::CANONICAL_NEW === TicketStatus::toCanonical( $current_status ) ) {
+			$this->transitionNewTicketToPendingAgentReply( $ticket_id, $current_status );
+			$ticket = $this->findTicket( $ticket_id );
+			if ( empty( $ticket ) ) {
+				return new WP_REST_Response( array( 'message' => 'Ticket not found.' ), 404 );
+			}
+		}
+
 		$raw_messages = $this->fetchMessagesForTicket( (int) $ticket['id'] );
 		$messages     = array_map(
 			array( $this, 'normalizeMessageForResponse' ),
@@ -112,6 +121,28 @@ class AdminTicketController {
 				'success' => true,
 				'data'    => $data,
 			)
+		);
+	}
+
+	/**
+	 * Silently transition a new ticket to pending-agent-reply when opened in detail view.
+	 *
+	 * @param int    $ticket_id      Ticket ID.
+	 * @param string $current_status Current raw status value.
+	 * @return void
+	 */
+	protected function transitionNewTicketToPendingAgentReply( int $ticket_id, string $current_status ): void {
+		global $wpdb;
+
+		$wpdb->update(
+			Schema::table( Constants::TABLE_TICKETS ),
+			array( 'status' => TicketStatus::toStorage( TicketStatus::CANONICAL_PENDING_AGENT_REPLY ) ),
+			array(
+				'id'     => $ticket_id,
+				'status' => $current_status,
+			),
+			array( '%s' ),
+			array( '%d', '%s' )
 		);
 	}
 

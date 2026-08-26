@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
+use WPHelpdesk\Domain\Ticket\TicketStatus;
 use WPHelpdesk\Interfaces\Rest\AdminTicketController;
 
 require_once __DIR__ . '/bootstrap.php';
@@ -22,6 +23,9 @@ final class FakeAdminTicketController extends AdminTicketController {
 
 	/** @var array<int, array<string, mixed>|null> */
 	private array $ticketSequence;
+
+	/** @var array<int, array{ticket_id:int,current_status:string}> */
+	private array $transitionCalls = array();
 
 	/**
 	 * @param array<string, mixed>|null         $ticket
@@ -43,6 +47,38 @@ final class FakeAdminTicketController extends AdminTicketController {
 
 	protected function fetchMessagesForTicket( int $ticket_id ): array {
 		return $this->messages;
+	}
+
+	/**
+	 * @return array<int, array{ticket_id:int,current_status:string}>
+	 */
+	public function getTransitionCalls(): array {
+		return $this->transitionCalls;
+	}
+
+	protected function transitionNewTicketToPendingAgentReply( int $ticket_id, string $current_status ): void {
+		$this->transitionCalls[] = array(
+			'ticket_id'      => $ticket_id,
+			'current_status' => $current_status,
+		);
+	}
+}
+
+final class FakeAdminTicketControllerWithRealTransition extends AdminTicketController {
+	/** @var array<int, array<string, mixed>|null> */
+	private array $ticketSequence;
+
+	public function __construct( array $ticketSequence ) {
+		$this->ticketSequence = $ticketSequence;
+	}
+
+	protected function findTicket( int $ticket_id ): ?array {
+		$ticket = array_shift( $this->ticketSequence );
+		return is_array( $ticket ) ? $ticket : null;
+	}
+
+	protected function fetchMessagesForTicket( int $ticket_id ): array {
+		return array();
 	}
 }
 
@@ -124,6 +160,111 @@ final class AdminTicketControllerTest extends TestCase {
 		self::assertCount( 2, $response->data['data']['messages'] );
 		self::assertSame( 'I cannot log in.', $response->data['data']['messages'][0]['body'] );
 		self::assertSame( 'agent', $response->data['data']['messages'][1]['author_type'] );
+	}
+
+	public function testGetTicketTransitionsNewTicketToPendingAgentReplyOnDetailView(): void {
+		$new_ticket = array(
+			'id'        => 8,
+			'ticket_no' => 'HD-000008',
+			'subject'   => 'Transition test',
+			'status'    => 'new',
+		);
+		$updated_ticket = $new_ticket;
+		$updated_ticket['status'] = TicketStatus::toStorage( TicketStatus::CANONICAL_PENDING_AGENT_REPLY );
+
+		$controller = new FakeAdminTicketController( $new_ticket, array(), array( $new_ticket, $updated_ticket ) );
+		$request    = new WP_REST_Request();
+		$request['id'] = 8;
+
+		$response = $controller->getTicket( $request );
+
+		self::assertSame( 200, $response->status );
+		self::assertSame( TicketStatus::CANONICAL_PENDING_AGENT_REPLY, $response->data['data']['status'] );
+		self::assertCount( 1, $controller->getTransitionCalls() );
+	}
+
+	public function testGetTicketTransitionDoesNotFireStatusChangedHook(): void {
+		global $wpdb;
+
+		$hook_fired    = false;
+		$new_ticket    = array( 'id' => 9, 'ticket_no' => 'HD-000009', 'subject' => 'Silent', 'status' => 'new' );
+		$updated_ticket = $new_ticket;
+		$updated_ticket['status'] = TicketStatus::toStorage( TicketStatus::CANONICAL_PENDING_AGENT_REPLY );
+		$original_wpdb = $wpdb;
+		$wpdb_mock     = new class {
+			public string $base_prefix = 'wp_';
+			public int $update_calls   = 0;
+
+			public function update( string $table, array $data, array $where, array $format = array(), array $where_format = array() ): int {
+				++$this->update_calls;
+				return 1;
+			}
+		};
+		$wpdb = $wpdb_mock;
+
+		add_action(
+			'hd_ticket_status_changed',
+			static function () use ( &$hook_fired ): void {
+				$hook_fired = true;
+			}
+		);
+
+		try {
+			$controller = new FakeAdminTicketControllerWithRealTransition( array( $new_ticket, $updated_ticket ) );
+			$request    = new WP_REST_Request();
+			$request['id'] = 9;
+			$controller->getTicket( $request );
+
+			self::assertFalse( $hook_fired );
+			self::assertSame( 1, $wpdb_mock->update_calls );
+		} finally {
+			$wpdb = $original_wpdb;
+		}
+	}
+
+	public function testGetTicketLeavesNonNewStatusUnchanged(): void {
+		$ticket = array(
+			'id'        => 10,
+			'ticket_no' => 'HD-000010',
+			'subject'   => 'No transition',
+			'status'    => 'resolved',
+		);
+		$controller = new FakeAdminTicketController( $ticket );
+		$request    = new WP_REST_Request();
+		$request['id'] = 10;
+
+		$response = $controller->getTicket( $request );
+
+		self::assertSame( 200, $response->status );
+		self::assertSame( TicketStatus::CANONICAL_RESOLVED, $response->data['data']['status'] );
+		self::assertCount( 0, $controller->getTransitionCalls() );
+	}
+
+	public function testGetTicketTransitionIsIdempotentAcrossMultipleOpens(): void {
+		$new_ticket = array(
+			'id'        => 11,
+			'ticket_no' => 'HD-000011',
+			'subject'   => 'Idempotent',
+			'status'    => 'new',
+		);
+		$in_progress_ticket = $new_ticket;
+		$in_progress_ticket['status'] = TicketStatus::toStorage( TicketStatus::CANONICAL_PENDING_AGENT_REPLY );
+
+		$controller = new FakeAdminTicketController(
+			$new_ticket,
+			array(),
+			array( $new_ticket, $in_progress_ticket, $in_progress_ticket )
+		);
+		$request    = new WP_REST_Request();
+		$request['id'] = 11;
+
+		$first_response  = $controller->getTicket( $request );
+		$second_response = $controller->getTicket( $request );
+
+		self::assertSame( TicketStatus::CANONICAL_PENDING_AGENT_REPLY, $first_response->data['data']['status'] );
+		self::assertSame( TicketStatus::CANONICAL_PENDING_AGENT_REPLY, $second_response->data['data']['status'] );
+		self::assertCount( 1, $controller->getTransitionCalls() );
+		self::assertSame( 'new', $controller->getTransitionCalls()[0]['current_status'] );
 	}
 
 	public function testGetTicketAddsAuthorNameFromWpUserWhenAuthorUserIdIsSet(): void {
