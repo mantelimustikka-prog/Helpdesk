@@ -79,7 +79,7 @@ object NotificationScheduler {
 
         WorkManager.getInstance(context).enqueueUniqueWork(
             BOOTSTRAP_WORK_NAME,
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             bootstrapRequest
         )
 
